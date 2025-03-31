@@ -4,7 +4,21 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="0f3a97c3-823c-42c1-9286-6f09c7f42fa6" name="Changes" comment="" />
+    <list default="true" id="0f3a97c3-823c-42c1-9286-6f09c7f42fa6" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/dacroq_web/src/app/(dashboard)/(root)/CreateTestWindow.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/dacroq_web/src/app/(dashboard)/(root)/EnhancedTestTable.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/dacroq_web/src/app/(dashboard)/(root)/TestDetails.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/dacroq_web/src/app/(dashboard)/TestDetails.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/dacroq_web/src/app/(dashboard)/analytics/page.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/dacroq_web/src/app/(dashboard)/community/page.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/dacroq_web/src/components/Accordion.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dacroq_web/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/dacroq_web/package.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dacroq_web/pnpm-lock.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/dacroq_web/pnpm-lock.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dacroq_web/src/app/(dashboard)/(root)/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/dacroq_web/src/app/(dashboard)/(root)/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dacroq_web/src/app/(dashboard)/admin/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/dacroq_web/src/app/(dashboard)/admin/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dacroq_web/src/components/ui/Navigation.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/dacroq_web/src/components/ui/Navigation.tsx" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -13,10 +27,25 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "associatedIndex": 6
+  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
+  "lastFilter": {
+    "state": "OPEN",
+    "assignee": "bendatsko"
+  }
 }]]></component>
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "https://github.com/bendatsko/dacroq.git",
+    "accountId": "6296e9c1-8e51-4d00-8ef0-4cab3c55a4e3"
+  }
+}]]></component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 6
+}</component>
   <component name="ProjectId" id="2v3fUfyjqso3NvFLnu60MBtFAaa" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
@@ -26,19 +55,29 @@
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
     "git-widget-placeholder": "main",
+    "last_opened_file_path": "C:/Users/bldat/Documents/GitHub/dacroq/dacroq_web/src/app/(dashboard)/community",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
     "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "pnpm",
-    "ts.external.directory.path": "/Users/admin/Documents/GitHub/dacroq/node_modules/typescript/lib",
+    "prettierjs.PrettierConfiguration.Package": "C:\\Users\\bldat\\Documents\\GitHub\\dacroq\\dacroq_web\\node_modules\\prettier",
+    "ts.external.directory.path": "C:\\Users\\bldat\\Documents\\GitHub\\dacroq\\dacroq_web\\node_modules\\typescript\\lib",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Users\bldat\Documents\GitHub\dacroq\dacroq_web\src\app\(dashboard)\community" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\bldat\Documents\GitHub\dacroq\dacroq_web\src\app\(dashboard)\(root)" />
+    </key>
+  </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-js-predefined-d6986cc7102b-76f8388c3a79-JavaScript-WS-243.24978.60" />
+        <option value="bundled-js-predefined-d6986cc7102b-1632447f56bf-JavaScript-WS-243.25659.40" />
       </set>
     </attachedChunks>
   </component>
@@ -51,6 +90,7 @@
       <option name="presentableId" value="Default" />
       <updated>1743378695577</updated>
       <workItem from="1743378696586" duration="804000" />
+      <workItem from="1743437523127" duration="20563000" />
     </task>
     <servers />
   </component>

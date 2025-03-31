@@ -73,7 +73,15 @@ function Navigation() {
             asChild
             active={pathname === "/"}
           >
-            <Link href="/">Home</Link>
+            <Link href="/">Overview</Link>
+          </TabNavigationLink>
+
+          <TabNavigationLink
+              className="inline-flex gap-2"
+              asChild
+              active={pathname === "/analytics"}
+          >
+            <Link href="/analytics">Analytics</Link>
           </TabNavigationLink>
 
           <TabNavigationLink
@@ -81,7 +89,15 @@ function Navigation() {
             asChild
             active={pathname === "/documentation"}
           >
-            <Link href="/documentation">Getting Started</Link>
+            <Link href="/documentation">Documentation</Link>
+          </TabNavigationLink>
+
+          <TabNavigationLink
+              className="inline-flex gap-2"
+              asChild
+              active={pathname === "/community"}
+          >
+            <Link href="/community">Community</Link>
           </TabNavigationLink>
 
           {/* Admin tab - only rendered if user is admin */}
