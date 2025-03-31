@@ -3,6 +3,9 @@
 import { useState, useEffect } from "react";
 import { Card } from "@/components/Card";
 import { Divider } from "@/components/Divider";
+import { Button } from "@/components/Button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import {
   RiFileTextLine,
   RiBookOpenLine,
@@ -12,10 +15,14 @@ import {
   RiArrowRightSLine,
   RiArrowDownSLine,
   RiSearchLine,
-  RiExternalLinkLine
+  RiExternalLinkLine,
+  RiCpuLine,
+  RiEditLine,
+  RiSaveLine,
+  RiCloseLine
 } from "@remixicon/react";
 
-// Documentation content sections - this would normally come from content.ts
+// Documentation content sections
 const DocsContent = {
   introduction: {
     title: "Introduction",
@@ -32,6 +39,7 @@ Dacroq provides:
 - Detailed performance metrics and benchmarking
 - Support for multiple input formats`
   },
+
   "quick-start": {
     title: "Quick Start Guide",
     content: `## Running the 3-SAT Solver
@@ -68,6 +76,7 @@ Dacroq supports multiple input formats:
 - Use the reset function if needed
 - Check success rates and performance metrics`
   },
+
   installation: {
     title: "Installation",
     content: `## Getting Access
@@ -87,6 +96,84 @@ For API access:
 - Internet connection
 - Valid university credentials`
   },
+
+  "hardware-architecture": {
+    title: "Hardware Architecture",
+    content: `## System Overview
+Our platform combines specialized hardware accelerators with custom software to solve complex optimization problems. The system consists of three main accelerators:
+
+- **Daedalus**: 3-SAT solver featuring 50 relaxation oscillators
+- **Amorgos**: LDPC decoder for error correction
+- **Medusa**: Advanced k-SAT solver implementation
+
+Each accelerator operates on dedicated testbeds controlled by Teensy 4.1 microcontrollers, using 2M baud serial connections for rapid data exchange.
+
+## Hardware Components
+### 3-SAT Solver (Daedalus)
+- 50 relaxation oscillators for direct variable mapping
+- Analog crossbar network handling up to 50 variables and 228 clauses
+- SPI-based scan chains for configuration
+- Real-time error signal monitoring
+- Automatic problem decomposition for larger instances
+
+### Physical Interface
+- Teensy 4.1 microcontroller bridge
+- Error-correcting protocols with hash verification
+- Local SD card storage for configurations and solutions
+- Direct mapping of DIMACS CNF files to hardware states
+
+## Problem Decomposition
+For problems exceeding hardware capacity:
+- Spectral partitioning algorithm for problem division
+- Graph-based variable clustering
+- Optimized subproblem generation
+- Hierarchical solution reconstruction`
+  },
+
+  "software-architecture": {
+    title: "Software Architecture",
+    content: `## Web Interface
+Our Next.js frontend provides intuitive access to the system's capabilities:
+- Direct CNF entry and file uploads
+- Real-time monitoring displays
+- Cloud integration for status updates
+- Performance metrics visualization
+
+## Backend System
+The Flask-based backend serves as the system kernel:
+- Problem validation and encoding
+- Automatic decomposition
+- Performance metrics computation
+- Solution verification
+- Hardware resource management
+
+## API Integration
+Our API provides seamless integration between web users and hardware accelerators:
+- Problem translation to hardware-compatible formats
+- Metadata tracking and management
+- Decomposition handling for large problems
+- Solution reconstruction and verification
+
+## Problem Processing
+1. **Problem Intake**
+   - Sequential problem numbering
+   - JSON metadata generation
+   - Format validation
+   - Preprocessing optimization
+
+2. **Hardware Acceleration**
+   - Direct problem mapping
+   - Physical convergence monitoring
+   - Solution state capture
+   - Performance tracking
+
+3. **Solution Processing**
+   - Subproblem recombination
+   - WalkSAT refinement when needed
+   - Solution verification
+   - Results reporting`
+  },
+
   "3-sat-solver": {
     title: "3-SAT Solver",
     content: `The 3-SAT solver is our primary solver, designed for Boolean satisfiability problems where each clause contains exactly three literals.
@@ -143,6 +230,7 @@ The solver provides comprehensive metrics:
 - Configurable range
 - Verified problem instances`
   },
+
   "k-sat-solver": {
     title: "K-SAT Solver",
     content: `## Overview
@@ -163,6 +251,7 @@ The K-SAT solver is an extension of our 3-SAT solver, designed to handle Boolean
 
 Stay tuned for updates on the K-SAT solver release.`
   },
+
   "ldpc-solver": {
     title: "LDPC Solver",
     content: `## Overview
@@ -195,6 +284,15 @@ const docsStructure = [
       { id: "introduction", title: "Introduction" },
       { id: "quick-start", title: "Quick Start Guide" },
       { id: "installation", title: "Installation" }
+    ]
+  },
+  {
+    id: "architecture",
+    title: "System Architecture",
+    icon: <RiCpuLine className="size-4" />,
+    items: [
+      { id: "hardware-architecture", title: "Hardware Architecture" },
+      { id: "software-architecture", title: "Software Architecture" }
     ]
   },
   {
@@ -280,10 +378,73 @@ const renderMarkdown = (content) => {
 };
 
 export default function Documentation() {
+  // Simulated admin status - replace with actual auth logic
+  const isAdmin = true; // TODO: Replace with actual auth check
+
   const [activeSection, setActiveSection] = useState("introduction");
   const [expandedSections, setExpandedSections] = useState(docsStructure.map(section => section.id));
   const [searchQuery, setSearchQuery] = useState("");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // New states for editing
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState("");
+  const [editTitle, setEditTitle] = useState("");
+  const [activeTab, setActiveTab] = useState("preview");
+
+  // Update edit content when section changes
+  useEffect(() => {
+    if (DocsContent[activeSection]) {
+      setEditContent(DocsContent[activeSection].content);
+      setEditTitle(DocsContent[activeSection].title);
+    }
+  }, [activeSection]);
+
+  // Reset editing state when section changes
+  useEffect(() => {
+    setIsEditing(false);
+    setActiveTab("preview");
+  }, [activeSection]);
+
+  const handleStartEditing = () => {
+    setIsEditing(true);
+    setEditContent(DocsContent[activeSection].content);
+    setEditTitle(DocsContent[activeSection].title);
+    setActiveTab("edit");
+  };
+
+  const handleSave = async () => {
+    try {
+      // Here you would make an API call to save the content
+      // For now we'll just simulate it
+      console.log("Saving content for section:", activeSection);
+      console.log("New title:", editTitle);
+      console.log("New content:", editContent);
+
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Update local state
+      DocsContent[activeSection] = {
+        ...DocsContent[activeSection],
+        title: editTitle,
+        content: editContent
+      };
+
+      setIsEditing(false);
+      setActiveTab("preview");
+    } catch (error) {
+      console.error("Error saving content:", error);
+      // Show error message to user
+    }
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    setEditContent(DocsContent[activeSection].content);
+    setEditTitle(DocsContent[activeSection].title);
+    setActiveTab("preview");
+  };
 
   // Find parent section for navigation
   const findParentSection = (itemId) => {
@@ -314,7 +475,6 @@ export default function Documentation() {
 
   // Find next and previous items for navigation
   const findAdjacentItems = () => {
-    // Flatten the structure for navigation
     const allItems = docsStructure.flatMap(section => section.items);
     const currentIndex = allItems.findIndex(item => item.id === activeSection);
 
@@ -343,7 +503,7 @@ export default function Documentation() {
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             className="flex items-center justify-between w-full px-4 py-2 bg-white dark:bg-gray-900 border rounded-lg shadow-sm"
           >
-            <span>{DocsContent[activeSection].title}</span>
+            <span>{editTitle}</span>
             <RiArrowDownSLine className={`transition-transform ${isMobileMenuOpen ? 'rotate-180' : ''}`} />
           </button>
         </div>
@@ -367,7 +527,7 @@ export default function Documentation() {
               <div key={section.id} className="mb-4">
                 <button
                   onClick={() => toggleSection(section.id)}
-                  className="flex items-center w-full text-left font-medium mb-2"
+                  className="flex items-center w-full text-left font-medium"
                 >
                   <span className="mr-2">{section.icon}</span>
                   <span>{section.title}</span>
@@ -400,16 +560,7 @@ export default function Documentation() {
 
       {/* Desktop Sidebar */}
       <div className="hidden lg:block w-64 flex-shrink-0">
-        <div className="sticky top-4">
-          <div className="mb-6">
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
-              Documentation
-            </h1>
-            <p className="text-gray-500 text-sm dark:text-gray-500">
-              Comprehensive guides for using the Dacroq platform
-            </p>
-          </div>
-
+        <div className="sticky top-0">
           <div className="mb-6">
             <div className="relative">
               <RiSearchLine className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
@@ -474,73 +625,111 @@ export default function Documentation() {
       <div className="flex-1">
         <Divider className="block lg:hidden" />
 
-        {/* Status Indicator */}
-        <div className="mb-4">
-          <div className="flex items-center gap-2 text-sm">
-            <div className="flex items-center gap-2">
-              <span
-                className={`size-2.5 shrink-0 rounded-sm ${
-                  activeSection === '3-sat-solver' ? 'bg-green-500' :
-                    (activeSection === 'k-sat-solver' || activeSection === 'ldpc-solver') ? 'bg-amber-500' : 'bg-blue-500'
-                }`}
-                aria-hidden="true"
-              />
-              <span>
-                {activeSection === '3-sat-solver' ? 'Available' :
-                  (activeSection === 'k-sat-solver' || activeSection === 'ldpc-solver') ? 'In Development' : 'Documentation'}
-              </span>
-            </div>
-          </div>
+        {/* Documentation Header */}
+        <div className="flex items-center justify-between mb-6">
+          {isEditing ? (
+            <input
+              type="text"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              className="text-2xl font-semibold w-full bg-transparent border-b border-gray-200 dark:border-gray-800 focus:outline-none focus:border-blue-500"
+            />
+          ) : (
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
+              {editTitle}
+            </h2>
+          )}
+
+          {isAdmin && !isEditing && (
+            <Button
+              variant="outline"
+              onClick={handleStartEditing}
+              className="flex items-center gap-2"
+            >
+              <RiEditLine className="size-4" />
+              Edit
+            </Button>
+          )}
         </div>
 
         {/* Documentation Content */}
-        <Card className="p-6 shadow-sm">
-          <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-50 mb-4">
-            {DocsContent[activeSection].title}
-          </h2>
+        {isEditing ? (
+          <Card className="p-6 shadow-sm">
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <div className="flex items-center justify-between mb-4">
+                <TabsList>
+                  <TabsTrigger value="edit">Edit</TabsTrigger>
+                  <TabsTrigger value="preview">Preview</TabsTrigger>
+                </TabsList>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={handleCancel}
+                    className="flex items-center gap-2"
+                  >
+                    <RiCloseLine className="size-4" />
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSave}
+                    className="flex items-center gap-2"
+                  >
+                    <RiSaveLine className="size-4" />
+                    Save
+                  </Button>
+                </div>
+              </div>
 
-          <div className="documentation-content">
-            {renderMarkdown(DocsContent[activeSection].content)}
-          </div>
+              <TabsContent value="edit">
+                <Textarea
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  className="min-h-[500px] font-mono text-sm p-4 bg-gray-50 dark:bg-gray-900"
+                  placeholder="Enter markdown content..."
+                />
+              </TabsContent>
 
-          {/* Navigation buttons */}
-          <div className="mt-8 flex flex-wrap justify-between gap-4 pt-6 border-t">
-            <div>
-              {prev && (
-                <button
-                  onClick={() => setActiveSection(prev.id)}
-                  className="flex items-center text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
-                >
-                  <RiArrowRightSLine className="mr-1 size-4 rotate-180" />
-                  <span className="text-sm mr-2">Previous</span>
-                  <span className="text-sm font-medium">{prev.title}</span>
-                </button>
-              )}
+              <TabsContent value="preview">
+                <div className="documentation-content">
+                  {renderMarkdown(editContent)}
+                </div>
+              </TabsContent>
+            </Tabs>
+          </Card>
+        ) : (
+          <Card className="p-6 shadow-sm">
+            <div className="documentation-content">
+              {renderMarkdown(editContent)}
             </div>
-            <div>
-              {next && (
-                <button
-                  onClick={() => setActiveSection(next.id)}
-                  className="flex items-center text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
-                >
-                  <span className="text-sm mr-2">Next</span>
-                  <span className="text-sm font-medium">{next.title}</span>
-                  <RiArrowRightSLine className="ml-1 size-4" />
-                </button>
-              )}
-            </div>
-          </div>
-        </Card>
+          </Card>
+        )}
 
-        {/* Edit on GitHub link */}
-        <div className="mt-4 text-right">
-          <a
-            href="#"
-            className="text-sm text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 inline-flex items-center"
-          >
-            <span>Edit this page on GitHub</span>
-            <RiExternalLinkLine className="ml-1 size-4" />
-          </a>
+        {/* Navigation buttons */}
+        <div className="mt-8 flex flex-wrap justify-between gap-4 pt-6 border-t">
+          <div>
+            {prev && (
+              <button
+                onClick={() => setActiveSection(prev.id)}
+                className="flex items-center text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+              >
+                <RiArrowRightSLine className="mr-1 size-4 rotate-180" />
+                <span className="text-sm mr-2">Previous</span>
+                <span className="text-sm font-medium">{prev.title}</span>
+              </button>
+            )}
+          </div>
+          <div>
+            {next && (
+              <button
+                onClick={() => setActiveSection(next.id)}
+                className="flex items-center text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+              >
+                <span className="text-sm mr-2">Next</span>
+                <span className="text-sm font-medium">{next.title}</span>
+                <RiArrowRightSLine className="ml-1 size-4" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </main>

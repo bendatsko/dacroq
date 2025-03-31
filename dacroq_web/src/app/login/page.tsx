@@ -167,7 +167,7 @@ export default function LoginPage() {
           >
             <span className="inline-flex items-center gap-2">
               <RiGoogleFill className="size-5" aria-hidden={true} />
-              {isProcessing ? "Processing..." : "Continue with Google"}
+              {isProcessing ? "Logging you in..." : "Continue with Google"}
             </span>
           </Button>
         </div>

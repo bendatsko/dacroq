@@ -1,53 +1,64 @@
-"use client"
-
-import { useState, useEffect, useMemo, useRef } from "react"
-import { Divider } from "@/components/Divider"
-import { RiInformationLine, RiRefreshLine, RiShieldLine } from "@remixicon/react"
-import { Button } from "@/components/Button"
-import { agents } from "@/data/agents/agents"
-import { collection, getDocs, doc, updateDoc, getDoc, setDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase"
+"use client";
+import { useState, useEffect } from "react";
 import {
-  flexRender,
-  getCoreRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from '@tanstack/react-table'
+  RiInformationLine,
+  RiRefreshLine,
+  RiShieldLine,
+  RiAddLine,
+  RiCloseLine,
+  RiSearchLine,
+  RiNotification2Line,
+  RiUserAddLine,
+  RiUserSettingsLine,
+  RiTerminalBoxLine,
+  RiSettings4Line,
+  RiDashboardLine,
+} from "@remixicon/react";
+import { Button } from "@/components/Button";
+import {
+  collection,
+  getDocs,
+  doc,
+  updateDoc,
+  getDoc,
+  setDoc,
+  addDoc,
+  serverTimestamp,
+  query,
+  where,
+  orderBy,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import {
   Table,
   TableBody,
   TableCell,
-  TableFoot,
   TableHead,
   TableHeaderCell,
   TableRow,
-} from '@tremor/react'
+  Card,
+  Tab,
+  TabGroup,
+  TabList,
+  TabPanel,
+  TabPanels,
+  Badge,
+  Select,
+  SelectItem,
+  TextInput,
+  Textarea,
+  Dialog,
+  DialogPanel,
+  Divider,
+  Grid,
+  Col,
+  Flex,
+  Title,
+  Text,
+  Metric,
+} from "@tremor/react";
 
-function classNames(...classes) {
-  return classes.filter(Boolean).join(' ')
-}
-
-function IndeterminateCheckbox({ indeterminate, className, ...rest }) {
-  const ref = useRef(null)
-  useEffect(() => {
-    if (typeof indeterminate === 'boolean') {
-      ref.current.indeterminate = !rest.checked && indeterminate
-    }
-  }, [ref, indeterminate])
-
-  return (
-    <input
-      type="checkbox"
-      ref={ref}
-      className={classNames(
-        'size-4 rounded border-tremor-border text-tremor-brand shadow-tremor-input focus:ring-tremor-brand-muted dark:border-dark-tremor-border dark:bg-dark-tremor-background dark:text-dark-tremor-brand dark:shadow-dark-tremor-input dark:focus:ring-dark-tremor-brand-muted',
-        className,
-      )}
-      {...rest}
-    />
-  )
-}
-
+// Interfaces
 interface AdminUser {
   uid: string;
   displayName: string;
@@ -60,20 +71,125 @@ interface AdminUser {
   photoURL?: string;
 }
 
+interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  date: any;
+  type: "system" | "alert" | "update" | "info";
+  global: boolean;
+  forUsers?: string[];
+  readBy: string[];
+  createdBy: string;
+  createdByName: string;
+}
+
+// Utility functions
+function formatDate(date) {
+  if (!date) return "Unknown";
+  const d = date.toDate ? date.toDate() : new Date(date);
+  return d.toLocaleString();
+}
+
+function classNames(...classes) {
+  return classes.filter(Boolean).join(" ");
+}
+
+// Terminal Component
+function Terminal({ framework, title }) {
+  return (
+    <Card className="h-full">
+      <Flex alignItems="center" justifyContent="between" className="mb-4">
+        <Title>{title}</Title>
+        <Button variant="outline" size="sm" className="flex items-center gap-1">
+          <RiRefreshLine className="size-4" /> Refresh
+        </Button>
+      </Flex>
+      <div className="bg-gray-900 text-gray-200 p-3 rounded-md h-40 overflow-auto font-mono text-sm">
+        <div>$ {framework} --version</div>
+        <div className="text-green-400">v16.0.0</div>
+        <div>$ {framework} run test</div>
+        <div className="text-gray-400">Running tests...</div>
+        <div className="text-green-400">✓ All tests passed!</div>
+        <div>$ _</div>
+      </div>
+    </Card>
+  );
+}
+
+// TestBench Configuration Component
+function TestBenchConfig() {
+  return (
+    <Card>
+      <Title>Test Bench Configuration</Title>
+      <Divider className="my-4" />
+      <div className="space-y-4">
+        <div>
+          <Text className="font-medium mb-1">Environment</Text>
+          <Select defaultValue="staging">
+            <SelectItem value="development">Development</SelectItem>
+            <SelectItem value="staging">Staging</SelectItem>
+            <SelectItem value="production">Production</SelectItem>
+          </Select>
+        </div>
+        <div>
+          <Text className="font-medium mb-1">Test Suite</Text>
+          <Select defaultValue="all">
+            <SelectItem value="all">All Tests</SelectItem>
+            <SelectItem value="unit">Unit Tests</SelectItem>
+            <SelectItem value="integration">Integration Tests</SelectItem>
+            <SelectItem value="e2e">End-to-End Tests</SelectItem>
+          </Select>
+        </div>
+        <Flex justifyContent="end" className="mt-4">
+          <Button className="flex items-center gap-1">
+            Run Tests <RiRefreshLine className="size-4" />
+          </Button>
+        </Flex>
+      </div>
+    </Card>
+  );
+}
+
 export default function AdminPanel() {
-  const [users, setUsers] = useState<AdminUser[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [maintenanceMode, setMaintenanceMode] = useState(false)
-  const [whitelistedEmails, setWhitelistedEmails] = useState<string[]>([])
-  const [newEmail, setNewEmail] = useState("")
-  const [rowSelection, setRowSelection] = useState({})
+  // Main state
+  const [activeTab, setActiveTab] = useState(0);
+  const [users, setUsers] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [rowSelection, setRowSelection] = useState({});
 
+  // Maintenance mode state
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [whitelistedEmails, setWhitelistedEmails] = useState([]);
+  const [newEmail, setNewEmail] = useState("");
+
+  // User management state
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [newUser, setNewUser] = useState({
+    displayName: "",
+    email: "",
+    role: "user",
+  });
+
+  // Announcement state
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newMessage, setNewMessage] = useState("");
+  const [newType, setNewType] = useState("info");
+  const [isGlobal, setIsGlobal] = useState(true);
+  const [selectedUsers, setSelectedUsers] = useState([]);
+
+  // Initial data loading
   useEffect(() => {
-    loadUsers()
-    loadMaintenanceState()
-  }, [])
+    loadUsers();
+    loadMaintenanceState();
+    loadNotifications();
+  }, []);
 
+  // Load maintenance state from Firestore
   const loadMaintenanceState = async () => {
     try {
       const maintenanceRef = doc(db, "system", "maintenance");
@@ -84,68 +200,18 @@ export default function AdminPanel() {
       }
     } catch (error) {
       console.error("Error loading maintenance state:", error);
+      setError("Failed to load maintenance settings");
     }
   };
 
-  const toggleMaintenanceMode = async () => {
-    try {
-      const maintenanceRef = doc(db, "system", "maintenance");
-      await setDoc(maintenanceRef, {
-        enabled: !maintenanceMode,
-        whitelistedEmails,
-        lastUpdated: new Date().toISOString()
-      });
-      setMaintenanceMode(!maintenanceMode);
-      setError(null);
-    } catch (error) {
-      console.error("Error toggling maintenance mode:", error);
-      setError("Failed to toggle maintenance mode");
-    }
-  };
-
-  const addWhitelistedEmail = async () => {
-    if (!newEmail || whitelistedEmails.includes(newEmail)) return;
-    try {
-      const maintenanceRef = doc(db, "system", "maintenance");
-      const updatedEmails = [...whitelistedEmails, newEmail];
-      await setDoc(maintenanceRef, {
-        enabled: maintenanceMode,
-        whitelistedEmails: updatedEmails,
-        lastUpdated: new Date().toISOString()
-      });
-      setWhitelistedEmails(updatedEmails);
-      setNewEmail("");
-      setError(null);
-    } catch (error) {
-      console.error("Error adding email to whitelist:", error);
-      setError("Failed to add email to whitelist");
-    }
-  };
-
-  const removeWhitelistedEmail = async (emailToRemove: string) => {
-    try {
-      const maintenanceRef = doc(db, "system", "maintenance");
-      const updatedEmails = whitelistedEmails.filter(email => email !== emailToRemove);
-      await setDoc(maintenanceRef, {
-        enabled: maintenanceMode,
-        whitelistedEmails: updatedEmails,
-        lastUpdated: new Date().toISOString()
-      });
-      setWhitelistedEmails(updatedEmails);
-      setError(null);
-    } catch (error) {
-      console.error("Error removing email from whitelist:", error);
-      setError("Failed to remove email from whitelist");
-    }
-  };
-
+  // Load users from Firestore
   const loadUsers = async () => {
     setLoading(true);
     setError(null);
     try {
       const usersRef = collection(db, "users");
       const usersSnapshot = await getDocs(usersRef);
-      const firestoreUsers: AdminUser[] = [];
+      const firestoreUsers = [];
       usersSnapshot.forEach((doc) => {
         const data = doc.data();
         firestoreUsers.push({
@@ -157,264 +223,204 @@ export default function AdminPanel() {
           testsRun: data.testsRun || 0,
           accountState: data.accountState || "enabled",
           role: data.role || "user",
-          photoURL: data.photoURL
+          photoURL: data.photoURL,
         });
       });
       setUsers(firestoreUsers);
     } catch (error) {
       console.error("Error loading users:", error);
-      setError("Error loading user data. Using demo data.");
-      const fallbackUsers: AdminUser[] = agents.map((agent, index) => ({
-        uid: agent.agent_id,
-        displayName: agent.full_name,
-        email: agent.email,
-        joinDate: agent.start_date,
-        lastOnlineDate: new Date().toISOString(),
-        testsRun: Math.floor(agent.minutes_called / 10),
-        accountState: agent.registered ? "enabled" : "disabled",
-        role: index < 3 ? "admin" : index < 10 ? "moderator" : "user"
-      }));
-      setUsers(fallbackUsers);
+      setError("Error loading user data.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Bulk actions for selected users
-  const handleBulkDisable = async () => {
+  // Toggle maintenance mode in Firestore
+  const toggleMaintenanceMode = async () => {
     try {
-      const selectedIndices = Object.keys(rowSelection);
-      const selectedUsers = selectedIndices.map(index => users[parseInt(index)]);
-
-      for (const user of selectedUsers) {
-        const userRef = doc(db, "users", user.uid);
-        await updateDoc(userRef, { accountState: "disabled" });
-      }
-
-      loadUsers();
-      setRowSelection({});
+      const maintenanceRef = doc(db, "system", "maintenance");
+      await setDoc(maintenanceRef, {
+        enabled: !maintenanceMode,
+        whitelistedEmails,
+        lastUpdated: new Date().toISOString(),
+      });
+      setMaintenanceMode(!maintenanceMode);
+      setError(null);
     } catch (error) {
-      console.error("Error disabling users:", error);
-      setError("Failed to disable selected users");
+      console.error("Error toggling maintenance mode:", error);
+      setError("Failed to toggle maintenance mode");
     }
   };
 
-  const handleBulkRoleChange = async (newRole: "user" | "moderator" | "admin") => {
+  // Load notifications from Firestore
+  const loadNotifications = async () => {
     try {
-      const selectedIndices = Object.keys(rowSelection);
-      const selectedUsers = selectedIndices.map(index => users[parseInt(index)]);
+      const notificationsRef = collection(db, "notifications");
+      const notificationsQuery = query(
+        notificationsRef,
+        where("deleted", "!=", true),
+        orderBy("date", "desc")
+      );
 
-      for (const user of selectedUsers) {
-        const userRef = doc(db, "users", user.uid);
-        await updateDoc(userRef, { role: newRole });
-      }
+      const notificationsSnapshot = await getDocs(notificationsQuery);
+      const notificationsData = notificationsSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
 
-      loadUsers();
-      setRowSelection({});
+      setNotifications(notificationsData);
     } catch (error) {
-      console.error("Error updating user roles:", error);
-      setError("Failed to update roles for selected users");
+      console.error("Error loading notifications:", error);
+      setError("Failed to load notifications");
     }
   };
 
-  const columns = useMemo(() => [
-    {
-      id: 'select',
-      header: ({ table }) => (
-        <IndeterminateCheckbox
-          {...{
-            checked: table.getIsAllRowsSelected(),
-            indeterminate: table.getIsSomeRowsSelected(),
-            onChange: table.getToggleAllRowsSelectedHandler(),
-          }}
-          className="-translate-y-[1px]"
-        />
-      ),
-      cell: ({ row }) => (
-        <IndeterminateCheckbox
-          {...{
-            checked: row.getIsSelected(),
-            disabled: !row.getCanSelect(),
-            indeterminate: row.getIsSomeSelected(),
-            onChange: row.getToggleSelectedHandler(),
-          }}
-          className="-translate-y-[1px]"
-        />
-      ),
-      enableSorting: false,
-      meta: {
-        align: 'text-left',
-      },
-    },
-    {
-      accessorKey: "displayName",
-      header: "Name",
-      enableSorting: true,
-      meta: {
-        align: 'text-left',
-      },
-      cell: ({ row }) => {
-        const user = row.original as AdminUser
-        return (
-          <div className="flex items-center gap-2">
-            {user.photoURL ? (
-              <img
-                src={user.photoURL}
-                alt={user.displayName}
-                className="size-8 rounded-full border border-gray-300 dark:border-gray-800"
-              />
-            ) : (
-              <div className="flex size-8 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
-                {user.displayName.charAt(0)}
-              </div>
-            )}
-            <span>{user.displayName}</span>
-          </div>
-        )
-      }
-    },
-    {
-      accessorKey: "email",
-      header: "Email",
-      enableSorting: true,
-      meta: {
-        align: 'text-left',
-      }
-    },
-    {
-      accessorKey: "joinDate",
-      header: "Join Date",
-      enableSorting: true,
-      meta: {
-        align: 'text-left',
-      },
-      cell: ({ row }) => {
-        const joinDate = new Date(row.getValue("joinDate"))
-        return <span>{joinDate.toLocaleDateString()}</span>
-      }
-    },
-    {
-      accessorKey: "lastOnlineDate",
-      header: "Last Online",
-      enableSorting: true,
-      meta: {
-        align: 'text-left',
-      },
-      cell: ({ row }) => {
-        const lastOnlineDate = row.getValue("lastOnlineDate") as string | null
-        if (!lastOnlineDate) return <span>Never</span>
-        const date = new Date(lastOnlineDate)
-        const today = new Date()
-        const diffDays = Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
-        if (diffDays === 0) return <span>Today</span>
-        if (diffDays === 1) return <span>Yesterday</span>
-        return <span>{diffDays} days ago</span>
-      }
-    },
-    {
-      accessorKey: "testsRun",
-      header: "Tests Run",
-      enableSorting: true,
-      meta: {
-        align: 'text-left',
-      }
-    },
-    {
-      accessorKey: "accountState",
-      header: "Status",
-      enableSorting: true,
-      meta: {
-        align: 'text-left',
-      },
-      cell: ({ row }) => {
-        const status = row.getValue("accountState") as string
-        return (
-          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-            status === "enabled"
-              ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-500"
-              : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-500"
-          }`}>
-            {status.charAt(0).toUpperCase() + status.slice(1)}
-          </span>
-        )
-      }
-    },
-    {
-      id: "actions",
-      header: "Actions",
-      enableSorting: false,
-      meta: {
-        align: 'text-right',
-      },
-      cell: ({ row }) => {
-        const user = row.original as AdminUser;
-        const handleRoleChange = async (newRole: string) => {
-          try {
-            const userRef = doc(db, "users", user.uid);
-            await updateDoc(userRef, { role: newRole });
-            loadUsers();
-          } catch (error) {
-            console.error("Error updating role:", error);
-            setError("Failed to update user role");
-          }
-        };
-        const handleStatusChange = async () => {
-          try {
-            const userRef = doc(db, "users", user.uid);
-            const newState = user.accountState === "enabled" ? "disabled" : "enabled";
-            await updateDoc(userRef, { accountState: newState });
-            loadUsers();
-          } catch (error) {
-            console.error("Error updating status:", error);
-            setError("Failed to update account status");
-          }
-        };
-        return (
-          <div className="flex gap-2 justify-end">
-            <select
-              value={user.role}
-              onChange={(e) => handleRoleChange(e.target.value)}
-              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800"
-            >
-              <option value="user">User</option>
-              <option value="moderator">Moderator</option>
-              <option value="admin">Admin</option>
-            </select>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleStatusChange}
-              className="h-8"
-            >
-              {user.accountState === "enabled" ? "Disable" : "Enable"}
-            </Button>
-          </div>
-        );
-      }
-    }
-  ], []);
+  // Add new user to Firestore
+  const handleAddUser = async (e) => {
+    e.preventDefault();
 
-  const table = useReactTable({
-    data: users,
-    columns,
-    enableRowSelection: true,
-    onRowSelectionChange: setRowSelection,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    state: {
-      rowSelection,
-    },
-  });
+    try {
+      // Here you would typically use Firebase Authentication createUser
+      // For demo purposes, we're just adding to Firestore
+      const userRef = collection(db, "users");
+      await addDoc(userRef, {
+        displayName: newUser.displayName,
+        email: newUser.email,
+        role: newUser.role,
+        accountState: "enabled",
+        createdAt: new Date().toISOString(),
+        testsRun: 0
+      });
+
+      // Reset form and close modal
+      setNewUser({
+        displayName: "",
+        email: "",
+        role: "user",
+      });
+      setIsUserModalOpen(false);
+
+      // Reload users
+      loadUsers();
+    } catch (error) {
+      console.error("Error adding user:", error);
+      setError("Failed to add user");
+    }
+  };
+
+  // Create a new notification announcement
+  const handleCreateNotification = async (e) => {
+    e.preventDefault();
+
+    try {
+      // Get current user from localStorage
+      const userStr = localStorage.getItem("user");
+      if (!userStr) {
+        setError("User not authenticated");
+        return;
+      }
+
+      const user = JSON.parse(userStr);
+
+      // Basic validation
+      if (!newTitle.trim() || !newMessage.trim()) {
+        setError("Title and message are required");
+        return;
+      }
+
+      // Create notification object
+      const newNotification = {
+        title: newTitle,
+        message: newMessage,
+        type: newType,
+        date: serverTimestamp(),
+        global: isGlobal,
+        forUsers: isGlobal ? [] : selectedUsers,
+        readBy: [],
+        createdBy: user.uid,
+        createdByName: user.displayName || user.name || "Admin",
+        deleted: false,
+      };
+
+      // Add to Firestore
+      await addDoc(collection(db, "notifications"), newNotification);
+
+      // Reset form fields and close modal
+      setNewTitle("");
+      setNewMessage("");
+      setNewType("info");
+      setIsGlobal(true);
+      setSelectedUsers([]);
+      setIsNotificationModalOpen(false);
+      setError(null);
+
+      // Reload notifications
+      loadNotifications();
+    } catch (error) {
+      console.error("Error creating notification:", error);
+      setError("Failed to create notification");
+    }
+  };
+
+  // Handle delete notification
+  const handleDeleteNotification = async (id) => {
+    if (!confirm("Are you sure you want to delete this notification?")) return;
+
+    try {
+      await updateDoc(doc(db, "notifications", id), {
+        deleted: true,
+        deletedAt: serverTimestamp(),
+      });
+      loadNotifications();
+    } catch (error) {
+      console.error("Error deleting notification:", error);
+      setError("Failed to delete notification");
+    }
+  };
+
+  // Handle user status change
+  const handleUserStatusChange = async (user, newStatus) => {
+    try {
+      const userRef = doc(db, "users", user.uid);
+      await updateDoc(userRef, { accountState: newStatus });
+      loadUsers();
+    } catch (error) {
+      console.error("Error updating user status:", error);
+      setError("Failed to update user status");
+    }
+  };
+
+  // Handle user role change
+  const handleUserRoleChange = async (user, newRole) => {
+    try {
+      const userRef = doc(db, "users", user.uid);
+      await updateDoc(userRef, { role: newRole });
+      loadUsers();
+    } catch (error) {
+      console.error("Error updating user role:", error);
+      setError("Failed to update user role");
+    }
+  };
+
+  // Filter notifications by search query
+  const filteredNotifications = searchQuery.trim() === ""
+    ? notifications
+    : notifications.filter((notification) => {
+      const query = searchQuery.toLowerCase();
+      return (
+        (notification.title && notification.title.toLowerCase().includes(query)) ||
+        (notification.message && notification.message.toLowerCase().includes(query)) ||
+        (notification.type && notification.type.toLowerCase().includes(query))
+      );
+    });
 
   return (
-    <main className="p-4">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <main className="p-4 md:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
-            Admin Panel
-          </h1>
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">Admin Panel</h1>
           <p className="text-gray-500 sm:text-sm/6 dark:text-gray-500">
-            Manage users, permissions, and system status
+            Manage users, announcements, and system status
           </p>
         </div>
         <div className="flex gap-2">
@@ -428,7 +434,10 @@ export default function AdminPanel() {
           </Button>
           <Button
             variant="outline"
-            onClick={() => loadUsers()}
+            onClick={() => {
+              loadUsers();
+              loadNotifications();
+            }}
             className="flex items-center gap-1"
           >
             <RiRefreshLine className="size-4" />
@@ -437,21 +446,41 @@ export default function AdminPanel() {
         </div>
       </div>
 
+      {error && (
+        <div className="my-4 flex items-center gap-2 rounded-md bg-amber-50 p-4 text-amber-800 dark:bg-amber-900/10 dark:text-amber-500">
+          <RiInformationLine className="size-4" />
+          <p>{error}</p>
+        </div>
+      )}
+
       {maintenanceMode && (
-        <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900/50 dark:bg-blue-900/20">
-          <h3 className="font-medium text-blue-900 dark:text-blue-200">Whitelist Configuration</h3>
+        <Card className="mb-6">
+          <Flex alignItems="center" justifyContent="between" className="mb-4">
+            <Title>Maintenance Mode Active</Title>
+            <Badge color="amber">Restricted Access</Badge>
+          </Flex>
+          <Text>Only whitelisted emails can access the system while maintenance mode is active.</Text>
+
+          <Divider className="my-4" />
+
           <div className="mt-2 flex gap-2">
-            <input
+            <TextInput
               type="email"
               placeholder="Add email to whitelist"
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
-              className="flex-1 rounded-md border border-blue-200 bg-white px-3 py-1 text-sm placeholder:text-blue-400 dark:border-blue-900/50 dark:bg-blue-900/30 dark:placeholder:text-blue-500"
+              className="flex-1"
             />
-            <Button variant="secondary" onClick={addWhitelistedEmail} size="sm">
+            <Button variant="secondary" onClick={() => {
+              if (newEmail && !whitelistedEmails.includes(newEmail)) {
+                setWhitelistedEmails([...whitelistedEmails, newEmail]);
+                setNewEmail("");
+              }
+            }}>
               Add Email
             </Button>
           </div>
+
           <div className="mt-3 flex flex-wrap gap-2">
             {whitelistedEmails.map((email) => (
               <div
@@ -460,7 +489,7 @@ export default function AdminPanel() {
               >
                 {email}
                 <button
-                  onClick={() => removeWhitelistedEmail(email)}
+                  onClick={() => setWhitelistedEmails(whitelistedEmails.filter(e => e !== email))}
                   className="text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-100"
                 >
                   ×
@@ -468,130 +497,570 @@ export default function AdminPanel() {
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
 
-      <Divider className="my-4" />
+      <Grid numItems={1} numItemsSm={2} numItemsLg={3} className="gap-6 mb-6">
+        {/* User Management Card */}
+        <Card className="col-span-1">
+          <Flex alignItems="center" justifyContent="between" className="mb-4">
+            <div>
+              <Title>User Management</Title>
+              <Text>Total Users: {users.length}</Text>
+            </div>
+            <Button onClick={() => setIsUserModalOpen(true)} className="flex items-center gap-1">
+              <RiUserAddLine className="size-4" />
+              Add User
+            </Button>
+          </Flex>
 
-      {error && (
-        <div className="my-4 flex items-center gap-2 rounded-md bg-amber-50 p-4 text-amber-800 dark:bg-amber-900/10 dark:text-amber-500">
-          <RiInformationLine className="size-4" />
-          <p>{error}</p>
-        </div>
-      )}
+          <div className="space-y-2">
+            <div className="flex justify-between items-center text-sm font-medium text-gray-500 dark:text-gray-400 border-b pb-2">
+              <span>User Role</span>
+              <span>Count</span>
+            </div>
 
-      <section className="mt-8 relative">
-        {loading ? (
-          <div className="flex h-64 items-center justify-center">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-900/10 border-t-gray-900 dark:border-gray-50/10 dark:border-t-gray-50"></div>
-          </div>
-        ) : (
-          <div className="relative">
-            <Table>
-              <TableHead>
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow
-                    key={headerGroup.id}
-                    className="border-b border-tremor-border dark:border-dark-tremor-border"
-                  >
-                    {headerGroup.headers.map((header) => (
-                      <TableHeaderCell
-                        key={header.id}
-                        className={classNames(header.column.columnDef.meta.align)}
-                        onClick={header.column.getToggleSortingHandler()}
-                      >
-                        {flexRender(
-                          header.column.columnDef.header,
-                          header.getContext(),
-                        )}
-                      </TableHeaderCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableHead>
-              <TableBody>
-                {table.getRowModel().rows.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    onClick={() => row.toggleSelected(!row.getIsSelected())}
-                    className="select-none hover:bg-tremor-background-muted hover:dark:bg-dark-tremor-background-muted"
-                  >
-                    {row.getVisibleCells().map((cell, index) => (
-                      <TableCell
-                        key={cell.id}
-                        className={classNames(
-                          row.getIsSelected()
-                            ? 'bg-tremor-background-muted dark:bg-dark-tremor-background-muted'
-                            : '',
-                          cell.column.columnDef.meta.align,
-                          'relative',
-                        )}
-                      >
-                        {index === 0 && row.getIsSelected() && (
-                          <div className="absolute inset-y-0 left-0 w-0.5 bg-tremor-brand dark:bg-dark-tremor-brand" />
-                        )}
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-              <TableFoot>
-                <TableRow>
-                  <TableHeaderCell colSpan={1}>
-                    <IndeterminateCheckbox
-                      {...{
-                        checked: table.getIsAllPageRowsSelected(),
-                        indeterminate: table.getIsSomePageRowsSelected(),
-                        onChange: table.getToggleAllPageRowsSelectedHandler(),
-                      }}
-                      className="-translate-y-[1px]"
-                    />
-                  </TableHeaderCell>
-                  <TableHeaderCell colSpan={7} className="font-normal tabular-nums">
-                    {Object.keys(rowSelection).length} of{' '}
-                    {table.getRowModel().rows.length} Page Row(s) selected
-                  </TableHeaderCell>
-                </TableRow>
-              </TableFoot>
-            </Table>
+            <div className="flex justify-between items-center">
+              <span className="flex items-center gap-2">
+                <Badge color="blue">Admin</Badge>
+                <span>Administrators</span>
+              </span>
+              <span className="font-medium">{users.filter(u => u.role === 'admin').length}</span>
+            </div>
 
-            <div
-              className={classNames(
-                'absolute inset-x-0 -bottom-14 mx-auto flex w-fit items-center space-x-10 rounded-tremor-default border border-tremor-border bg-tremor-background p-2 shadow-tremor-dropdown dark:border-dark-tremor-border dark:bg-dark-tremor-background dark:shadow-dark-tremor-dropdown',
-                Object.keys(rowSelection).length > 0 ? '' : 'hidden',
-              )}
-            >
-              <p className="select-none text-tremor-default">
-                <span className="rounded bg-tremor-brand-faint px-2 py-1.5 font-medium tabular-nums text-tremor-brand-emphasis dark:bg-dark-tremor-brand-faint dark:text-dark-tremor-brand-emphasis">
-                  {Object.keys(rowSelection).length}
-                </span>
-                <span className="ml-2 font-medium text-tremor-content-strong dark:text-dark-tremor-content-strong">
-                  selected
-                </span>
-              </p>
-              <div className="flex items-center space-x-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => handleBulkRoleChange("moderator")}
-                  className="inline-flex items-center rounded bg-tremor-brand px-2 py-1.5 text-tremor-default font-semibold"
-                >
-                  Make Moderators
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleBulkDisable}
-                  className="inline-flex items-center rounded px-2 py-1.5 text-tremor-default font-semibold"
-                >
-                  Disable All
-                </Button>
-              </div>
+            <div className="flex justify-between items-center">
+              <span className="flex items-center gap-2">
+                <Badge color="indigo">Mod</Badge>
+                <span>Moderators</span>
+              </span>
+              <span className="font-medium">{users.filter(u => u.role === 'moderator').length}</span>
+            </div>
+
+            <div className="flex justify-between items-center">
+              <span className="flex items-center gap-2">
+                <Badge color="gray">User</Badge>
+                <span>Standard Users</span>
+              </span>
+              <span className="font-medium">{users.filter(u => u.role === 'user').length}</span>
             </div>
           </div>
-        )}
-      </section>
+
+          <Divider className="my-4" />
+
+          <Flex justifyContent="end">
+            <Button variant="secondary" onClick={() => setActiveTab(0)} className="flex items-center gap-1">
+              <RiUserSettingsLine className="size-4" />
+              Manage Users
+            </Button>
+          </Flex>
+        </Card>
+
+        {/* Announcement Tool Card */}
+        <Card className="col-span-1">
+          <Flex alignItems="center" justifyContent="between" className="mb-4">
+            <div>
+              <Title>Announcement Tool</Title>
+              <Text>Total Announcements: {notifications.length}</Text>
+            </div>
+            <Button onClick={() => setIsNotificationModalOpen(true)} className="flex items-center gap-1">
+              <RiNotification2Line className="size-4" />
+              Create
+            </Button>
+          </Flex>
+
+          <div className="space-y-2">
+            <div className="flex justify-between items-center text-sm font-medium text-gray-500 dark:text-gray-400 border-b pb-2">
+              <span>Type</span>
+              <span>Count</span>
+            </div>
+
+            <div className="flex justify-between items-center">
+              <span className="flex items-center gap-2">
+                <Badge color="amber">Alert</Badge>
+                <span>Alert Messages</span>
+              </span>
+              <span className="font-medium">{notifications.filter(n => n.type === 'alert').length}</span>
+            </div>
+
+            <div className="flex justify-between items-center">
+              <span className="flex items-center gap-2">
+                <Badge color="green">Update</Badge>
+                <span>Update Messages</span>
+              </span>
+              <span className="font-medium">{notifications.filter(n => n.type === 'update').length}</span>
+            </div>
+
+            <div className="flex justify-between items-center">
+              <span className="flex items-center gap-2">
+                <Badge color="blue">System</Badge>
+                <span>System Messages</span>
+              </span>
+              <span className="font-medium">{notifications.filter(n => n.type === 'system').length}</span>
+            </div>
+          </div>
+
+          <Divider className="my-4" />
+
+          <Flex justifyContent="end">
+            <Button variant="secondary" onClick={() => setActiveTab(1)} className="flex items-center gap-1">
+              <RiNotification2Line className="size-4" />
+              Manage Announcements
+            </Button>
+          </Flex>
+        </Card>
+
+        {/* Test Bench Card */}
+        <Card className="col-span-1">
+          <Flex alignItems="center" justifyContent="between" className="mb-4">
+            <div>
+              <Title>Test Bench</Title>
+              <Text>Run tests across frameworks</Text>
+            </div>
+            <Button variant="secondary" className="flex items-center gap-1">
+              <RiSettings4Line className="size-4" />
+              Configure
+            </Button>
+          </Flex>
+
+          <div className="space-y-2">
+            <div className="flex justify-between items-center text-sm font-medium text-gray-500 dark:text-gray-400 border-b pb-2">
+              <span>Framework</span>
+              <span>Status</span>
+            </div>
+
+            <div className="flex justify-between items-center">
+              <span className="flex items-center gap-2">
+                <span>React</span>
+              </span>
+              <Badge color="green">Ready</Badge>
+            </div>
+
+            <div className="flex justify-between items-center">
+              <span className="flex items-center gap-2">
+                <span>Node.js</span>
+              </span>
+              <Badge color="green">Ready</Badge>
+            </div>
+
+            <div className="flex justify-between items-center">
+              <span className="flex items-center gap-2">
+                <span>Firebase</span>
+              </span>
+              <Badge color="green">Ready</Badge>
+            </div>
+          </div>
+
+          <Divider className="my-4" />
+
+          <Flex justifyContent="end">
+            <Button variant="secondary" onClick={() => setActiveTab(2)} className="flex items-center gap-1">
+              <RiTerminalBoxLine className="size-4" />
+              Open Test Bench
+            </Button>
+          </Flex>
+        </Card>
+      </Grid>
+
+      <TabGroup index={activeTab} onIndexChange={setActiveTab}>
+        <TabList className="mb-6">
+          <Tab icon={RiUserSettingsLine}>Users</Tab>
+          <Tab icon={RiNotification2Line}>Announcements</Tab>
+          <Tab icon={RiTerminalBoxLine}>Test Bench</Tab>
+        </TabList>
+
+        <TabPanels>
+          {/* USERS TAB */}
+          <TabPanel>
+            <section className="mb-6">
+              {loading ? (
+                <div className="flex h-64 items-center justify-center">
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-900/10 border-t-gray-900 dark:border-gray-50/10 dark:border-t-gray-50"></div>
+                </div>
+              ) : (
+                <Card>
+                  <Title>User List</Title>
+                  <Divider className="my-4" />
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHead>
+                        <TableRow>
+                          <TableHeaderCell>Name</TableHeaderCell>
+                          <TableHeaderCell>Email</TableHeaderCell>
+                          <TableHeaderCell>Last Online</TableHeaderCell>
+                          <TableHeaderCell>Status</TableHeaderCell>
+                          <TableHeaderCell>Role</TableHeaderCell>
+                          <TableHeaderCell>Actions</TableHeaderCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {users.map((user) => (
+                          <TableRow key={user.uid}>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                {user.photoURL ? (
+                                  <img
+                                    src={user.photoURL}
+                                    alt={user.displayName}
+                                    className="size-8 rounded-full border border-gray-300 dark:border-gray-800"
+                                  />
+                                ) : (
+                                  <div className="flex size-8 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
+                                    {user.displayName.charAt(0)}
+                                  </div>
+                                )}
+                                <span>{user.displayName}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>{user.email}</TableCell>
+                            <TableCell>
+                              {user.lastOnlineDate ? (
+                                new Date(user.lastOnlineDate).toLocaleDateString()
+                              ) : (
+                                "Never"
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Badge color={user.accountState === "enabled" ? "green" : "red"}>
+                                {user.accountState === "enabled" ? "Enabled" : "Disabled"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Select
+                                value={user.role}
+                                onValueChange={(value) => handleUserRoleChange(user, value)}
+                              >
+                                <SelectItem value="user">User</SelectItem>
+                                <SelectItem value="moderator">Moderator</SelectItem>
+                                <SelectItem value="admin">Admin</SelectItem>
+                              </Select>
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant={user.accountState === "enabled" ? "destructive" : "secondary"}
+                                size="xs"
+                                onClick={() => handleUserStatusChange(
+                                  user,
+                                  user.accountState === "enabled" ? "disabled" : "enabled"
+                                )}
+                              >
+                                {user.accountState === "enabled" ? "Disable" : "Enable"}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </Card>
+              )}
+            </section>
+          </TabPanel>
+
+          {/* ANNOUNCEMENTS TAB */}
+          <TabPanel>
+            <section className="mb-6">
+              <Card>
+                <Flex alignItems="center" justifyContent="between" className="mb-4">
+                  <Title>System Announcements</Title>
+                  <Button onClick={() => setIsNotificationModalOpen(true)} className="flex items-center gap-1">
+                    <RiNotification2Line className="size-4" />
+                    Create Announcement
+                  </Button>
+                </Flex>
+
+                <div className="mb-4 relative">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                    <RiSearchLine className="size-4 text-gray-400" />
+                  </div>
+                  <TextInput
+                    placeholder="Search announcements..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+
+                <Divider className="my-4" />
+
+                {filteredNotifications.length === 0 ? (
+                  <div className="py-12 text-center">
+                    <RiNotification2Line className="mx-auto size-12 text-gray-400" />
+                    <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No announcements</h3>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      Get started by creating a new system announcement.
+                    </p>
+                    <div className="mt-6">
+                      <Button onClick={() => setIsNotificationModalOpen(true)}>
+                        <RiAddLine className="mr-2 size-4" />
+                        New Announcement
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHead>
+                        <TableRow>
+                          <TableHeaderCell>Title</TableHeaderCell>
+                          <TableHeaderCell>Type</TableHeaderCell>
+                          <TableHeaderCell>Audience</TableHeaderCell>
+                          <TableHeaderCell>Date</TableHeaderCell>
+                          <TableHeaderCell>Created By</TableHeaderCell>
+                          <TableHeaderCell>Actions</TableHeaderCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {filteredNotifications.map((notification) => (
+                          <TableRow key={notification.id}>
+                            <TableCell>
+                              <div className="font-medium">{notification.title}</div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                color={
+                                  notification.type === "alert"
+                                    ? "amber"
+                                    : notification.type === "update"
+                                      ? "green"
+                                      : notification.type === "system"
+                                        ? "blue"
+                                        : "gray"
+                                }
+                              >
+                                {notification.type}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {notification.global ? (
+                                <Badge color="blue">All Users</Badge>
+                              ) : (
+                                <Badge color="indigo">Targeted</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>{formatDate(notification.date)}</TableCell>
+                            <TableCell>{notification.createdByName || "Unknown"}</TableCell>
+                            <TableCell>
+                              <Button
+                                variant="destructive"
+                                size="xs"
+                                onClick={() => handleDeleteNotification(notification.id)}
+                              >
+                                Delete
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </Card>
+            </section>
+          </TabPanel>
+
+          {/* TEST BENCH TAB */}
+          <TabPanel>
+            <Grid numItems={1} numItemsMd={2} className="gap-6 mb-6">
+              <Col numColSpan={1} numColSpanMd={2}>
+                <TestBenchConfig />
+              </Col>
+
+              <Terminal framework="react" title="React Terminal" />
+              <Terminal framework="node" title="Node.js Terminal" />
+              <Terminal framework="firebase" title="Firebase Terminal" />
+            </Grid>
+          </TabPanel>
+        </TabPanels>
+      </TabGroup>
+
+      {/* Create Announcement Modal */}
+      <Dialog
+        open={isNotificationModalOpen}
+        onClose={() => setIsNotificationModalOpen(false)}
+        static={true}
+      >
+        <DialogPanel>
+          <div className="flex justify-between items-center border-b p-4">
+            <Title>Create New Announcement</Title>
+            <button onClick={() => setIsNotificationModalOpen(false)}>
+              <RiCloseLine className="size-5" />
+            </button>
+          </div>
+
+          <form onSubmit={handleCreateNotification} className="p-4">
+            <div className="space-y-4">
+              <div>
+                <Text className="font-medium mb-1">Title</Text>
+                <TextInput
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder="Announcement title"
+                  required
+                />
+              </div>
+
+              <div>
+                <Text className="font-medium mb-1">Type</Text>
+                <Select value={newType} onValueChange={(value) => setNewType(value)}>
+                  <SelectItem value="info">Information</SelectItem>
+                  <SelectItem value="update">Update</SelectItem>
+                  <SelectItem value="alert">Alert</SelectItem>
+                  <SelectItem value="system">System</SelectItem>
+                </Select>
+              </div>
+
+              <div>
+                <Text className="font-medium mb-1">Message</Text>
+                <Textarea
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  placeholder="Announcement message"
+                  rows={4}
+                  required
+                />
+              </div>
+
+              <div>
+                <Text className="font-medium mb-1">Audience</Text>
+                <div className="space-y-2">
+                  <div className="flex items-center">
+                    <input
+                      type="radio"
+                      id="audienceGlobal"
+                      name="audience"
+                      className="h-4 w-4 text-blue-600"
+                      checked={isGlobal}
+                      onChange={() => setIsGlobal(true)}
+                    />
+                    <label htmlFor="audienceGlobal" className="ml-2 text-sm">
+                      All users
+                    </label>
+                  </div>
+
+                  <div className="flex items-center">
+                    <input
+                      type="radio"
+                      id="audienceSpecific"
+                      name="audience"
+                      className="h-4 w-4 text-blue-600"
+                      checked={!isGlobal}
+                      onChange={() => setIsGlobal(false)}
+                    />
+                    <label htmlFor="audienceSpecific" className="ml-2 text-sm">
+                      Specific users
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {!isGlobal && (
+                <div className="border rounded-md p-4 max-h-60 overflow-y-auto">
+                  <Text className="font-medium mb-2">
+                    Select users ({selectedUsers.length} selected)
+                  </Text>
+                  <ul className="space-y-2">
+                    {users.map((user) => (
+                      <li key={user.uid} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id={`user-${user.uid}`}
+                          checked={selectedUsers.includes(user.uid)}
+                          onChange={() => {
+                            setSelectedUsers(
+                              selectedUsers.includes(user.uid)
+                                ? selectedUsers.filter(id => id !== user.uid)
+                                : [...selectedUsers, user.uid]
+                            );
+                          }}
+                          className="h-4 w-4 rounded text-blue-600"
+                        />
+                        <label htmlFor={`user-${user.uid}`} className="ml-2 text-sm">
+                          {user.displayName} ({user.email})
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setIsNotificationModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit">Send Announcement</Button>
+            </div>
+          </form>
+        </DialogPanel>
+      </Dialog>
+
+      {/* Add User Modal */}
+      <Dialog
+        open={isUserModalOpen}
+        onClose={() => setIsUserModalOpen(false)}
+        static={true}
+      >
+        <DialogPanel>
+          <div className="flex justify-between items-center border-b p-4">
+            <Title>Add New User</Title>
+            <button onClick={() => setIsUserModalOpen(false)}>
+              <RiCloseLine className="size-5" />
+            </button>
+          </div>
+
+          <form onSubmit={handleAddUser} className="p-4">
+            <div className="space-y-4">
+              <div>
+                <Text className="font-medium mb-1">Full Name</Text>
+                <TextInput
+                  value={newUser.displayName}
+                  onChange={(e) => setNewUser({...newUser, displayName: e.target.value})}
+                  placeholder="User's full name"
+                  required
+                />
+              </div>
+
+              <div>
+                <Text className="font-medium mb-1">Email</Text>
+                <TextInput
+                  type="email"
+                  value={newUser.email}
+                  onChange={(e) => setNewUser({...newUser, email: e.target.value})}
+                  placeholder="user@example.com"
+                  required
+                />
+              </div>
+
+              <div>
+                <Text className="font-medium mb-1">Role</Text>
+                <Select
+                  value={newUser.role}
+                  onValueChange={(value) => setNewUser({...newUser, role: value})}
+                >
+                  <SelectItem value="user">User</SelectItem>
+                  <SelectItem value="moderator">Moderator</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setIsUserModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit">Add User</Button>
+            </div>
+          </form>
+        </DialogPanel>
+      </Dialog>
     </main>
-  )
+  );
 }
