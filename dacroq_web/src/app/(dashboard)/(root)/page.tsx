@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { RiAddLine } from "@remixicon/react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 // Existing components & icons
 import { Button } from "@/components/Button";
@@ -15,11 +15,10 @@ import EnhancedTestTable from "./EnhancedTestTable";
 import TestDetails from "./TestDetails";
 
 // Tremor UI components
-import { Select, SelectItem } from "@remixor/react"; // if needed
 
 // Firestore
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, onSnapshot, serverTimestamp } from "firebase/firestore";
 
 // Types
 interface ChipStatus {
@@ -122,24 +121,24 @@ export default function HardwareDashboard() {
       setIsAdmin(user.role === "admin");
       setChips(mockChips);
       const unsubscribe = onSnapshot(
-          collection(db, "tests"),
-          (snapshot) => {
-            const testsData = snapshot.docs.map((doc) => ({
-              id: doc.id,
-              ...doc.data(),
-            })) as TestRun[];
-            testsData.sort((a, b) => {
-              const dateA = a.created?.seconds ? a.created.seconds * 1000 : new Date(a.created).getTime();
-              const dateB = b.created?.seconds ? b.created.seconds * 1000 : new Date(b.created).getTime();
-              return dateB - dateA;
-            });
-            setTests(testsData);
-            setIsLoading(false);
-          },
-          (error) => {
-            console.error("Error fetching tests:", error);
-            setIsLoading(false);
-          }
+        collection(db, "tests"),
+        (snapshot) => {
+          const testsData = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          })) as TestRun[];
+          testsData.sort((a, b) => {
+            const dateA = a.created?.seconds ? a.created.seconds * 1000 : new Date(a.created).getTime();
+            const dateB = b.created?.seconds ? b.created.seconds * 1000 : new Date(b.created).getTime();
+            return dateB - dateA;
+          });
+          setTests(testsData);
+          setIsLoading(false);
+        },
+        (error) => {
+          console.error("Error fetching tests:", error);
+          setIsLoading(false);
+        }
       );
       return () => unsubscribe();
     } catch (error) {
@@ -221,26 +220,26 @@ export default function HardwareDashboard() {
       cell: ({ row }: any) => {
         const creator = row.original.createdBy;
         return (
-            <div className="relative group flex items-center">
-              <img
-                  src={
-                      creator?.photoURL ||
-                      creator?.avatar ||
-                      `https://ui-avatars.com/api/?name=${encodeURIComponent(creator?.name || 'User')}`
-                  }
-                  alt="Creator Avatar"
-                  className="h-8 w-8 rounded-full"
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(creator?.name || 'User')}`;
-                  }}
-              />
-              <div className="absolute left-0 top-full mt-1 hidden w-48 p-2 bg-gray-700 text-white text-xs rounded-md group-hover:block z-10">
-                <p className="font-medium">{creator?.displayName || creator?.name || "Unknown"}</p>
-                <p>{creator?.email || "No email"}</p>
-                <p className="text-gray-300">{creator?.role || "No role"}</p>
-              </div>
+          <div className="relative group flex items-center">
+            <img
+              src={
+                creator?.photoURL ||
+                creator?.avatar ||
+                `https://ui-avatars.com/api/?name=${encodeURIComponent(creator?.name || 'User')}`
+              }
+              alt="Creator Avatar"
+              className="h-8 w-8 rounded-full"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(creator?.name || 'User')}`;
+              }}
+            />
+            <div className="absolute left-0 top-full mt-1 hidden w-48 p-2 bg-gray-700 text-white text-xs rounded-md group-hover:block z-10">
+              <p className="font-medium">{creator?.displayName || creator?.name || "Unknown"}</p>
+              <p>{creator?.email || "No email"}</p>
+              <p className="text-gray-300">{creator?.role || "No role"}</p>
             </div>
+          </div>
         );
       },
     },
@@ -252,13 +251,13 @@ export default function HardwareDashboard() {
         const status = row.original.status;
         const displayStatus = status.charAt(0).toUpperCase() + status.slice(1);
         return (
-            <div className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium 
+          <div className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium 
             ${status === "completed" ? "bg-green-500/10 text-green-500" :
-                status.includes("running") ? "bg-blue-500/10 text-blue-500" :
-                    status === "failed" ? "bg-red-500/10 text-red-500" :
-                        "bg-gray-500/10 text-gray-500"}`}>
-              {displayStatus}
-            </div>
+              status.includes("running") ? "bg-blue-500/10 text-blue-500" :
+                status === "failed" ? "bg-red-500/10 text-red-500" :
+                  "bg-gray-500/10 text-gray-500"}`}>
+            {displayStatus}
+          </div>
         );
       },
     },
@@ -275,33 +274,33 @@ export default function HardwareDashboard() {
       id: "details",
       header: "Results",
       cell: ({ row }: any) => (
-          <Button className="text-sm" variant="secondary" onClick={() => handleViewResults(row.original)}>
-            View
-          </Button>
+        <Button className="text-sm" variant="secondary" onClick={() => handleViewResults(row.original)}>
+          View
+        </Button>
       ),
     },
   ];
 
   if (isLoading) {
     return (
-        <div className="flex h-screen items-center justify-center">
-          <Button isLoading loadingText="Loading..." variant="ghost" />
-        </div>
+      <div className="flex h-screen items-center justify-center">
+        <Button isLoading loadingText="Loading..." variant="ghost" />
+      </div>
     );
   }
 
   if (selectedTest) {
     return (
-        <TestDetails
-            test={selectedTest}
-            onBack={handleBackToDashboard}
-            performanceData={performanceData}
-            utilizationData={utilizationData}
-            runtimeData={runtimeData}
-            aggregatedData={aggregatedData}
-            usageSummary={usageSummary}
-            resourceData={resourceData}
-        />
+      <TestDetails
+        test={selectedTest}
+        onBack={handleBackToDashboard}
+        performanceData={performanceData}
+        utilizationData={utilizationData}
+        runtimeData={runtimeData}
+        aggregatedData={aggregatedData}
+        usageSummary={usageSummary}
+        resourceData={resourceData}
+      />
     );
   }
 
@@ -309,127 +308,126 @@ export default function HardwareDashboard() {
   const onlineChips = mockChips.filter((c) => c.status === "online").length;
   const totalChips = mockChips.length;
   const avgChipSuccess =
-      totalChips > 0
-          ? mockChips.reduce((sum, chip) => sum + (chip.successRate || 0), 0) / totalChips
-          : 0;
+    totalChips > 0
+      ? mockChips.reduce((sum, chip) => sum + (chip.successRate || 0), 0) / totalChips
+      : 0;
 
   const runningTests = tests.filter(
-      (t) => t.status === "running" || t.status.startsWith("running_") || t.status === "queued"
+    (t) => t.status === "running" || t.status.startsWith("running_") || t.status === "queued"
   ).length;
   const completedTests = tests.filter((t) => t.status === "completed").length;
   const failedTests = tests.filter((t) => t.status === "failed" || t.status === "error").length;
 
   return (
-      <main className="p-4">
-        {/* Dashboard header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
-              Hardware Dashboard
-            </h1>
-            <p className="text-gray-500 sm:text-sm/6 dark:text-gray-500">
-              Real-time monitoring of hardware solvers with performance metrics
-            </p>
-          </div>
-          <div className="flex gap-4">
-            <Button onClick={() => setIsOpen(true)} className="flex items-center gap-2 text-base sm:text-sm">
-              Create Test
-              <RiAddLine className="-mr-0.5 size-5 shrink-0" aria-hidden="true" />
-            </Button>
-          </div>
+    <main className="p-4">
+      {/* Dashboard header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
+            Hardware Dashboard
+          </h1>
+          <p className="text-gray-500 sm:text-sm/6 dark:text-gray-500">
+            Real-time monitoring of hardware solvers with performance metrics
+          </p>
         </div>
-        <Divider />
-        {/* Chip and test status cards */}
-        <dl className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <Card>
-            <dt className="text-sm font-medium text-gray-900 dark:text-gray-50">Chip Status</dt>
-            <dd className="mt-1 text-3xl font-semibold text-gray-900 dark:text-gray-50">
-              {onlineChips}/{totalChips}
-            </dd>
-            <CategoryBar
-                values={[onlineChips, totalChips - onlineChips]}
-                className="mt-6"
-                colors={["blue", "lightGray"]}
-                showLabels={false}
-            />
-            <ul role="list" className="mt-4 flex flex-wrap gap-x-10 gap-y-4 text-sm">
-              {mockChips.map((chip) => (
-                  <li key={chip.id}>
-                    <div className="flex items-center gap-2">
+        <div className="flex gap-4">
+          <Button onClick={() => setIsOpen(true)} className="flex items-center gap-2 text-base sm:text-sm">
+            Create Test
+            <RiAddLine className="-mr-0.5 size-5 shrink-0" aria-hidden="true" />
+          </Button>
+        </div>
+      </div>
+      <Divider />
+      {/* Chip and test status cards */}
+      <dl className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <Card>
+          <dt className="text-sm font-medium text-gray-900 dark:text-gray-50">Chip Status</dt>
+          <dd className="mt-1 text-3xl font-semibold text-gray-900 dark:text-gray-50">
+            {onlineChips}/{totalChips}
+          </dd>
+          <CategoryBar
+            values={[onlineChips, totalChips - onlineChips]}
+            className="mt-6"
+            colors={["blue", "lightGray"]}
+            showLabels={false}
+          />
+          <ul role="list" className="mt-4 flex flex-wrap gap-x-10 gap-y-4 text-sm">
+            {mockChips.map((chip) => (
+              <li key={chip.id}>
+                <div className="flex items-center gap-2">
                   <span
-                      className={`size-2.5 shrink-0 rounded-sm ${
-                          chip.status === "online"
-                              ? "bg-blue-500 dark:bg-blue-500"
-                              : chip.status === "maintenance"
-                                  ? "bg-amber-500 dark:bg-amber-500"
-                                  : "bg-red-500 dark:bg-red-500"
+                    className={`size-2.5 shrink-0 rounded-sm ${chip.status === "online"
+                      ? "bg-blue-500 dark:bg-blue-500"
+                      : chip.status === "maintenance"
+                        ? "bg-amber-500 dark:bg-amber-500"
+                        : "bg-red-500 dark:bg-red-500"
                       }`}
-                      aria-hidden="true"
+                    aria-hidden="true"
                   />
-                      <span className="text-sm">{chip.name}</span>
-                    </div>
-                    <span className="ml-5 text-xs text-gray-500">{chip.status}</span>
-                  </li>
-              ))}
-            </ul>
-          </Card>
-          <Card>
-            <dt className="text-sm font-medium text-gray-900 dark:text-gray-50">Success Rate</dt>
-            <div className="mt-4 flex flex-nowrap items-center justify-between gap-y-4">
-              <dd className="space-y-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="size-2.5 shrink-0 rounded-sm bg-blue-500 dark:bg-blue-500" aria-hidden="true" />
-                    <span className="text-sm">Successful</span>
-                  </div>
-                  <span className="mt-1 block text-2xl font-semibold text-gray-900 dark:text-gray-50">
+                  <span className="text-sm">{chip.name}</span>
+                </div>
+                <span className="ml-5 text-xs text-gray-500">{chip.status}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+        <Card>
+          <dt className="text-sm font-medium text-gray-900 dark:text-gray-50">Success Rate</dt>
+          <div className="mt-4 flex flex-nowrap items-center justify-between gap-y-4">
+            <dd className="space-y-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="size-2.5 shrink-0 rounded-sm bg-blue-500 dark:bg-blue-500" aria-hidden="true" />
+                  <span className="text-sm">Successful</span>
+                </div>
+                <span className="mt-1 block text-2xl font-semibold text-gray-900 dark:text-gray-50">
                   {avgChipSuccess.toFixed(1)}%
                 </span>
+              </div>
+            </dd>
+            <ProgressCircle value={avgChipSuccess} radius={45} strokeWidth={7} />
+          </div>
+        </Card>
+        <Card>
+          <dt className="text-sm font-medium text-gray-900 dark:text-gray-50">Test Status</dt>
+          <div className="mt-4 flex items-center gap-x-8 gap-y-4">
+            <dd className="space-y-3 whitespace-nowrap">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="size-2.5 shrink-0 rounded-sm bg-blue-500 dark:bg-blue-500" aria-hidden="true" />
+                  <span className="text-sm">Active</span>
                 </div>
-              </dd>
-              <ProgressCircle value={avgChipSuccess} radius={45} strokeWidth={7} />
-            </div>
-          </Card>
-          <Card>
-            <dt className="text-sm font-medium text-gray-900 dark:text-gray-50">Test Status</dt>
-            <div className="mt-4 flex items-center gap-x-8 gap-y-4">
-              <dd className="space-y-3 whitespace-nowrap">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="size-2.5 shrink-0 rounded-sm bg-blue-500 dark:bg-blue-500" aria-hidden="true" />
-                    <span className="text-sm">Active</span>
-                  </div>
-                  <span className="mt-1 block text-2xl font-semibold text-gray-900 dark:text-gray-50">
+                <span className="mt-1 block text-2xl font-semibold text-gray-900 dark:text-gray-50">
                   {runningTests}
                 </span>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="size-2.5 shrink-0 rounded-sm bg-green-500 dark:bg-green-500" aria-hidden="true" />
+                  <span className="text-sm">Completed</span>
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="size-2.5 shrink-0 rounded-sm bg-green-500 dark:bg-green-500" aria-hidden="true" />
-                    <span className="text-sm">Completed</span>
-                  </div>
-                  <span className="mt-1 block text-2xl font-semibold text-gray-900 dark:text-gray-50">
+                <span className="mt-1 block text-2xl font-semibold text-gray-900 dark:text-gray-50">
                   {completedTests}
                 </span>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="size-2.5 shrink-0 rounded-sm bg-red-500 dark:bg-red-500" aria-hidden="true" />
+                  <span className="text-sm">Failed</span>
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="size-2.5 shrink-0 rounded-sm bg-red-500 dark:bg-red-500" aria-hidden="true" />
-                    <span className="text-sm">Failed</span>
-                  </div>
-                  <span className="mt-1 block text-2xl font-semibold text-gray-900 dark:text-gray-50">
+                <span className="mt-1 block text-2xl font-semibold text-gray-900 dark:text-gray-50">
                   {failedTests}
                 </span>
-                </div>
-              </dd>
-            </div>
-          </Card>
-        </dl>
-        <Divider className="my-6" />
-        <h2 className="mb-4 text-lg font-medium">Recent Tests</h2>
-        <EnhancedTestTable tests={tests} columns={columns} handleViewResults={handleViewResults} isAdmin={isAdmin} />
-        {/* Integrated Create Test Modal */}
-        <CreateTestWindow isOpen={isOpen} onClose={() => setIsOpen(false)} onCreateTest={handleCreateTest} />
-      </main>
+              </div>
+            </dd>
+          </div>
+        </Card>
+      </dl>
+      <Divider className="my-6" />
+      <h2 className="mb-4 text-lg font-medium">Recent Tests</h2>
+      <EnhancedTestTable tests={tests} columns={columns} handleViewResults={handleViewResults} isAdmin={isAdmin} />
+      {/* Integrated Create Test Modal */}
+      <CreateTestWindow isOpen={isOpen} onClose={() => setIsOpen(false)} onCreateTest={handleCreateTest} />
+    </main>
   );
 }
