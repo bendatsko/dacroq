@@ -1,14 +1,14 @@
 FROM node:18-alpine AS web
 WORKDIR /app
 
+# Install Git and pnpm
+RUN apk add --no-cache git && npm install -g pnpm
+
 # Copy package files
 COPY package.json pnpm-lock.yaml* ./
 
 # Copy the dacroq_web directory
 COPY dacroq_web ./dacroq_web
-
-# Install pnpm
-RUN npm install -g pnpm
 
 # Navigate to dacroq_web directory
 WORKDIR /app/dacroq_web
@@ -30,7 +30,7 @@ RUN go build -o dacroq
 FROM node:18-alpine
 WORKDIR /app
 
-# Install pnpm in the final stage
+# Install pnpm in the final stage (add Git here too if needed)
 RUN npm install -g pnpm
 
 # Copy web files and dependencies from web stage
