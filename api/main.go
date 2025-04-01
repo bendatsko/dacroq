@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -41,10 +42,39 @@ func NewHardwareAPI() *HardwareAPI {
 }
 
 func (api *HardwareAPI) RegisterHandlers() {
-	http.HandleFunc("/api/status", api.handleStatus)
-	http.HandleFunc("/api/devices", api.handleDevices)
-	http.HandleFunc("/api/jobs", api.handleJobs)
-	http.HandleFunc("/api/queue-job", api.handleQueueJob)
+	http.HandleFunc("/status", api.handleStatus)
+	http.HandleFunc("/devices", api.handleDevices)
+	http.HandleFunc("/jobs", api.handleJobs)
+	http.HandleFunc("/queue-job", api.handleQueueJob)
+	http.HandleFunc("/health", api.handleHealth) // Health endpoint
+}
+
+// Health endpoint handler - modified to handle browser requests
+func (api *HardwareAPI) handleHealth(w http.ResponseWriter, r *http.Request) {
+	// Check if the request is coming from a browser
+	userAgent := r.Header.Get("User-Agent")
+	acceptHeader := r.Header.Get("Accept")
+
+	// Most browsers include "text/html" in their Accept header
+	// and typically include words like "Mozilla", "Chrome", "Safari", etc. in User-Agent
+	isBrowser := strings.Contains(acceptHeader, "text/html") ||
+		strings.Contains(userAgent, "Mozilla") ||
+		strings.Contains(userAgent, "Chrome") ||
+		strings.Contains(userAgent, "Safari") ||
+		strings.Contains(userAgent, "Firefox") ||
+		strings.Contains(userAgent, "Edge")
+
+	if isBrowser {
+		// Return plain text for browser requests
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	} else {
+		// Return JSON for API clients
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"status": "OK"})
+	}
 }
 
 func (api *HardwareAPI) handleStatus(w http.ResponseWriter, r *http.Request) {
@@ -177,6 +207,7 @@ func main() {
 
 	api.RegisterHandlers()
 
-	fmt.Println("Hardware API server starting on port 5000...")
-	log.Fatal(http.ListenAndServe(":5000", nil))
+	// Make sure to use consistent port (5000) as mentioned in the error message
+	fmt.Println("Hardware API server starting on port 8080...")
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
