@@ -1,8 +1,8 @@
 'use client';
 
-import { RiAddLine, RiArrowDownLine, RiArrowUpLine } from "@remixicon/react";
+import { RiAddLine, RiArrowDownLine, RiArrowUpLine, RiSearchLine, RiUser3Line, RiTeamLine, RiDeleteBin5Line, RiCloseLine } from "@remixicon/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 
 // Existing components & icons
 import { Button } from "@/components/Button";
@@ -10,14 +10,14 @@ import { Card } from "@/components/Card";
 import { CategoryBar } from "@/components/CategoryBar";
 import { Divider } from "@/components/Divider";
 import CreateTestWindow from "./CreateTestWindow";
-import EnhancedTestTable from "./EnhancedTestTable";
+import { DataTable } from "@/components/ui/data-table-support/DataTable";
 import TestDetails from "./TestDetails";
 
 // Tremor UI components
 
 // Firestore
 import { db } from "@/lib/firebase";
-import { addDoc, collection, onSnapshot, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, onSnapshot, serverTimestamp, doc, writeBatch } from "firebase/firestore";
 
 // Types
 interface ChipStatus {
@@ -125,6 +125,12 @@ export default function HardwareDashboard() {
     gpuUsage: 0,
     temperature: 0,
   });
+  const [testMetrics, setTestMetrics] = useState({
+    totalTests: 0,
+    successRate: 0,
+    avgRuntime: 0,
+    lastHourTests: 0
+  });
 
   const mockChips: ChipStatus[] = [
     { id: "1", name: "3-SAT Solver", type: "3-SAT", status: "online", successRate: 97.8, avgRuntime: 124 },
@@ -189,28 +195,37 @@ export default function HardwareDashboard() {
   }, [tests]);
 
   useEffect(() => {
-    // Simulate real-time performance metrics updates
-    const interval = setInterval(() => {
-      setPerformanceMetrics(prev => {
-        const newMetrics = {
-          timestamp: new Date(),
-          successRate: Math.random() * 100,
-          runtime: Math.random() * 200,
-          errorCount: Math.floor(Math.random() * 5),
-        };
-        return [...prev.slice(-10), newMetrics];
-      });
+    if (tests.length === 0) return;
 
-      setSystemHealth(prev => ({
-        cpuUsage: Math.random() * 100,
-        memoryUsage: Math.random() * 100,
-        gpuUsage: Math.random() * 100,
-        temperature: 40 + Math.random() * 20,
-      }));
-    }, 5000);
+    const now = new Date();
+    const hourAgo = new Date(now.getTime() - (60 * 60 * 1000));
+    
+    const recentTests = tests.filter(test => {
+      const testDate = test.created?.seconds ? 
+        new Date(test.created.seconds * 1000) : 
+        new Date(test.created);
+      return testDate >= hourAgo;
+    });
 
-    return () => clearInterval(interval);
-  }, []);
+    const completedTests = tests.filter(t => t.status === "completed");
+    const successfulTests = completedTests.filter(t => t.results?.successRate && t.results.successRate > 0);
+    
+    const avgSuccess = successfulTests.length > 0 
+      ? successfulTests.reduce((acc, test) => acc + (test.results?.successRate || 0), 0) / successfulTests.length
+      : 0;
+
+    const avgRuntime = successfulTests.length > 0
+      ? successfulTests.reduce((acc, test) => acc + (test.results?.runtime || 0), 0) / successfulTests.length
+      : 0;
+
+    setTestMetrics({
+      totalTests: tests.length,
+      successRate: avgSuccess,
+      avgRuntime: avgRuntime,
+      lastHourTests: recentTests.length
+    });
+
+  }, [tests]);
 
   const handleCreateTest = async (testName: string, chipType: string) => {
     try {
@@ -331,6 +346,269 @@ export default function HardwareDashboard() {
     target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(creatorName || 'User')}`;
   };
 
+  // Add the table component inside the main component before the return statement
+  const TestTable: React.FC<{
+    tests: TestRun[];
+    columns: any[];
+    handleViewResults: (test: TestRun) => void;
+    isAdmin: boolean;
+  }> = ({ tests, columns, handleViewResults, isAdmin }) => {
+    const [showOnlyMyTests, setShowOnlyMyTests] = useState(false);
+    const [filteredTests, setFilteredTests] = useState(tests);
+    const [selectedTests, setSelectedTests] = useState<{ [key: string]: boolean }>({});
+    const [searchQuery, setSearchQuery] = useState("");
+    const [adminMode, setAdminMode] = useState(false);
+    const [isFilterVisible, setIsFilterVisible] = useState(false);
+
+    const currentUser = useMemo(() => {
+      try {
+        const stored = localStorage.getItem("user");
+        return stored ? JSON.parse(stored) : null;
+      } catch (e) {
+        console.error("Error parsing user from localStorage:", e);
+        return null;
+      }
+    }, []);
+
+    useEffect(() => {
+      let filtered = [...tests];
+      if (showOnlyMyTests && currentUser) {
+        filtered = filtered.filter((test) => test.createdBy?.uid === currentUser.uid);
+      }
+      if (searchQuery.trim() !== "") {
+        const query = searchQuery.toLowerCase().trim();
+        filtered = filtered.filter((test) => {
+          if (test.name && test.name.toLowerCase().includes(query)) return true;
+          if (test.chipType && test.chipType.toLowerCase().includes(query)) return true;
+          if (test.status && test.status.toLowerCase().includes(query)) return true;
+          if (test.createdBy) {
+            if (test.createdBy.name && test.createdBy.name.toLowerCase().includes(query)) return true;
+            if (test.createdBy.displayName && test.createdBy.displayName.toLowerCase().includes(query)) return true;
+            if (test.createdBy.email && test.createdBy.email.toLowerCase().includes(query)) return true;
+          }
+          return false;
+        });
+      }
+      setFilteredTests(filtered);
+      setSelectedTests({});
+    }, [showOnlyMyTests, searchQuery, tests, currentUser]);
+
+    const handleBulkDelete = async () => {
+      try {
+        const selectedIds = Object.keys(selectedTests).filter(id => selectedTests[id]);
+        if (selectedIds.length === 0) return;
+
+        if (confirm(`Are you sure you want to delete ${selectedIds.length} tests?`)) {
+          const batch = writeBatch(db);
+          selectedIds.forEach((id) => {
+            const testRef = doc(db, "tests", id);
+            batch.delete(testRef);
+          });
+          await batch.commit();
+          console.log(`Deleted ${selectedIds.length} tests`);
+          setSelectedTests({});
+        }
+      } catch (error) {
+        console.error("Error deleting tests:", error);
+        alert("An error occurred while deleting tests");
+      }
+    };
+
+    const handleResetFilters = () => {
+      setSearchQuery("");
+      setShowOnlyMyTests(false);
+      setSelectedTests({});
+    };
+
+    const handleToggleAdminMode = () => {
+      setAdminMode((prev) => !prev);
+      setSelectedTests({});
+    };
+
+    const formatDate = (dateValue: any) => {
+      if (!dateValue) return "";
+
+      let date: Date;
+      try {
+        if (dateValue?.seconds) {
+          date = new Date(dateValue.seconds * 1000);
+        } else {
+          date = new Date(dateValue);
+        }
+
+        if (isNaN(date.getTime())) {
+          return "Invalid date";
+        }
+
+        const now = new Date();
+        const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+
+        if (diffInDays < 1) {
+          return formatDistanceToNow(date, { addSuffix: true });
+        } else if (diffInDays < 7) {
+          return formatDistanceToNow(date, { addSuffix: true });
+        } else {
+          return format(date, "MMM d, yyyy");
+        }
+      } catch (error) {
+        console.error("Error formatting date:", error);
+        return "Invalid date";
+      }
+    };
+
+    const truncateText = (text: string, maxLength: number = 20) => {
+      if (!text || text.length <= maxLength) return text;
+      return `${text.substring(0, maxLength)}...`;
+    };
+
+    const enhancedColumns = useMemo(() => {
+      const modifiedColumns = columns.map(column => {
+        if (column.id === "details") return null;
+
+        const newColumn = { ...column };
+
+        if (column.accessorKey === "name") {
+          newColumn.cell = ({ row }: any) => {
+            const test = row.original;
+            const name = test.name || "";
+            return (
+              <div className="flex items-center">
+                <span className="font-medium">{truncateText(name, 25)}</span>
+              </div>
+            );
+          };
+        }
+
+        if (column.accessorKey === "created") {
+          newColumn.cell = ({ row }: any) => {
+            const created = row.original.created;
+            return <span className="text-gray-500 text-sm">{formatDate(created)}</span>;
+          };
+        }
+
+        return newColumn;
+      }).filter(Boolean);
+
+      const selectionColumn = {
+        id: "select",
+        header: ({ table }: any) => {
+          const canSelectAll = adminMode || currentUser;
+          if (!canSelectAll) return null;
+          
+          const allVisibleSelected = filteredTests.length > 0 && 
+            filteredTests.every(test => selectedTests[test.id]);
+          
+          return (
+            <input
+              type="checkbox"
+              checked={allVisibleSelected}
+              onChange={(e) => {
+                const newSelected: { [key: string]: boolean } = {};
+                if (e.target.checked) {
+                  filteredTests.forEach(test => {
+                    if (adminMode || test.createdBy?.uid === currentUser?.uid) {
+                      newSelected[test.id] = true;
+                    }
+                  });
+                }
+                setSelectedTests(newSelected);
+              }}
+              className="size-4 rounded border-tremor-border text-blue-600"
+              onClick={(e) => e.stopPropagation()}
+            />
+          );
+        },
+        size: 40,
+        cell: ({ row }: any) => {
+          const test = row.original;
+          const canSelect = adminMode || test.createdBy?.uid === currentUser?.uid;
+          return canSelect ? (
+            <input
+              type="checkbox"
+              checked={!!selectedTests[test.id]}
+              onChange={(e) => {
+                setSelectedTests((prev) => ({
+                  ...prev,
+                  [test.id]: e.target.checked,
+                }));
+              }}
+              className="size-4 rounded border-tremor-border text-blue-600"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : <span className="w-4"></span>;
+        },
+      };
+
+      return [selectionColumn, ...modifiedColumns];
+    }, [columns, selectedTests, adminMode, currentUser, filteredTests]);
+
+    return (
+      <Card className="mt-6">
+        <div className="p-4 sm:flex sm:items-center sm:justify-between">
+          <div className="relative">
+            <RiSearchLine className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search tests..."
+              className="pl-10 pr-4 py-2 w-full sm:w-96 rounded-md border border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-400 dark:focus:ring-blue-400"
+            />
+          </div>
+          <div className="mt-4 flex items-center gap-4 sm:mt-0">
+            <button
+              onClick={() => setShowOnlyMyTests(!showOnlyMyTests)}
+              className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
+                showOnlyMyTests
+                  ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
+                  : "text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
+              }`}
+            >
+              {showOnlyMyTests ? <RiUser3Line /> : <RiTeamLine />}
+              {showOnlyMyTests ? "My Tests" : "All Tests"}
+            </button>
+            {Object.keys(selectedTests).some((id) => selectedTests[id]) && (
+              <button
+                onClick={handleBulkDelete}
+                className="flex items-center gap-2 rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
+              >
+                <RiDeleteBin5Line />
+                Delete Selected
+              </button>
+            )}
+            {(searchQuery || showOnlyMyTests) && (
+              <button
+                onClick={handleResetFilters}
+                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
+              >
+                <RiCloseLine />
+                Reset Filters
+              </button>
+            )}
+            {isAdmin && (
+              <button
+                onClick={handleToggleAdminMode}
+                className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
+                  adminMode
+                    ? "bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400"
+                    : "text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
+                }`}
+              >
+                {adminMode ? "Exit Admin Mode" : "Admin Mode"}
+              </button>
+            )}
+          </div>
+        </div>
+        <DataTable
+          data={filteredTests}
+          columns={enhancedColumns}
+          onRowClick={({ original }) => handleViewResults(original)}
+          rowClassName="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+        />
+      </Card>
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -421,9 +699,30 @@ export default function HardwareDashboard() {
           role="region"
           aria-label="Dashboard statistics"
         >
-          <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 mb-8">
+          <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-2 mb-8">
             <Card className="p-6">
-              <dt className="text-sm font-medium text-gray-900 dark:text-gray-50">Chip Status</dt>
+              <dt className="text-sm font-medium text-gray-900 dark:text-gray-50">Test Statistics</dt>
+              <div className="mt-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-500">Total Tests</span>
+                  <span className="text-sm font-medium">{testMetrics.totalTests}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-500">Tests (Last Hour)</span>
+                  <span className="text-sm font-medium">{testMetrics.lastHourTests}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-500">Average Success Rate</span>
+                  <span className="text-sm font-medium">{testMetrics.successRate.toFixed(1)}%</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-500">Average Runtime</span>
+                  <span className="text-sm font-medium">{testMetrics.avgRuntime.toFixed(2)}ms</span>
+                </div>
+              </div>
+            </Card>
+            <Card className="p-6">
+              <dt className="text-sm font-medium text-gray-900 dark:text-gray-50">Solver Status</dt>
               <dd className="mt-1 text-3xl font-semibold text-gray-900 dark:text-gray-50">
                 {onlineChips}/{totalChips}
               </dd>
@@ -454,100 +753,10 @@ export default function HardwareDashboard() {
                 ))}
               </ul>
             </Card>
-            <Card className="p-6">
-              <dt className="text-sm font-medium text-gray-900 dark:text-gray-50">System Health</dt>
-              <dd className="mt-4 space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">CPU Usage</span>
-                  <span className="text-sm font-medium">{systemHealth.cpuUsage.toFixed(1)}%</span>
-                </div>
-                <CategoryBar
-                  values={[systemHealth.cpuUsage, 100 - systemHealth.cpuUsage]}
-                  colors={["blue", "lightGray"]}
-                  showLabels={false}
-                />
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Memory Usage</span>
-                  <span className="text-sm font-medium">{systemHealth.memoryUsage.toFixed(1)}%</span>
-                </div>
-                <CategoryBar
-                  values={[systemHealth.memoryUsage, 100 - systemHealth.memoryUsage]}
-                  colors={["emerald", "lightGray"]}
-                  showLabels={false}
-                />
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">GPU Usage</span>
-                  <span className="text-sm font-medium">{systemHealth.gpuUsage.toFixed(1)}%</span>
-                </div>
-                <CategoryBar
-                  values={[systemHealth.gpuUsage, 100 - systemHealth.gpuUsage]}
-                  colors={["violet", "lightGray"]}
-                  showLabels={false}
-                />
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Temperature</span>
-                  <span className="text-sm font-medium">{systemHealth.temperature.toFixed(1)}°C</span>
-                </div>
-                <CategoryBar
-                  values={[systemHealth.temperature, 100 - systemHealth.temperature]}
-                  colors={["red", "lightGray"]}
-                  showLabels={false}
-                />
-              </dd>
-            </Card>
-            <Card className="p-6">
-              <dt className="text-sm font-medium text-gray-900 dark:text-gray-50">Performance Metrics</dt>
-              <dd className="mt-4 space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Success Rate</span>
-                  <span className="text-sm font-medium">
-                    {performanceMetrics[performanceMetrics.length - 1]?.successRate.toFixed(1)}%
-                  </span>
-                </div>
-                <CategoryBar
-                  values={[
-                    performanceMetrics[performanceMetrics.length - 1]?.successRate || 0,
-                    100 - (performanceMetrics[performanceMetrics.length - 1]?.successRate || 0),
-                  ]}
-                  colors={["emerald", "lightGray"]}
-                  showLabels={false}
-                />
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Average Runtime</span>
-                  <span className="text-sm font-medium">
-                    {performanceMetrics[performanceMetrics.length - 1]?.runtime.toFixed(1)}ms
-                  </span>
-                </div>
-                <CategoryBar
-                  values={[
-                    performanceMetrics[performanceMetrics.length - 1]?.runtime || 0,
-                    200 - (performanceMetrics[performanceMetrics.length - 1]?.runtime || 0),
-                  ]}
-                  colors={["blue", "lightGray"]}
-                  showLabels={false}
-                />
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Error Count</span>
-                  <span className="text-sm font-medium">
-                    {performanceMetrics[performanceMetrics.length - 1]?.errorCount || 0}
-                  </span>
-                </div>
-                <CategoryBar
-                  values={[
-                    performanceMetrics[performanceMetrics.length - 1]?.errorCount || 0,
-                    5 - (performanceMetrics[performanceMetrics.length - 1]?.errorCount || 0),
-                  ]}
-                  colors={["red", "lightGray"]}
-                  showLabels={false}
-                />
-              </dd>
-            </Card>
           </dl>
         </div>
 
-        <div className="w-full overflow-hidden rounded-lg bg-white dark:bg-gray-800">
-          <EnhancedTestTable tests={tests} columns={columns} handleViewResults={handleViewResults} isAdmin={isAdmin} />
-        </div>
+        <TestTable tests={tests} columns={columns} handleViewResults={handleViewResults} isAdmin={isAdmin} />
       </div>
       {/* Integrated Create Test Modal */}
       <CreateTestWindow isOpen={isOpen} onClose={() => setIsOpen(false)} onCreateTest={handleCreateTest} />

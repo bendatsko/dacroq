@@ -11,6 +11,9 @@ importers:
       '@radix-ui/react-accordion':
         specifier: ^1.2.3
         version: 1.2.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      pnpm:
+        specifier: ^10.7.1
+        version: 10.7.1
 
 packages:
 
@@ -154,6 +157,11 @@ packages:
       '@types/react':
         optional: true
 
+  pnpm@10.7.1:
+    resolution: {integrity: sha512-LZLIa3ko3IKE9TSU+0IB+YPaZfD7Tw1Auq+lz2KPox2uPllo8SRm8X336XMQ4w80OmSLrqG5s1BoXa+v/99YCA==}
+    engines: {node: '>=18.12'}
+    hasBin: true
+
   react-dom@19.1.0:
     resolution: {integrity: sha512-Xs1hdnE+DyKgeHJeJznQmYMIBG3TKIHJJT95Q58nHLSrElKlGQqDTR2HQ9fx5CN/Gk6Vh/kupBTDLU11/nDk/g==}
     peerDependencies:
@@ -253,6 +261,8 @@ snapshots:
   '@radix-ui/react-use-layout-effect@1.1.0(react@19.1.0)':
     dependencies:
       react: 19.1.0
+
+  pnpm@10.7.1: {}
 
   react-dom@19.1.0(react@19.1.0):
     dependencies:

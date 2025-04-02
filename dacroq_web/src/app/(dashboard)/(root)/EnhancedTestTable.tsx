@@ -14,30 +14,7 @@ import {
 import { format, formatDistanceToNow } from 'date-fns';
 import { doc, writeBatch } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
-
-interface TestRun {
-  id: string;
-  name: string;
-  chipType: string;
-  status: string;
-  created: any;
-  completed?: any;
-  results?: {
-    successRate?: number;
-    solutionCount?: number;
-    evidence?: string;
-    [key: string]: any;
-  };
-  createdBy?: {
-    uid: string;
-    name: string;
-    email: string;
-    role: string;
-    avatar: string;
-    photoURL?: string;
-    displayName?: string;
-  };
-}
+import { TestRun } from "@/types/test";
 
 interface EnhancedTestTableProps {
     tests: TestRun[];
@@ -73,7 +50,7 @@ const EnhancedTestTable: React.FC<EnhancedTestTableProps> = ({
         } catch (e) {
             console.error("Error parsing user from localStorage:", e);
             return null;
-        }
+        }                           
     }, []);
 
     useEffect(() => {
@@ -135,20 +112,33 @@ const EnhancedTestTable: React.FC<EnhancedTestTableProps> = ({
     const formatDate = (dateValue: any) => {
         if (!dateValue) return "";
 
-        const date = dateValue?.seconds
-          ? new Date(dateValue.seconds * 1000)
-          : new Date(dateValue);
+        let date: Date;
+        try {
+            if (dateValue?.seconds) {
+                date = new Date(dateValue.seconds * 1000);
+            } else {
+                date = new Date(dateValue);
+            }
 
-        // Check if date is today or within the last week
-        const now = new Date();
-        const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+            // Check if the date is valid
+            if (isNaN(date.getTime())) {
+                return "Invalid date";
+            }
 
-        if (diffInDays < 1) {
-            return formatDistanceToNow(date, { addSuffix: true });
-        } else if (diffInDays < 7) {
-            return formatDistanceToNow(date, { addSuffix: true });
-        } else {
-            return format(date, "MMM d, yyyy");
+            // Check if date is today or within the last week
+            const now = new Date();
+            const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+
+            if (diffInDays < 1) {
+                return formatDistanceToNow(date, { addSuffix: true });
+            } else if (diffInDays < 7) {
+                return formatDistanceToNow(date, { addSuffix: true });
+            } else {
+                return format(date, "MMM d, yyyy");
+            }
+        } catch (error) {
+            console.error("Error formatting date:", error);
+            return "Invalid date";
         }
     };
 
@@ -334,7 +324,7 @@ const EnhancedTestTable: React.FC<EnhancedTestTableProps> = ({
                           }`}
                         >
                             <RiDeleteBin5Line className="h-3.5 w-3.5" />
-                            {adminMode ? "Exit Admin" : "Admin Mode"}
+                            {adminMode ? "Cancel Deletion" : "Delete Tests"}
                         </button>
                       )}
                   </div>
@@ -381,13 +371,13 @@ const EnhancedTestTable: React.FC<EnhancedTestTableProps> = ({
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-3 flex items-center text-sm">
                 <RiDeleteBin5Line className="h-4 w-4 text-red-500 mr-2" />
                 <span className="text-red-600 dark:text-red-400">
-            Admin Mode: You can select and delete any test
-          </span>
+                    Select tests to delete. You can delete any test in this mode.
+                </span>
             </div>
           )}
 
           {/* Table */}
-          <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+          <div className="overflow-hidden rounded-lg border  dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
               {filteredTests.length > 0 ? (
                 <DataTable<TestRun>
                   data={filteredTests}
