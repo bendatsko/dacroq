@@ -1,18 +1,56 @@
-// ./EnhancedTestTable.tsx
 'use client';
 
-import React, { useEffect, useState, useMemo } from "react";
-import { RiUser3Line, RiTeamLine, RiDeleteBin5Line, RiCloseLine } from "@remixicon/react";
-import { Button } from "@/components/Button";
+import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table-support/DataTable";
-import { writeBatch, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import {
+  RiCloseLine,
+  RiDeleteBin5Line,
+  RiEyeLine,
+  RiSearchLine,
+  RiTeamLine,
+  RiUser3Line
+} from "@remixicon/react";
+import { format, formatDistanceToNow } from 'date-fns';
+import { doc, writeBatch } from "firebase/firestore";
+import React, { useEffect, useMemo, useState } from "react";
+
+interface TestRun {
+  id: string;
+  name: string;
+  chipType: string;
+  status: string;
+  created: any;
+  completed?: any;
+  results?: {
+    successRate?: number;
+    solutionCount?: number;
+    evidence?: string;
+    [key: string]: any;
+  };
+  createdBy?: {
+    uid: string;
+    name: string;
+    email: string;
+    role: string;
+    avatar: string;
+    photoURL?: string;
+    displayName?: string;
+  };
+}
 
 interface EnhancedTestTableProps {
-    tests: any[];
+    tests: TestRun[];
     columns: any[];
-    handleViewResults: (test: any) => void;
+    handleViewResults: (test: TestRun) => void;
     isAdmin: boolean;
+}
+
+interface DataTableProps<T> {
+    data: T[];
+    columns: any[];
+    rowClassName?: string;
+    onRowClick?: (row: { original: T }) => void;
 }
 
 const EnhancedTestTable: React.FC<EnhancedTestTableProps> = ({
@@ -26,6 +64,7 @@ const EnhancedTestTable: React.FC<EnhancedTestTableProps> = ({
     const [selectedTests, setSelectedTests] = useState<{ [key: string]: boolean }>({});
     const [searchQuery, setSearchQuery] = useState("");
     const [adminMode, setAdminMode] = useState(false);
+    const [isFilterVisible, setIsFilterVisible] = useState(false);
 
     const currentUser = useMemo(() => {
         try {
@@ -57,13 +96,15 @@ const EnhancedTestTable: React.FC<EnhancedTestTableProps> = ({
             });
         }
         setFilteredTests(filtered);
+        // Only reset selections when filter changes
         setSelectedTests({});
     }, [showOnlyMyTests, searchQuery, tests, currentUser]);
 
     const handleBulkDelete = async () => {
         try {
-            const selectedIds = Object.keys(selectedTests);
+            const selectedIds = Object.keys(selectedTests).filter(id => selectedTests[id]);
             if (selectedIds.length === 0) return;
+
             if (confirm(`Are you sure you want to delete ${selectedIds.length} tests?`)) {
                 const batch = writeBatch(db);
                 selectedIds.forEach((id) => {
@@ -91,10 +132,95 @@ const EnhancedTestTable: React.FC<EnhancedTestTableProps> = ({
         setSelectedTests({});
     };
 
+    const formatDate = (dateValue: any) => {
+        if (!dateValue) return "";
+
+        const date = dateValue?.seconds
+          ? new Date(dateValue.seconds * 1000)
+          : new Date(dateValue);
+
+        // Check if date is today or within the last week
+        const now = new Date();
+        const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+
+        if (diffInDays < 1) {
+            return formatDistanceToNow(date, { addSuffix: true });
+        } else if (diffInDays < 7) {
+            return formatDistanceToNow(date, { addSuffix: true });
+        } else {
+            return format(date, "MMM d, yyyy");
+        }
+    };
+
+    const truncateText = (text: string, maxLength: number = 20) => {
+        if (!text || text.length <= maxLength) return text;
+        return `${text.substring(0, maxLength)}...`;
+    };
+
     const enhancedColumns = useMemo(() => {
+        // Override cell renderers for better presentation
+        const modifiedColumns = columns.map(column => {
+            // Skip the "details" column as we'll handle it separately
+            if (column.id === "details") return null;
+
+            // Create a copy of the column to modify
+            const newColumn = { ...column };
+
+            // Customize name column
+            if (column.accessorKey === "name") {
+                newColumn.cell = ({ row }: any) => {
+                    const test = row.original;
+                    const name = test.name || "";
+                    return (
+                      <div className="flex items-center">
+                          <span className="font-medium">{truncateText(name, 25)}</span>
+                      </div>
+                    );
+                };
+            }
+
+            // Customize date column
+            if (column.accessorKey === "created") {
+                newColumn.cell = ({ row }: any) => {
+                    const created = row.original.created;
+                    return <span className="text-gray-500 text-sm">{formatDate(created)}</span>;
+                };
+            }
+
+            return newColumn;
+        }).filter(Boolean);
+
+        // Add the selection column
         const selectionColumn = {
             id: "select",
-            header: "Select",
+            header: ({ table }: any) => {
+                const canSelectAll = adminMode || currentUser;
+                if (!canSelectAll) return null;
+                
+                const allVisibleSelected = filteredTests.length > 0 && 
+                    filteredTests.every(test => selectedTests[test.id]);
+                
+                return (
+                    <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        onChange={(e) => {
+                            const newSelected: { [key: string]: boolean } = {};
+                            if (e.target.checked) {
+                                filteredTests.forEach(test => {
+                                    if (adminMode || test.createdBy?.uid === currentUser?.uid) {
+                                        newSelected[test.id] = true;
+                                    }
+                                });
+                            }
+                            setSelectedTests(newSelected);
+                        }}
+                        className="size-4 rounded border-tremor-border text-blue-600"
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                );
+            },
+            size: 40,
             cell: ({ row }: any) => {
                 const test = row.original;
                 const canSelect = adminMode || test.createdBy?.uid === currentUser?.uid;
@@ -111,133 +237,179 @@ const EnhancedTestTable: React.FC<EnhancedTestTableProps> = ({
                         className="size-4 rounded border-tremor-border text-blue-600"
                         onClick={(e) => e.stopPropagation()}
                     />
-                ) : null;
+                ) : <span className="w-4"></span>;
             },
         };
-        return [selectionColumn, ...columns];
-    }, [columns, selectedTests, currentUser, adminMode]);
+
+        // Add actions column
+        const actionsColumn = {
+            id: "actions",
+            header: "",
+            size: 70,
+            cell: ({ row }: any) => {
+                const test = row.original;
+                return (
+                    <div className="flex items-center justify-end">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleViewResults(test);
+                            }}
+                            className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                            title="View results"
+                        >
+                            <RiEyeLine className="h-4 w-4 text-blue-500" />
+                        </button>
+                    </div>
+                );
+            },
+        };
+
+        return [selectionColumn, ...modifiedColumns, actionsColumn];
+    }, [columns, selectedTests, currentUser, adminMode, handleViewResults]);
+
+    const selectedCount = Object.keys(selectedTests).filter(id => selectedTests[id]).length;
 
     return (
-        <div className="space-y-4">
-            {/* Filter and search controls */}
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center space-x-2">
-                    <Button
-                        variant={showOnlyMyTests ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setShowOnlyMyTests(true)}
-                        className="flex items-center gap-2"
-                    >
-                        <RiUser3Line className="h-4 w-4" />
-                        My Tests
-                    </Button>
-                    <Button
-                        variant={!showOnlyMyTests ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setShowOnlyMyTests(false)}
-                        className="flex items-center gap-2"
-                    >
-                        <RiTeamLine className="h-4 w-4" />
-                        All Tests
-                    </Button>
-                    {isAdmin && (
-                        <Button
-                            variant={adminMode ? "destructive" : "outline"}
-                            size="sm"
-                            onClick={handleToggleAdminMode}
-                            className="flex items-center gap-2 ml-2"
-                        >
-                            <RiDeleteBin5Line className="h-4 w-4" />
-                            {adminMode ? "Exit Admin Mode" : "Admin Mode"}
-                        </Button>
-                    )}
-                </div>
-                {/* Search bar */}
-                <div className="relative flex-1 max-w-md">
-                    <input
+      <div className="space-y-6">
+          {/* Search and Filter Section */}
+          <Card className="p-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  {/* Search bar */}
+                  <div className="relative flex-1">
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                          <RiSearchLine className="h-4 w-4 text-gray-400" />
+                      </div>
+                      <input
                         type="text"
-                        placeholder="Search tests by name, type, creator..."
+                        placeholder="Search tests..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full rounded-md border border-gray-300 py-2 pl-10 pr-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                    />
-                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                        <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                            <path
-                                fillRule="evenodd"
-                                d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
-                                clipRule="evenodd"
-                            />
-                        </svg>
-                    </div>
-                    {searchQuery && (
+                        className="w-full rounded-md border border-gray-300 py-2 pl-10 pr-10 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm"
+                      />
+                      {searchQuery && (
                         <button
-                            className="absolute inset-y-0 right-0 flex items-center pr-3"
-                            onClick={() => setSearchQuery("")}
+                          className="absolute inset-y-0 right-0 flex items-center pr-3"
+                          onClick={() => setSearchQuery("")}
                         >
-                            <RiCloseLine className="h-5 w-5 text-gray-400 hover:text-gray-500" />
+                            <RiCloseLine className="h-4 w-4 text-gray-400 hover:text-gray-500" />
                         </button>
-                    )}
-                </div>
-            </div>
-            {/* Admin mode indicator */}
-            {adminMode && (
-                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-3 flex items-center">
-                    <RiDeleteBin5Line className="h-5 w-5 text-red-500 mr-2" />
-                    <span className="text-red-600 dark:text-red-400 font-medium">
-            Admin Mode: You can delete any test
-          </span>
-                </div>
-            )}
-            {/* Search results stats and actions */}
-            <div className="flex flex-wrap justify-between items-center">
-                <div className="text-sm text-gray-500 mb-2 md:mb-0">
-                    {filteredTests.length} {filteredTests.length === 1 ? "test" : "tests"} found
-                    {(searchQuery || showOnlyMyTests) && (
+                      )}
+                  </div>
+
+                  {/* Filter buttons */}
+                  <div className="flex items-center space-x-2">
+                      <div className="flex rounded-md overflow-hidden border border-gray-300 dark:border-gray-600">
+                          <button
+                            onClick={() => setShowOnlyMyTests(true)}
+                            className={`px-3 py-1.5 text-xs flex items-center gap-1 ${
+                              showOnlyMyTests
+                                ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
+                                : "bg-white text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                            }`}
+                          >
+                              <RiUser3Line className="h-3.5 w-3.5" />
+                              <span>My Tests</span>
+                          </button>
+                          <button
+                            onClick={() => setShowOnlyMyTests(false)}
+                            className={`px-3 py-1.5 text-xs flex items-center gap-1 ${
+                              !showOnlyMyTests
+                                ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
+                                : "bg-white text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                            }`}
+                          >
+                              <RiTeamLine className="h-3.5 w-3.5" />
+                              <span>All Tests</span>
+                          </button>
+                      </div>
+
+                      {isAdmin && (
                         <button
-                            className="ml-2 text-blue-500 hover:text-blue-700 hover:underline"
+                          onClick={handleToggleAdminMode}
+                          className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs border ${
+                            adminMode
+                              ? "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800"
+                              : "bg-white text-gray-600 border-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600"
+                          }`}
+                        >
+                            <RiDeleteBin5Line className="h-3.5 w-3.5" />
+                            {adminMode ? "Exit Admin" : "Admin Mode"}
+                        </button>
+                      )}
+                  </div>
+              </div>
+
+              {/* Selected items and filters info */}
+              {(selectedCount > 0 || (searchQuery || showOnlyMyTests)) && (
+                <div className="flex flex-wrap justify-between items-center mt-4 pt-3 border-t border-gray-200 dark:border-gray-700">
+                    <div className="text-xs text-gray-500">
+                        <span className="mr-2">{filteredTests.length} {filteredTests.length === 1 ? "test" : "tests"} found</span>
+                        {(searchQuery || showOnlyMyTests) && (
+                          <button
+                            className="text-blue-500 hover:text-blue-700 hover:underline text-xs"
                             onClick={handleResetFilters}
-                        >
-                            Reset filters
-                        </button>
+                          >
+                              Clear filters
+                          </button>
+                        )}
+                    </div>
+
+                    {selectedCount > 0 && (
+                      <div className="flex items-center">
+                <span className="text-xs mr-2">
+                  <span className="bg-blue-100 dark:bg-blue-900 px-1.5 py-0.5 rounded text-blue-700 dark:text-blue-300 font-medium">
+                    {selectedCount}
+                  </span>
+                  <span className="ml-1 text-gray-600 dark:text-gray-400">selected</span>
+                </span>
+                          <button
+                            onClick={handleBulkDelete}
+                            className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
+                          >
+                              <RiDeleteBin5Line className="h-3.5 w-3.5" />
+                              Delete
+                          </button>
+                      </div>
                     )}
                 </div>
-                {Object.keys(selectedTests).length > 0 && (
-                    <div className="flex items-center gap-4 px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
-            <span className="text-sm font-medium">
-              <span className="rounded bg-blue-100 dark:bg-blue-900 px-2 py-1 font-medium text-blue-700 dark:text-blue-300">
-                {Object.keys(selectedTests).length}
-              </span>
-              <span className="ml-2">selected</span>
-            </span>
-                        <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={handleBulkDelete}
-                            className="flex items-center gap-2"
-                        >
-                            <RiDeleteBin5Line className="h-4 w-4" />
-                            Delete selected
-                        </Button>
-                    </div>
-                )}
+              )}
+          </Card>
+
+          {/* Admin mode indicator */}
+          {adminMode && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-3 flex items-center text-sm">
+                <RiDeleteBin5Line className="h-4 w-4 text-red-500 mr-2" />
+                <span className="text-red-600 dark:text-red-400">
+            Admin Mode: You can select and delete any test
+          </span>
             </div>
-            {filteredTests.length > 0 ? (
-                <DataTable data={filteredTests} columns={enhancedColumns} />
-            ) : (
-                <div className="text-center py-10 bg-gray-50 dark:bg-gray-800 rounded-md">
-                    <p className="text-gray-500 dark:text-gray-400">
+          )}
+
+          {/* Table */}
+          <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+              {filteredTests.length > 0 ? (
+                <DataTable<TestRun>
+                  data={filteredTests}
+                  columns={enhancedColumns}
+                  onRowClick={(row) => handleViewResults(row.original)}
+                  rowClassName="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                />
+              ) : (
+                <div className="text-center py-12 bg-gray-50 dark:bg-gray-800">
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">
                         No tests found matching your criteria.
                     </p>
                     <button
-                        className="mt-2 text-blue-500 hover:text-blue-700 hover:underline"
-                        onClick={handleResetFilters}
+                      className="mt-3 text-blue-500 hover:text-blue-700 hover:underline text-sm"
+                      onClick={handleResetFilters}
                     >
-                        Clear search and filters
+                        Clear filters
                     </button>
                 </div>
-            )}
-        </div>
+              )}
+          </div>
+      </div>
     );
 };
 

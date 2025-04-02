@@ -5,209 +5,216 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
-	"sync"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"time"
 )
 
-type Job struct {
-	ID          string    `json:"id"`
-	DeviceID    string    `json:"device_id"`
-	TestType    string    `json:"test_type"`
-	Status      string    `json:"status"`
-	CreatedAt   time.Time `json:"created_at"`
-	CompletedAt time.Time `json:"completed_at,omitempty"`
-}
+// handleListPresets lists all preset batches available in the "./presets" directory.
+func handleListPresets(w http.ResponseWriter, r *http.Request) {
+	// Set CORS headers.
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
-type DeviceStatus struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Status    string `json:"status"`
-	Connected bool   `json:"connected"`
-}
-
-type HardwareAPI struct {
-	jobs     map[string]Job
-	devices  map[string]DeviceStatus
-	jobQueue []string
-	mutex    sync.Mutex
-}
-
-func NewHardwareAPI() *HardwareAPI {
-	return &HardwareAPI{
-		jobs:     make(map[string]Job),
-		devices:  make(map[string]DeviceStatus),
-		jobQueue: []string{},
-	}
-}
-
-func (api *HardwareAPI) RegisterHandlers() {
-	http.HandleFunc("/status", api.handleStatus)
-	http.HandleFunc("/devices", api.handleDevices)
-	http.HandleFunc("/jobs", api.handleJobs)
-	http.HandleFunc("/queue-job", api.handleQueueJob)
-	http.HandleFunc("/health", api.handleHealth) // Health endpoint
-}
-
-// Health endpoint handler - modified to handle browser requests
-func (api *HardwareAPI) handleHealth(w http.ResponseWriter, r *http.Request) {
-	// Check if the request is coming from a browser
-	userAgent := r.Header.Get("User-Agent")
-	acceptHeader := r.Header.Get("Accept")
-
-	// Most browsers include "text/html" in their Accept header
-	// and typically include words like "Mozilla", "Chrome", "Safari", etc. in User-Agent
-	isBrowser := strings.Contains(acceptHeader, "text/html") ||
-		strings.Contains(userAgent, "Mozilla") ||
-		strings.Contains(userAgent, "Chrome") ||
-		strings.Contains(userAgent, "Safari") ||
-		strings.Contains(userAgent, "Firefox") ||
-		strings.Contains(userAgent, "Edge")
-
-	if isBrowser {
-		// Return plain text for browser requests
-		w.Header().Set("Content-Type", "text/plain")
+	// Handle preflight OPTIONS requests.
+	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	} else {
-		// Return JSON for API clients
-		w.Header().Set("Content-Type", "application/json")
+		return
+	}
+
+	presetDir := "./presets"
+	entries, err := os.ReadDir(presetDir)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to read presets directory: %v", err), http.StatusInternalServerError)
+		return
+	}
+	var presets []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			presets = append(presets, entry.Name())
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "success",
+		"presets": presets,
+	})
+}
+
+// handleMaxTests returns the total number of CNF files for a given preset.
+func handleMaxTests(w http.ResponseWriter, r *http.Request) {
+	// Set CORS headers.
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	// Handle preflight OPTIONS requests.
+	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"status": "OK"})
-	}
-}
-
-func (api *HardwareAPI) handleStatus(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	status := map[string]interface{}{
-		"status":       "online",
-		"device_count": len(api.devices),
-		"job_count":    len(api.jobs),
-		"queue_size":   len(api.jobQueue),
-	}
-
-	json.NewEncoder(w).Encode(status)
-}
-
-func (api *HardwareAPI) handleDevices(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	api.mutex.Lock()
-	defer api.mutex.Unlock()
-
-	devices := make([]DeviceStatus, 0, len(api.devices))
-	for _, device := range api.devices {
-		devices = append(devices, device)
-	}
-
-	json.NewEncoder(w).Encode(devices)
-}
-
-func (api *HardwareAPI) handleJobs(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	api.mutex.Lock()
-	defer api.mutex.Unlock()
-
-	jobs := make([]Job, 0, len(api.jobs))
-	for _, job := range api.jobs {
-		jobs = append(jobs, job)
-	}
-
-	json.NewEncoder(w).Encode(jobs)
-}
-
-func (api *HardwareAPI) handleQueueJob(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var newJob Job
-	if err := json.NewDecoder(r.Body).Decode(&newJob); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	// Get preset from query parameter.
+	preset := r.URL.Query().Get("preset")
+	if preset == "" {
+		http.Error(w, "preset is required", http.StatusBadRequest)
 		return
 	}
 
-	// Generate a simple ID if not provided
-	if newJob.ID == "" {
-		newJob.ID = fmt.Sprintf("job-%d", time.Now().Unix())
-	}
-
-	newJob.Status = "queued"
-	newJob.CreatedAt = time.Now()
-
-	api.mutex.Lock()
-	defer api.mutex.Unlock()
-
-	// Check if device exists
-	if _, exists := api.devices[newJob.DeviceID]; !exists {
-		http.Error(w, "Device not found", http.StatusNotFound)
+	presetPath := filepath.Join("./presets", preset)
+	// Check if the preset folder exists.
+	if _, err := os.Stat(presetPath); os.IsNotExist(err) {
+		http.Error(w, "preset not found", http.StatusNotFound)
 		return
 	}
 
-	api.jobs[newJob.ID] = newJob
-	api.jobQueue = append(api.jobQueue, newJob.ID)
+	// Get list of .cnf files.
+	files, err := filepath.Glob(filepath.Join(presetPath, "*.cnf"))
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to list CNF files: %v", err), http.StatusInternalServerError)
+		return
+	}
 
+	totalTests := len(files)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(newJob)
-
-	// Simulate starting the job processing in background
-	go api.processJobs()
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"total_tests": totalTests,
+	})
 }
 
-func (api *HardwareAPI) processJobs() {
-	api.mutex.Lock()
-	if len(api.jobQueue) == 0 {
-		api.mutex.Unlock()
+// handleDaedalus processes a test request.
+// It copies the preset CNF files into ./walksat/problems,
+// runs the client binary, waits for recent.json to be generated,
+// then reads and returns the JSON results.
+func handleDaedalus(w http.ResponseWriter, r *http.Request) {
+	// Set CORS headers.
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	// Handle preflight OPTIONS requests.
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	// Get the next job
-	jobID := api.jobQueue[0]
-	api.jobQueue = api.jobQueue[1:]
-	job := api.jobs[jobID]
-	job.Status = "running"
-	api.jobs[jobID] = job
-	api.mutex.Unlock()
+	// Decode the request JSON.
+	var req struct {
+		Preset     string `json:"preset"`
+		StartIndex int    `json:"start_index"`
+		EndIndex   int    `json:"end_index"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	// If the client sends "standard" or empty, map it to a valid preset.
+	if req.Preset == "standard" || req.Preset == "" {
+		req.Preset = "hardware-t_batch_0"
+	}
 
-	// Simulate hardware interaction
-	log.Printf("Running job %s on device %s\n", job.ID, job.DeviceID)
-	time.Sleep(5 * time.Second)
+	presetPath := filepath.Join("./presets", req.Preset)
+	if _, err := os.Stat(presetPath); os.IsNotExist(err) {
+		http.Error(w, "preset not found", http.StatusNotFound)
+		return
+	}
 
-	// Update job status
-	api.mutex.Lock()
-	job = api.jobs[jobID]
-	job.Status = "completed"
-	job.CompletedAt = time.Now()
-	api.jobs[jobID] = job
-	api.mutex.Unlock()
+	// Prepare the destination folder: ./walksat/problems.
+	problemsDir := filepath.Join("./walksat", "problems")
+	os.RemoveAll(problemsDir)
+	if err := os.MkdirAll(problemsDir, 0755); err != nil {
+		http.Error(w, fmt.Sprintf("failed to create problems directory: %v", err), http.StatusInternalServerError)
+		return
+	}
 
-	log.Printf("Completed job %s\n", job.ID)
+	// List all .cnf files in the preset folder.
+	files, err := filepath.Glob(filepath.Join(presetPath, "*.cnf"))
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to list CNF files: %v", err), http.StatusInternalServerError)
+		return
+	}
+	if len(files) == 0 {
+		http.Error(w, "no CNF files found in preset", http.StatusNotFound)
+		return
+	}
+
+	// Apply start and end index filtering.
+	if req.StartIndex < 0 {
+		req.StartIndex = 0
+	}
+	if req.EndIndex <= 0 || req.EndIndex > len(files) {
+		req.EndIndex = len(files)
+	}
+	selectedFiles := files[req.StartIndex:req.EndIndex]
+
+	// Copy files into the problems folder with standardized filenames.
+	for i, src := range selectedFiles {
+		dest := filepath.Join(problemsDir, fmt.Sprintf("%03d.cnf", i))
+		input, err := os.ReadFile(src)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("failed to read file %s: %v", src, err), http.StatusInternalServerError)
+			return
+		}
+		if err := os.WriteFile(dest, input, 0644); err != nil {
+			http.Error(w, fmt.Sprintf("failed to write file %s: %v", dest, err), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Execute the client binary from within the "./walksat" folder.
+	cmd := exec.Command("./client")
+	cmd.Dir = "./walksat"
+	// Capture combined stdout and stderr for debugging.
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to run client: %v\nOutput: %s", err, string(output)), http.StatusInternalServerError)
+		return
+	}
+	// Log the output from the client.
+	fmt.Println("Client output:", string(output))
+
+	// Wait for recent.json to be generated (up to 2 seconds).
+	recentPath := filepath.Join("./walksat", "recent.json")
+	var data []byte
+	waitTime := 2 * time.Second
+	start := time.Now()
+	for {
+		data, err = os.ReadFile(recentPath)
+		if err == nil && len(data) > 0 {
+			break
+		}
+		if time.Since(start) > waitTime {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if err != nil || len(data) == 0 {
+		http.Error(w, "recent.json not generated in time", http.StatusInternalServerError)
+		return
+	}
+	// Log the content of recent.json for debugging.
+	fmt.Println("recent.json content:", string(data))
+
+	// Validate the JSON content.
+	var jsonData interface{}
+	if err := json.Unmarshal(data, &jsonData); err != nil {
+		http.Error(w, fmt.Sprintf("failed to parse recent.json: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Return the JSON data.
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(jsonData)
 }
 
 func main() {
-	api := NewHardwareAPI()
+	// Register endpoints.
+	http.HandleFunc("/presets", handleListPresets)
+	http.HandleFunc("/max-tests", handleMaxTests)
+	http.HandleFunc("/daedalus", handleDaedalus)
 
-	// Add some sample devices
-	api.devices["device-001"] = DeviceStatus{
-		ID:        "device-001",
-		Name:      "Test Machine Alpha",
-		Status:    "idle",
-		Connected: true,
-	}
-
-	api.devices["device-002"] = DeviceStatus{
-		ID:        "device-002",
-		Name:      "Test Machine Beta",
-		Status:    "idle",
-		Connected: true,
-	}
-
-	api.RegisterHandlers()
-
-	// Make sure to use consistent port (5000) as mentioned in the error message
-	fmt.Println("Hardware API server starting on port 8080...")
+	fmt.Println("API server starting on port 8080...")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

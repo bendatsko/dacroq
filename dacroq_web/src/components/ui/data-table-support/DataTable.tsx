@@ -1,28 +1,30 @@
 "use client"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeaderCell,
-  TableRow,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeaderCell,
+    TableRow,
 } from "@/components/Table"
 import { cx } from "@/lib/utils"
 import {
-  ColumnDef,
-  flexRender,
-  getCoreRowModel,
-  getPaginationRowModel,
-  useReactTable,
+    ColumnDef,
+    flexRender,
+    getCoreRowModel,
+    getPaginationRowModel,
+    useReactTable,
 } from "@tanstack/react-table"
 import { DataTablePagination } from "../data-table/DataTablePagination"
 
 interface DataTableProps<TData> {
   columns: ColumnDef<TData>[]
   data: TData[]
+  onRowClick?: (row: { original: TData }) => void
+  rowClassName?: string
 }
 
-export function DataTable<TData>({ columns, data }: DataTableProps<TData>) {
+export function DataTable<TData>({ columns, data, onRowClick, rowClassName }: DataTableProps<TData>) {
   const pageSize = 16
 
   const table = useReactTable({
@@ -68,7 +70,15 @@ export function DataTable<TData>({ columns, data }: DataTableProps<TData>) {
           </TableHead>
           <TableBody>
             {table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id} className="odd:bg-gray-50 odd:dark:bg-[#090E1A]">
+              <TableRow 
+                key={row.id} 
+                className={cx(
+                  "odd:bg-gray-50 odd:dark:bg-[#090E1A]",
+                  onRowClick && "cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors",
+                  rowClassName
+                )}
+                onClick={() => onRowClick?.(row)}
+              >
                 {row.getVisibleCells().map((cell) => (
                   <TableCell
                     key={cell.id}

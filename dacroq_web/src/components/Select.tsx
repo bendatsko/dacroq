@@ -1,5 +1,6 @@
 // Tremor Select [v0.0.3]
 
+import React from "react"
 import * as SelectPrimitives from "@radix-ui/react-select"
 import {
   RiArrowDownSLine,
@@ -7,7 +8,6 @@ import {
   RiCheckLine,
   RiExpandUpDownLine,
 } from "@remixicon/react"
-import React from "react"
 
 import { cx, focusInput, hasErrorInput } from "@/lib/utils"
 
@@ -44,10 +44,10 @@ const selectTriggerStyles = [
 ]
 
 const SelectTrigger = React.forwardRef<
-  React.ComponentRef<typeof SelectPrimitives.Trigger>,
+  React.ElementRef<typeof SelectPrimitives.Trigger>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitives.Trigger> & {
-    hasError?: boolean
-  }
+  hasError?: boolean
+}
 >(({ className, hasError, children, ...props }, forwardedRef) => {
   return (
     <SelectPrimitives.Trigger
@@ -80,7 +80,7 @@ const SelectTrigger = React.forwardRef<
 SelectTrigger.displayName = "SelectTrigger"
 
 const SelectScrollUpButton = React.forwardRef<
-  React.ComponentRef<typeof SelectPrimitives.ScrollUpButton>,
+  React.ElementRef<typeof SelectPrimitives.ScrollUpButton>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitives.ScrollUpButton>
 >(({ className, ...props }, forwardedRef) => (
   <SelectPrimitives.ScrollUpButton
@@ -97,7 +97,7 @@ const SelectScrollUpButton = React.forwardRef<
 SelectScrollUpButton.displayName = SelectPrimitives.ScrollUpButton.displayName
 
 const SelectScrollDownButton = React.forwardRef<
-  React.ComponentRef<typeof SelectPrimitives.ScrollDownButton>,
+  React.ElementRef<typeof SelectPrimitives.ScrollDownButton>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitives.ScrollDownButton>
 >(({ className, ...props }, forwardedRef) => (
   <SelectPrimitives.ScrollDownButton
@@ -115,7 +115,7 @@ SelectScrollDownButton.displayName =
   SelectPrimitives.ScrollDownButton.displayName
 
 const SelectContent = React.forwardRef<
-  React.ComponentRef<typeof SelectPrimitives.Content>,
+  React.ElementRef<typeof SelectPrimitives.Content>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitives.Content>
 >(
   (
@@ -162,7 +162,7 @@ const SelectContent = React.forwardRef<
           className={cx(
             "p-1",
             position === "popper" &&
-              "h-[var(--radix-select-trigger-height)] w-full min-w-[calc(var(--radix-select-trigger-width))]",
+            "h-[var(--radix-select-trigger-height)] w-full min-w-[calc(var(--radix-select-trigger-width))]",
           )}
         >
           {children}
@@ -176,7 +176,7 @@ const SelectContent = React.forwardRef<
 SelectContent.displayName = "SelectContent"
 
 const SelectGroupLabel = React.forwardRef<
-  React.ComponentRef<typeof SelectPrimitives.Label>,
+  React.ElementRef<typeof SelectPrimitives.Label>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitives.Label>
 >(({ className, ...props }, forwardedRef) => (
   <SelectPrimitives.Label
@@ -195,7 +195,7 @@ const SelectGroupLabel = React.forwardRef<
 SelectGroupLabel.displayName = "SelectGroupLabel"
 
 const SelectItem = React.forwardRef<
-  React.ComponentRef<typeof SelectPrimitives.Item>,
+  React.ElementRef<typeof SelectPrimitives.Item>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitives.Item>
 >(({ className, children, ...props }, forwardedRef) => {
   return (
@@ -231,44 +231,8 @@ const SelectItem = React.forwardRef<
 
 SelectItem.displayName = "SelectItem"
 
-// new component created specifically for this template, outside of Tremor's standard components
-const SelectItemExtended = React.forwardRef<
-  React.ComponentRef<typeof SelectPrimitives.Item>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitives.Item> & {
-    option: string
-    description: string | boolean
-  }
->(({ className, option, description, ...props }, forwardedRef) => {
-  return (
-    <SelectPrimitives.Item
-      ref={forwardedRef}
-      className={cx(
-        // base
-        "flex max-w-[var(--radix-select-trigger-width)] cursor-pointer items-center justify-between whitespace-nowrap rounded px-3 py-2 outline-none transition-colors data-[state=checked]:font-semibold sm:text-sm",
-        // text color
-        "text-gray-900 dark:text-gray-50",
-        // disabled
-        "data-[disabled]:pointer-events-none data-[disabled]:text-gray-400 data-[disabled]:hover:bg-none dark:data-[disabled]:text-gray-600",
-        // focus
-        "focus-visible:bg-gray-100 focus-visible:dark:bg-gray-900",
-        // hover
-        "hover:bg-gray-100 hover:dark:bg-gray-900",
-        className,
-      )}
-      {...props}
-    >
-      <SelectPrimitives.ItemText>{option}</SelectPrimitives.ItemText>
-      <span className="ml-2 truncate font-normal text-gray-400 dark:text-gray-600">
-        {description}
-      </span>
-    </SelectPrimitives.Item>
-  )
-})
-
-SelectItemExtended.displayName = "SelectItemExtended"
-
 const SelectSeparator = React.forwardRef<
-  React.ComponentRef<typeof SelectPrimitives.Separator>,
+  React.ElementRef<typeof SelectPrimitives.Separator>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitives.Separator>
 >(({ className, ...props }, forwardedRef) => (
   <SelectPrimitives.Separator
@@ -292,7 +256,6 @@ export {
   SelectGroup,
   SelectGroupLabel,
   SelectItem,
-  SelectItemExtended,
   SelectSeparator,
   SelectTrigger,
   SelectValue,

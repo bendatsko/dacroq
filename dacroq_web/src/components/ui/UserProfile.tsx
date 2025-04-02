@@ -7,21 +7,10 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
-  DropdownMenuSubMenu,
-  DropdownMenuSubMenuContent,
-  DropdownMenuSubMenuTrigger,
-  DropdownMenuTrigger,
+  DropdownMenuTrigger
 } from "@/components/DropdownMenu"
 import { cx, focusRing } from "@/lib/utils"
-import {
-  RiArrowRightUpLine,
-  RiComputerLine,
-  RiMoonLine,
-  RiSunLine,
-} from "@remixicon/react"
 import { useTheme } from "next-themes"
 import React from "react"
 
@@ -91,7 +80,7 @@ function DropdownUserProfile() {
           className="!min-w-[calc(var(--radix-dropdown-menu-trigger-width))]"
         >
           <DropdownMenuLabel>{user ? user.email : "Not signed in"}</DropdownMenuLabel>
-          <DropdownMenuGroup>
+          {/* <DropdownMenuGroup>
             <DropdownMenuSubMenu>
               <DropdownMenuSubMenuTrigger>Theme</DropdownMenuSubMenuTrigger>
               <DropdownMenuSubMenuContent>
@@ -134,7 +123,7 @@ function DropdownUserProfile() {
                 </DropdownMenuRadioGroup>
               </DropdownMenuSubMenuContent>
             </DropdownMenuSubMenu>
-          </DropdownMenuGroup>
+          </DropdownMenuGroup> */}
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
             <DropdownMenuItem>
