@@ -23,256 +23,246 @@ import {
 } from "@remixicon/react";
 
 // Documentation content sections
+// Documentation content sections
 const DocsContent = {
   introduction: {
     title: "Introduction",
-    content: `Dacroq is a powerful web interface for solving complex mathematical problems through our API. Our platform currently supports 3-SAT solving, with K-SAT and LDPC solvers coming soon.
+    content: `
+## Dacroq Platform
+
+Dacroq is a specialized web platform for solving complex Boolean satisfiability problems using custom hardware accelerators. Our system integrates a modern Next.js web interface with a Go-based API server, enabling high-performance and low-latency computing solutions.
 
 ## What is Dacroq?
-The website dacroq.eecs.umich.edu acts as a web interface for an API. This API is used to control a SAT solver, a K-SAT solver, and an LDPC solver. Currently, only the SAT solver is operational.
+Dacroq stands for Digitally Assisted CMOS Relaxation Oscillator based Quantum-inspired computing. It provides researchers and engineers with a seamless interface to access our advanced hardware solvers.
 
-## Platform Overview
-Dacroq provides:
-- Real-time solving capabilities for SAT problems
-- User-friendly web interface
-- Comprehensive API access
-- Detailed performance metrics and benchmarking
-- Support for multiple input formats`
+## Platform Architecture
+The Dacroq platform comprises:
+- A Next.js web frontend for user interaction (located in /dacroq_web)
+- A Go-based API server for backend processing (located in /api)
+- Custom hardware solvers for 3-SAT, K-SAT, and LDPC problems
+- Specialized problem libraries and presets for various test cases
+
+## Current Capabilities
+- 3-SAT solving using our primary hardware accelerator (Daedalus)
+- Advanced problem preprocessing and decomposition techniques
+- Comprehensive performance benchmarking and metrics analysis
+- Support for multiple input formats including DIMACS CNF and batch processing via ZIP files`
   },
 
   "quick-start": {
     title: "Quick Start Guide",
-    content: `## Running the 3-SAT Solver
+    content: `# Getting Started with Dacroq
 
-Follow these steps to get started with your first test:
+Follow these steps to run your first test on the Dacroq platform:
 
-1. Prepare your input using one of these formats:
-   - .cnf file
-   - .zip file containing multiple .cnf files
-   - Pre-loaded problems (configurable range)
-   - Single problem in plaintext
+## Running Your First 3-SAT Test
+1. **Prepare Your Input**
+   - Single .cnf file in DIMACS format
+   - .zip archive with multiple .cnf files
+   - Select a pre-loaded problem from our presets (available in /api/presets)
+   - Direct plaintext input with CNF formatting
 
-2. Use the user interface to enter this configuration and press run
-3. Wait for your test status to update to "Completed"
-4. View results and analyze performance
+2. **Configure and Submit**
+   - Navigate to the solver interface
+   - Upload or select your problem input
+   - Configure any optional solver parameters
+   - Click "Run" to start processing
+
+3. **Monitor and Review**
+   - Watch real-time updates in the dashboard
+   - Wait for the test status to update from "Processing" to "Completed"
+   - Click on a completed test to view detailed results and performance metrics
 
 ## Test Management
-The recent tests table shows all tests run by all users. Key features:
-- All users can see all tests
-- Tests can be deleted by any user
-- Real-time status updates
-- Comprehensive result viewing
-
-## Input Types
-Dacroq supports multiple input formats:
-- Single CNF files
-- Batch processing via ZIP files
-- Pre-configured problem sets
-- Direct plaintext input
-  
-## Quick Tips
-- Monitor test status in real-time
-- Download benchmark data for detailed analysis
-- Use the reset function if needed
-- Check success rates and performance metrics`
+- All test runs are displayed in the dashboard for collaborative review
+- Downloadable results and benchmarks for offline analysis
+- Options to delete tests that are no longer needed`
   },
 
   installation: {
-    title: "Installation",
-    content: `## Getting Access
-1. Request access to Dacroq by contacting help@dacroq.eecs.umich.edu
-2. Once approved, you'll receive login credentials
-3. Access the platform at dacroq.eecs.umich.edu
+    title: "Installation & Setup",
+    content: `# Accessing and Setting Up the Dacroq Platform
 
-## API Setup
-For API access:
-1. Log in to your account
-2. Navigate to the API Documentation section
-3. Follow the authentication setup guide
-4. Test your connection using provided examples
+## User Access
+1. **Request Access**
+   - Email help@dacroq.eecs.umich.edu with your institutional and research details.
+2. **Account Setup**
+   - Receive login credentials via email.
+   - Sign in at [dacroq.eecs.umich.edu](https://dacroq.eecs.umich.edu).
+   - Update your password and complete your user profile on first login.
+
+## Developer Setup
+For local development and API integration:
+1. **Clone the Repository**
+   \`\`\`bash
+   git clone https://github.com/username/dacroq.git
+   cd dacroq
+   \`\`\`
+2. **Web Client Setup**
+   \`\`\`bash
+   cd dacroq_web
+   npm install
+   npm run dev
+   \`\`\`
+3. **API Server Setup**
+   \`\`\`bash
+   cd api
+   go build -o dacroq
+   ./dacroq
+   \`\`\`
+4. **Docker Deployment**
+   \`\`\`bash
+   docker-compose up -d
+   \`\`\`
 
 ## System Requirements
 - Modern web browser (Chrome, Firefox, Safari)
-- Internet connection
-- Valid university credentials`
+- Node.js 14+ for the web client
+- Go 1.16+ for the API server
+- Docker for containerized deployments`
   },
 
   "hardware-architecture": {
     title: "Hardware Architecture",
-    content: `## System Overview
-Our platform combines specialized hardware accelerators with custom software to solve complex optimization problems. The system consists of three main accelerators:
+    content: `# Dacroq Hardware Architecture
 
-- **Daedalus**: 3-SAT solver featuring 50 relaxation oscillators
-- **Amorgos**: LDPC decoder for error correction
-- **Medusa**: Advanced k-SAT solver implementation
+## Overview
+The Dacroq platform leverages custom hardware accelerators to solve complex Boolean satisfiability problems efficiently. Our system includes three specialized hardware modules:
 
-Each accelerator operates on dedicated testbeds controlled by Teensy 4.1 microcontrollers, using 2M baud serial connections for rapid data exchange.
+- **Daedalus (3-SAT Solver):** Equipped with 50 relaxation oscillators, an analog crossbar network, and SPI-based configuration.
+- **Amorgos (LDPC Decoder):** Designed for high-performance error correction.
+- **Medusa (K-SAT Solver):** Under development for handling variable clause lengths.
 
 ## Hardware Components
-### 3-SAT Solver (Daedalus)
-- 50 relaxation oscillators for direct variable mapping
-- Analog crossbar network handling up to 50 variables and 228 clauses
-- SPI-based scan chains for configuration
-- Real-time error signal monitoring
-- Automatic problem decomposition for larger instances
+### Daedalus (3-SAT Solver)
+- 50 relaxation oscillators for mapping Boolean variables
+- Analog crossbar network for clause evaluation
+- SPI-controlled scan chains for rapid configuration
+- Real-time error monitoring and automatic problem decomposition
 
-### Physical Interface
-- Teensy 4.1 microcontroller bridge
-- Error-correcting protocols with hash verification
-- Local SD card storage for configurations and solutions
-- Direct mapping of DIMACS CNF files to hardware states
+### Communication & Control
+- Teensy 4.1 microcontroller bridges for hardware interfacing
+- High-speed serial communication (2M baud) with error-correcting protocols
+- Integration with the Go-based API server for hardware management
 
 ## Problem Decomposition
 For problems exceeding hardware capacity:
-- Spectral partitioning algorithm for problem division
-- Graph-based variable clustering
-- Optimized subproblem generation
-- Hierarchical solution reconstruction`
+- Spectral partitioning and variable clustering techniques
+- Generation of optimized subproblems
+- Hierarchical solution recombination for accurate results`
   },
 
   "software-architecture": {
     title: "Software Architecture",
-    content: `## Web Interface
-Our Next.js frontend provides intuitive access to the system's capabilities:
-- Direct CNF entry and file uploads
-- Real-time monitoring displays
-- Cloud integration for status updates
-- Performance metrics visualization
+    content: `# Dacroq Software Architecture
 
-## Backend System
-The Flask-based backend serves as the system kernel:
-- Problem validation and encoding
-- Automatic decomposition
-- Performance metrics computation
-- Solution verification
-- Hardware resource management
+## Web Interface
+Built with Next.js, our frontend offers:
+- Server-side rendering and dynamic client-side updates
+- Intuitive problem submission and monitoring interfaces
+- Real-time visualization of solver performance metrics
+- Integration with custom React components and Tailwind CSS styling
 
-## API Integration
-Our API provides seamless integration between web users and hardware accelerators:
-- Problem translation to hardware-compatible formats
-- Metadata tracking and management
-- Decomposition handling for large problems
-- Solution reconstruction and verification
+## Backend API
+Our Go-based API server is responsible for:
+- Validating and preprocessing submitted problems
+- Managing communication with hardware solvers
+- Capturing and analyzing performance metrics
+- Handling solution verification and result formatting
 
-## Problem Processing
-1. **Problem Intake**
-   - Sequential problem numbering
-   - JSON metadata generation
-   - Format validation
-   - Preprocessing optimization
-
-2. **Hardware Acceleration**
-   - Direct problem mapping
-   - Physical convergence monitoring
-   - Solution state capture
-   - Performance tracking
-
-3. **Solution Processing**
-   - Subproblem recombination
-   - WalkSAT refinement when needed
-   - Solution verification
-   - Results reporting`
+## Data Flow & Deployment
+1. **Problem Submission:** Users submit problems via the web interface, which are sent to the API server.
+2. **Solver Execution:** The API server processes and routes problems to the appropriate hardware accelerator.
+3. **Result Delivery:** Solutions and performance data are collected, verified, and relayed back to the frontend.
+4. **Deployment Options:** 
+   - Full-stack deployment using Docker Compose
+   - Independent deployment of the web client and API server for scalability`
   },
 
   "3-sat-solver": {
     title: "3-SAT Solver",
-    content: `The 3-SAT solver is our primary solver, designed for Boolean satisfiability problems where each clause contains exactly three literals.
+    content: `# 3-SAT Solver
 
 ## Overview
-Our 3-SAT solver is built specifically for efficient handling of Boolean satisfiability problems. It utilizes advanced algorithms and hardware acceleration to solve complex SAT problems with high reliability and performance.
+The 3-SAT solver is the flagship component of Dacroq, engineered to solve Boolean satisfiability problems where each clause contains exactly three literals.
 
-## Features
-- Real-time solving capabilities
-- Multiple input formats supported
-- Detailed performance metrics
-- Benchmark data export
-- Batch processing support
+## Technical Details
+- Utilizes hardware acceleration with relaxation oscillators
+- Supports problems up to 50 variables and 228 clauses in hardware
+- Employs problem decomposition for larger instances
+- Optional WalkSAT refinement for challenging cases
+- Provides real-time convergence monitoring and performance analysis
+
+## Usage Instructions
+1. Format your problem in DIMACS CNF format.
+2. Submit your problem via the web interface.
+3. Monitor the test status and review detailed results upon completion
 
 ## Performance Metrics
-The solver provides comprehensive metrics:
 - Success rate
-- Average runtime
-- Solution iterations
-- Memory usage
-- Hardware utilization
-
-## Using the Solver
-1. Access through web interface
-2. Select input method
-   - Upload CNF file
-   - Use pre-loaded problems
-   - Enter plaintext
-3. Configure parameters
-4. Run test
-5. Monitor progress
-6. View results
-
-## Test Management
-- View all tests in the dashboard
-- Download benchmark data
-- Analyze performance metrics
-- Delete or re-run tests as needed
-  
-## Input Formats
-### CNF File Format
-- Standard DIMACS format
-- Three literals per clause
-- Comment lines start with 'c'
-- Problem line format: 'p cnf variables clauses'
-
-### Batch Processing
-- ZIP files containing multiple CNF files
-- Automatic processing queue
-- Aggregate results reporting
-
-### Pre-loaded Problems
-- Curated test sets
-- Configurable range
-- Verified problem instances`
+- Total runtime and phase-specific timings
+- Iteration count and convergence data
+- Energy efficiency and resource utilization`
   },
 
   "k-sat-solver": {
     title: "K-SAT Solver",
-    content: `## Overview
-The K-SAT solver is an extension of our 3-SAT solver, designed to handle Boolean satisfiability problems with varying clause lengths.
+    content: `# K-SAT Solver
 
-## Status
-🚧 Currently under development. The K-SAT solver will support:
-- Variable clause lengths
-- Enhanced performance metrics
-- Advanced optimization techniques
-- Extended benchmark capabilities
+## Overview
+The K-SAT solver extends our 3-SAT capabilities to handle problems with clauses of variable lengths. It is designed to provide enhanced flexibility and performance for more complex satisfiability problems.
 
-## Coming Features
-- Flexible clause length support
-- Advanced heuristics
-- Performance optimization
-- Extended benchmarking
+## Current Status
+🚧 **Under Development**
 
-Stay tuned for updates on the K-SAT solver release.`
+Core functionalities are being implemented in the /api/medusa directory.
+
+## Planned Features
+- Support for clauses of varying lengths within the same problem
+- Advanced problem decomposition tailored for K-SAT challenges
+- Optimized hardware mapping and resource allocation
+- Comparative performance analysis against the 3-SAT solver
+
+## Roadmap
+- **Alpha Testing:** Q3 2023
+- **Beta Release:** Q4 2023
+- **General Availability:** Q1 2024
+
+We welcome early feedback and collaboration from interested partners.`
   },
 
   "ldpc-solver": {
     title: "LDPC Solver",
-    content: `## Overview
-The LDPC (Low-Density Parity-Check) solver is designed for error-correcting codes and related applications.
+    content: `# LDPC Solver
 
-## Status
-🚧 In development. The LDPC solver will feature:
-- Specialized algorithms for LDPC codes
-- Performance optimization
-- Integration with existing infrastructure
-- Comprehensive benchmarking
+## Overview
+The LDPC (Low-Density Parity-Check) solver is engineered for error-correcting applications, leveraging our hardware accelerators to deliver high-performance decoding.
 
-## Planned Features
-- Matrix representation support
-- Advanced decoding algorithms
-- Performance analysis tools
-- Batch processing capabilities
+## Current Status
+🚧 **Under Development**
 
-Development updates will be posted here when available.`
+Development is actively underway in the /api/amorgos directory.
+
+## Technical Foundations
+- Maps LDPC decoding tasks to custom hardware accelerators
+- Implements iterative decoding algorithms (min-sum, sum-product)
+- Optimizes for various LDPC matrix formats and structures
+- Designed for high-throughput and low-latency operation
+
+## Planned Capabilities
+- Support for multiple LDPC matrix representations
+- Comparative benchmarking against traditional software decoders
+- Enhanced performance visualization and analysis tools
+- Batch processing for decoding multiple code words simultaneously
+
+## Application Areas
+- Wireless communications (5G, WiFi)
+- Data storage systems
+- Deep space and optical communications
+- Quantum error correction`
   }
 };
+
 
 // Define category structure with nesting
 const docsStructure = [

@@ -1,546 +1,699 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card } from "@/components/Card";
 import { Divider } from "@/components/Divider";
 import { Button } from "@/components/Button";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  RiFileTextLine,
-  RiBookOpenLine,
-  RiDownloadLine,
-  RiLightbulbLine,
-  RiCodeLine,
-  RiArrowRightSLine,
-  RiArrowDownSLine,
-  RiSearchLine,
-  RiExternalLinkLine,
-  RiCpuLine,
-  RiEditLine,
-  RiSaveLine,
-  RiCloseLine,
-  RiChat3Line,
-  RiQuestionLine,
-  RiThumbUpLine,
-  RiPinDistanceLine,
   RiTimeLine,
+  RiQuestionLine,
+  RiChat3Line,
   RiUserLine,
   RiAddLine,
-  RiFilterLine,
-  RiNotificationLine
+  RiSearchLine,
+  RiCloseLine,
+  RiPinDistanceLine,
+  RiEyeLine,
+  RiArrowRightSLine,
+  RiArrowLeftSLine
 } from "@remixicon/react";
 
-// Sample community data
-const sampleQuestions = [
-  {
-    id: 1,
-    title: "How to optimize large problem decomposition for the 3-SAT solver?",
-    author: "researcher42",
-    tag: "3-SAT",
-    timestamp: "2025-03-28T14:23:00",
-    replies: 4,
-    views: 56,
-    isPinned: true,
-    isAnswered: true
-  },
-  {
-    id: 2,
-    title: "Error when uploading large CNF files - timeouts after 30 seconds",
-    author: "alice_chen",
-    tag: "Bug Report",
-    timestamp: "2025-03-29T09:47:00",
-    replies: 2,
-    views: 23,
-    isPinned: false,
-    isAnswered: true
-  },
-  {
-    id: 3,
-    title: "Best practices for problem formulation to maximize hardware utilization",
-    author: "quantum_dave",
-    tag: "Best Practices",
-    timestamp: "2025-03-30T11:15:00",
-    replies: 7,
-    views: 42,
-    isPinned: true,
-    isAnswered: false
-  },
-  {
-    id: 4,
-    title: "What's the roadmap for LDPC solver release?",
-    author: "maria_j",
-    tag: "LDPC",
-    timestamp: "2025-03-30T16:38:00",
-    replies: 1,
-    views: 19,
-    isPinned: false,
-    isAnswered: true
-  },
-  {
-    id: 5,
-    title: "Unexpected fluctuations in success rate when running at scale",
-    author: "circuitpro",
-    tag: "Performance",
-    timestamp: "2025-03-31T08:12:00",
-    replies: 0,
-    views: 7,
-    isPinned: false,
-    isAnswered: false
-  },
-  {
-    id: 6,
-    title: "Using API with Python client - authentication issues",
-    author: "pythonista",
-    tag: "API",
-    timestamp: "2025-03-27T13:41:00",
-    replies: 3,
-    views: 28,
-    isPinned: false,
-    isAnswered: true
-  }
-];
+import {
+  collection,
+  onSnapshot,
+  addDoc,
+  serverTimestamp,
+  doc,
+  deleteDoc,
+  updateDoc,
+  query,
+  orderBy
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
-// Popular tags for filtering
-const popularTags = [
-  { name: "All", count: sampleQuestions.length },
-  { name: "3-SAT", count: 12 },
-  { name: "K-SAT", count: 5 },
-  { name: "LDPC", count: 4 },
-  { name: "API", count: 8 },
-  { name: "Bug Report", count: 6 },
-  { name: "Performance", count: 9 },
-  { name: "Best Practices", count: 7 }
-];
-
-// Format date/time in a human-readable way
+// Helper function to format timestamps
 const formatTimestamp = (timestamp) => {
+  if (!timestamp) return "Just now";
+  
   const date = new Date(timestamp);
   const now = new Date();
-
-  const diffMs = now - date;
-  const diffSecs = Math.floor(diffMs / 1000);
-  const diffMins = Math.floor(diffSecs / 60);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  
   if (diffDays > 0) {
-    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-  } else if (diffHours > 0) {
-    return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-  } else if (diffMins > 0) {
-    return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
-  } else {
-    return 'Just now';
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays} days ago`;
+    
+    // For older dates, show the actual date
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined 
+    });
   }
+  if (diffHours > 0) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+  if (diffMins > 0) return `${diffMins} minute${diffMins > 1 ? "s" : ""} ago`;
+  return "Just now";
 };
 
+// A mock component for the missing RiCheckLine icon
+const RiCheckLine = ({ className }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    width="24"
+    height="24"
+    className={className}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <polyline points="20 6 9 17 4 12"></polyline>
+  </svg>
+);
+
 export default function Community() {
-  const [activeTab, setActiveTab] = useState("latest");
-  const [activeTag, setActiveTag] = useState("All");
+  // Get current user from localStorage
+  const currentUser = useMemo(() => {
+    try {
+      const stored = localStorage.getItem("user");
+      return stored ? JSON.parse(stored) : null;
+    } catch (e) {
+      console.error("Error parsing user:", e);
+      return null;
+    }
+  }, []);
+
+  // State for posts from Firestore
+  const [posts, setPosts] = useState([]);
+  // Loading state
+  const [loading, setLoading] = useState(true);
+  // Search query
   const [searchQuery, setSearchQuery] = useState("");
-  const [questions, setQuestions] = useState(sampleQuestions);
+  // Current page
+  const [currentPage, setCurrentPage] = useState(1);
+  const postsPerPage = 15;
+  
+  // States for new post/reply fields
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
   const [newPostTitle, setNewPostTitle] = useState("");
   const [newPostContent, setNewPostContent] = useState("");
-  const [newPostTag, setNewPostTag] = useState("3-SAT");
+  
+  // State for integrated thread view
+  const [selectedPost, setSelectedPost] = useState(null);
+  const [newReplyContent, setNewReplyContent] = useState("");
+  const [replies, setReplies] = useState([]);
+  const [repliesLoading, setRepliesLoading] = useState(false);
 
-  // Filter and sort questions based on active filters
+  // Subscribe to community posts from Firestore
   useEffect(() => {
-    // Start with the original questions
-    let filtered = [...sampleQuestions];
-
-    // Apply tag filter
-    if (activeTag !== "All") {
-      filtered = filtered.filter(q => q.tag === activeTag);
-    }
-
-    // Apply search filter if present
-    if (searchQuery.trim() !== "") {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(q =>
-          q.title.toLowerCase().includes(query) ||
-          q.author.toLowerCase().includes(query)
-      );
-    }
-
-    // Apply sorting based on the active tab
-    switch(activeTab) {
-      case "latest":
-        filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        break;
-      case "popular":
-        filtered.sort((a, b) => b.views - a.views);
-        break;
-      case "unanswered":
-        filtered = filtered.filter(q => !q.isAnswered);
-        filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        break;
-    }
-
-    // Always put pinned items at the top
-    filtered.sort((a, b) => {
-      if (a.isPinned && !b.isPinned) return -1;
-      if (!a.isPinned && b.isPinned) return 1;
-      return 0;
+    setLoading(true);
+    const postsRef = collection(db, "communityPosts");
+    const postsQuery = query(postsRef, orderBy("timestamp", "desc"));
+    
+    const unsubscribe = onSnapshot(postsQuery, (snapshot) => {
+      const postsData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp?.toDate?.() || new Date()
+      }));
+      setPosts(postsData);
+      setLoading(false);
     });
+    return () => unsubscribe();
+  }, []);
 
-    setQuestions(filtered);
-  }, [activeTab, activeTag, searchQuery]);
+  // Subscribe to replies when a post is selected
+  useEffect(() => {
+    if (selectedPost) {
+      setRepliesLoading(true);
+      const repliesRef = collection(db, "communityPosts", selectedPost.id, "replies");
+      const repliesQuery = query(repliesRef, orderBy("timestamp", "asc"));
+      
+      const unsubscribe = onSnapshot(repliesQuery, (snapshot) => {
+        const repliesData = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          timestamp: doc.data().timestamp?.toDate?.() || new Date()
+        }));
+        setReplies(repliesData);
+        setRepliesLoading(false);
+        
+        // Update view count
+        incrementViewCount(selectedPost.id);
+      });
+      return () => unsubscribe();
+    } else {
+      setReplies([]);
+    }
+  }, [selectedPost]);
 
-  // Handle post submission
-  const handleSubmitPost = () => {
-    // This would normally send data to a server
-    console.log("Submitting new post:", {
-      title: newPostTitle,
-      content: newPostContent,
-      tag: newPostTag
-    });
+  // Filter posts by search query
+  const filteredPosts = useMemo(() => {
+    if (!searchQuery.trim()) return posts;
+    
+    const query = searchQuery.toLowerCase();
+    return posts.filter(
+      (post) =>
+        post.title?.toLowerCase().includes(query) ||
+        post.content?.toLowerCase().includes(query) ||
+        post.author?.toLowerCase().includes(query)
+    );
+  }, [posts, searchQuery]);
 
-    // Reset the form and close the modal
-    setNewPostTitle("");
-    setNewPostContent("");
-    setNewPostTag("3-SAT");
-    setIsPostModalOpen(false);
+  // Paginate posts
+  const paginatedPosts = useMemo(() => {
+    const startIndex = (currentPage - 1) * postsPerPage;
+    return filteredPosts.slice(startIndex, startIndex + postsPerPage);
+  }, [filteredPosts, currentPage]);
 
-    // Optionally, add the new post to the list (in a real app, would come from server)
-    const newPost = {
-      id: questions.length + 1,
-      title: newPostTitle,
-      author: "current_user", // Would be the logged-in user
-      tag: newPostTag,
-      timestamp: new Date().toISOString(),
-      replies: 0,
-      views: 0,
-      isPinned: false,
-      isAnswered: false
-    };
+  // Calculate total pages
+  const totalPages = useMemo(() => {
+    return Math.ceil(filteredPosts.length / postsPerPage);
+  }, [filteredPosts]);
 
-    setQuestions([newPost, ...questions]);
+  // Handle page changes
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    window.scrollTo(0, 0);
   };
 
-  return (
-      <main className="flex flex-col">
-        {/* Header */}
-        <div className="flex flex-wrap justify-between items-center mb-6">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
-              Community
-            </h1>
-            <p className="text-gray-500 sm:text-sm/6 dark:text-gray-500">
-              Ask questions, share knowledge, and connect with other researchers
-            </p>
-          </div>
+  // Increment view count
+  const incrementViewCount = async (postId) => {
+    try {
+      const postRef = doc(db, "communityPosts", postId);
+      await updateDoc(postRef, {
+        views: (selectedPost.views || 0) + 1
+      });
+    } catch (error) {
+      console.error("Error updating view count:", error);
+    }
+  };
+
+  // Handle new post submission
+  const handleSubmitPost = async () => {
+    try {
+      const postsRef = collection(db, "communityPosts");
+      await addDoc(postsRef, {
+        title: newPostTitle,
+        content: newPostContent,
+        author: currentUser?.displayName || "Anonymous",
+        uid: currentUser?.uid || null,
+        role: currentUser?.role || "user",
+        timestamp: serverTimestamp(),
+        replies: 0,
+        views: 0,
+        isPinned: false,
+        isAnswered: false
+      });
+      setNewPostTitle("");
+      setNewPostContent("");
+      setIsPostModalOpen(false);
+    } catch (error) {
+      console.error("Error creating new post:", error);
+    }
+  };
+
+  // Handle new reply submission
+  const handleSubmitReply = async () => {
+    if (!selectedPost || !newReplyContent.trim()) return;
+    
+    try {
+      const repliesRef = collection(db, "communityPosts", selectedPost.id, "replies");
+      await addDoc(repliesRef, {
+        content: newReplyContent,
+        author: currentUser?.displayName || "Anonymous",
+        uid: currentUser?.uid || null,
+        role: currentUser?.role || "user",
+        timestamp: serverTimestamp()
+      });
+      // Update the replies count on the post
+      const postRef = doc(db, "communityPosts", selectedPost.id);
+      await updateDoc(postRef, {
+        replies: (selectedPost.replies || 0) + 1
+      });
+      setNewReplyContent("");
+    } catch (error) {
+      console.error("Error submitting reply:", error);
+    }
+  };
+
+  // Admin: delete a post
+  const handleDeletePost = async (postId) => {
+    if (!window.confirm("Are you sure you want to delete this post?")) return;
+    try {
+      await deleteDoc(doc(db, "communityPosts", postId));
+      setSelectedPost(null);
+    } catch (error) {
+      console.error("Error deleting post:", error);
+    }
+  };
+
+  // Admin: toggle pin status
+  const handleTogglePin = async (postId, isPinned) => {
+    try {
+      const postRef = doc(db, "communityPosts", postId);
+      await updateDoc(postRef, {
+        isPinned: !isPinned
+      });
+    } catch (error) {
+      console.error("Error toggling pin status:", error);
+    }
+  };
+
+  // Admin: toggle answered status
+  const handleToggleAnswered = async (postId, isAnswered) => {
+    try {
+      const postRef = doc(db, "communityPosts", postId);
+      await updateDoc(postRef, {
+        isAnswered: !isAnswered
+      });
+    } catch (error) {
+      console.error("Error toggling answered status:", error);
+    }
+  };
+
+  // Render the post detail view
+  const renderPostDetail = () => (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
+      {/* Post Header */}
+      <div className="border-b border-gray-200 dark:border-gray-700 p-4 flex justify-between items-center">
+        <div className="flex items-center gap-2">
           <Button
-              onClick={() => setIsPostModalOpen(true)}
-              className="flex items-center gap-2"
+            variant="ghost"
+            onClick={() => setSelectedPost(null)}
+            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
           >
-            <RiAddLine className="size-4" />
-            New Post
+            <RiArrowLeftSLine className="size-5 mr-1" />
+            Back
           </Button>
         </div>
-
-        {/* Main content */}
-        <div className="flex flex-col lg:flex-row gap-6">
-          {/* Sidebar filters */}
-          <div className="w-full lg:w-64 flex-shrink-0 order-2 lg:order-1">
-            <Card className="p-4 shadow-sm">
-              <div className="mb-4">
-                <div className="relative">
-                  <RiSearchLine className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
-                  <input
-                      type="text"
-                      placeholder="Search community..."
-                      className="pl-8 w-full bg-gray-100 dark:bg-gray-800 border-none rounded-md py-2 text-sm"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="mb-6">
-                <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-3 flex items-center">
-                  <RiFilterLine className="mr-2 size-4" />
-                  Tags
-                </h3>
-                <div className="space-y-2">
-                  {popularTags.map((tag) => (
-                      <button
-                          key={tag.name}
-                          onClick={() => setActiveTag(tag.name)}
-                          className={`flex items-center justify-between w-full px-3 py-1.5 rounded-md text-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${
-                              activeTag === tag.name
-                                  ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
-                                  : 'text-gray-700 dark:text-gray-300'
-                          }`}
-                      >
-                        <span>{tag.name}</span>
-                        <span className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-xs px-2 py-0.5 rounded-full">
-                      {tag.count}
-                    </span>
-                      </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-gray-200 dark:border-gray-800">
-                <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-3">
-                  Resources
-                </h3>
-                <ul className="space-y-2">
-                  <li>
-                    <a
-                        href="#"
-                        className="flex items-center text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 text-sm"
-                    >
-                      <RiBookOpenLine className="mr-2 size-4" />
-                      Community Guidelines
-                    </a>
-                  </li>
-                  <li>
-                    <a
-                        href="#"
-                        className="flex items-center text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 text-sm"
-                    >
-                      <RiQuestionLine className="mr-2 size-4" />
-                      FAQ
-                    </a>
-                  </li>
-                  <li>
-                    <a
-                        href="#"
-                        className="flex items-center text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 text-sm"
-                    >
-                      <RiChat3Line className="mr-2 size-4" />
-                      Contact Support
-                    </a>
-                  </li>
-                </ul>
-              </div>
-            </Card>
+        
+        {/* Admin actions */}
+        {currentUser?.role === "admin" && (
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleTogglePin(selectedPost.id, selectedPost.isPinned)}
+              title={selectedPost.isPinned ? "Unpin post" : "Pin post"}
+              className={`p-2 ${selectedPost.isPinned ? "text-blue-600" : "text-gray-500"}`}
+            >
+              <RiPinDistanceLine className="size-4" />
+            </Button>
+            
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleToggleAnswered(selectedPost.id, selectedPost.isAnswered)}
+              title={selectedPost.isAnswered ? "Mark as unanswered" : "Mark as answered"}
+              className={`p-2 ${selectedPost.isAnswered ? "text-green-600" : "text-gray-500"}`}
+            >
+              <RiCheckLine className="size-4" />
+            </Button>
+            
+            <Button
+              variant="ghost"
+              onClick={() => handleDeletePost(selectedPost.id)}
+              className="text-red-600 dark:text-red-400 p-2"
+              title="Delete post"
+            >
+              <RiCloseLine className="size-4" />
+            </Button>
           </div>
-
-          {/* Questions list */}
-          <div className="flex-1 order-1 lg:order-2">
-            <Card className="shadow-sm">
-              {/* Tabs for sorting */}
-              <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800">
-                <Tabs value={activeTab} onValueChange={setActiveTab}>
-                  <TabsList className="grid grid-cols-3 w-full sm:w-auto sm:flex">
-                    <TabsTrigger value="latest" className="flex items-center gap-1.5">
-                      <RiTimeLine className="size-4" />
-                      <span className="hidden sm:inline">Latest</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="popular" className="flex items-center gap-1.5">
-                      <RiThumbUpLine className="size-4" />
-                      <span className="hidden sm:inline">Popular</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="unanswered" className="flex items-center gap-1.5">
-                      <RiQuestionLine className="size-4" />
-                      <span className="hidden sm:inline">Unanswered</span>
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
+        )}
+      </div>
+      
+      {/* Post Content */}
+      <div className="p-5">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+          {selectedPost?.title}
+        </h2>
+        
+        <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 mb-4">
+          <span className="flex items-center">
+            <RiUserLine className="mr-1 size-3.5" />
+            {selectedPost?.author}
+            {selectedPost?.role === "admin" && (
+              <span className="ml-1 inline-block bg-blue-500 text-white text-xs px-1 rounded">Admin</span>
+            )}
+          </span>
+          <span className="mx-2">•</span>
+          <span>{formatTimestamp(selectedPost?.timestamp)}</span>
+          <span className="mx-2">•</span>
+          <span className="flex items-center">
+            <RiEyeLine className="mr-1 size-3.5" />
+            {selectedPost?.views || 0} views
+          </span>
+        </div>
+        
+        <div className="text-gray-800 dark:text-gray-200 my-4 pb-4 border-b border-gray-200 dark:border-gray-700">
+          <p>{selectedPost?.content}</p>
+        </div>
+        
+        {/* Replies */}
+        <div className="mt-6">
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4">
+            Replies ({replies.length})
+          </h3>
+          
+          <div className="space-y-4">
+            {repliesLoading ? (
+              <div className="animate-pulse">
+                <div className="flex items-start space-x-3">
+                  <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700"></div>
+                  <div className="flex-1">
+                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-2"></div>
+                    <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/5 mb-3"></div>
+                    <div className="h-16 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
+                  </div>
+                </div>
               </div>
-
-              {/* Questions list */}
-              <div className="divide-y divide-gray-200 dark:divide-gray-800">
-                {questions.length > 0 ? (
-                    questions.map((question) => (
-                        <div
-                            key={question.id}
-                            className={`p-4 hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors ${
-                                question.isPinned ? 'bg-blue-50 dark:bg-blue-900/10' : ''
-                            }`}
-                        >
-                          <div className="flex items-start gap-3">
-                            {/* Question details */}
-                            <div className="flex-1">
-                              <div className="flex flex-wrap gap-2 items-center mb-1">
-                                {question.isPinned && (
-                                    <span className="inline-flex items-center text-xs font-medium text-blue-600 dark:text-blue-400">
-                              <RiPinDistanceLine className="mr-1 size-3.5" />
-                              Pinned
-                            </span>
-                                )}
-                                <span className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${
-                                    {
-                                      '3-SAT': 'bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400',
-                                      'K-SAT': 'bg-indigo-100 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400',
-                                      'LDPC': 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400',
-                                      'API': 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400',
-                                      'Bug Report': 'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400',
-                                      'Performance': 'bg-orange-100 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400',
-                                      'Best Practices': 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'
-                                    }[question.tag] || 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
-                                }`}>
-                            {question.tag}
-                          </span>
-                              </div>
-
-                              <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-1">
-                                <a href="#" className="hover:text-blue-600 dark:hover:text-blue-400">
-                                  {question.title}
-                                </a>
-                              </h3>
-
-                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
-                          <span className="flex items-center">
-                            <RiUserLine className="mr-1 size-3.5" />
-                            {question.author}
-                          </span>
-                                <span className="flex items-center">
-                            <RiTimeLine className="mr-1 size-3.5" />
-                                  {formatTimestamp(question.timestamp)}
-                          </span>
-                                <span className="flex items-center">
-                            <RiChat3Line className="mr-1 size-3.5" />
-                                  {question.replies} {question.replies === 1 ? 'reply' : 'replies'}
-                          </span>
-                                <span className="flex items-center">
-                            <RiSearchLine className="mr-1 size-3.5" />
-                                  {question.views} {question.views === 1 ? 'view' : 'views'}
-                          </span>
-                              </div>
-                            </div>
-
-                            {/* Status indicator */}
-                            <div className="flex-shrink-0">
-                              {question.isAnswered ? (
-                                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400">
-                            <RiCheckLine className="size-4" />
-                          </span>
-                              ) : (
-                                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
-                            <RiQuestionLine className="size-4" />
-                          </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                    ))
-                ) : (
-                    <div className="p-8 text-center">
-                      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-                        No questions found
-                      </h3>
-                      <p className="text-gray-600 dark:text-gray-400 mb-4">
-                        {searchQuery ? 'Try a different search term' : 'Be the first to ask a question!'}
-                      </p>
-                      <Button
-                          onClick={() => setIsPostModalOpen(true)}
-                          className="flex items-center gap-2 mx-auto"
-                      >
-                        <RiAddLine className="size-4" />
-                        Create New Post
-                      </Button>
+            ) : replies.length > 0 ? (
+              replies.map((reply) => (
+                <div key={reply.id} className="border-b border-gray-100 dark:border-gray-800 pb-4 last:border-0">
+                  <div className="flex items-center mb-2">
+                    <div className="h-8 w-8 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center">
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {reply.author?.[0]?.toUpperCase() || "A"}
+                      </span>
                     </div>
-                )}
+                    <div className="ml-3">
+                      <div className="flex items-center">
+                        <span className="font-medium text-gray-900 dark:text-gray-100">
+                          {reply.author}
+                        </span>
+                        {reply.role === "admin" && (
+                          <span className="ml-1 inline-block bg-blue-500 text-white text-xs px-1 rounded">Admin</span>
+                        )}
+                      </div>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {formatTimestamp(reply.timestamp)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="ml-11 text-gray-700 dark:text-gray-300">
+                    {reply.content}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-6">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 mb-3">
+                  <RiChat3Line className="size-6 text-gray-500" />
+                </div>
+                <p className="text-gray-500 dark:text-gray-400">No replies yet. Be the first to reply!</p>
               </div>
-            </Card>
+            )}
+          </div>
+          
+          {/* Reply Form */}
+          <div className="mt-6">
+            <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-3">Add a reply</h3>
+            
+            <div className="relative">
+              <Textarea
+                value={newReplyContent}
+                onChange={(e) => setNewReplyContent(e.target.value)}
+                placeholder="Write your reply here..."
+                className="min-h-[120px] w-full pr-14 border border-gray-300 dark:border-gray-700 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-800"
+              />
+              
+              <Button
+                onClick={handleSubmitReply}
+                disabled={!newReplyContent.trim()}
+                className="absolute bottom-3 right-3 h-8 w-8 p-0 flex items-center justify-center"
+                title="Post reply"
+              >
+                <RiAddLine className="size-4" />
+              </Button>
+            </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
 
-        {/* New Post Modal */}
-        {isPostModalOpen && (
-            <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center p-4 z-50">
-              <Card className="w-full max-w-2xl p-0 shadow-lg">
-                <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-800">
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50">
-                    Create New Post
-                  </h2>
-                </div>
-
-                <div className="p-4 sm:p-6 space-y-4">
-                  <div>
-                    <label htmlFor="post-title" className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Title
-                    </label>
-                    <input
-                        id="post-title"
-                        type="text"
-                        value={newPostTitle}
-                        onChange={(e) => setNewPostTitle(e.target.value)}
-                        placeholder="What's your question or topic?"
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="post-content" className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Content
-                    </label>
-                    <Textarea
-                        id="post-content"
-                        value={newPostContent}
-                        onChange={(e) => setNewPostContent(e.target.value)}
-                        placeholder="Provide details about your question or topic..."
-                        className="min-h-[200px] w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="post-tag" className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Tag
-                    </label>
-                    <select
-                        id="post-tag"
-                        value={newPostTag}
-                        onChange={(e) => setNewPostTag(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800"
-                    >
-                      <option value="3-SAT">3-SAT</option>
-                      <option value="K-SAT">K-SAT</option>
-                      <option value="LDPC">LDPC</option>
-                      <option value="API">API</option>
-                      <option value="Bug Report">Bug Report</option>
-                      <option value="Performance">Performance</option>
-                      <option value="Best Practices">Best Practices</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="p-4 sm:p-6 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-3">
-                  <Button
-                      variant="outline"
-                      onClick={() => setIsPostModalOpen(false)}
-                      className="flex items-center gap-2"
-                  >
-                    <RiCloseLine className="size-4" />
-                    Cancel
-                  </Button>
-                  <Button
-                      onClick={handleSubmitPost}
-                      disabled={!newPostTitle.trim() || !newPostContent.trim()}
-                      className="flex items-center gap-2"
-                  >
-                    <RiAddLine className="size-4" />
-                    Create Post
-                  </Button>
-                </div>
-              </Card>
+  // Render the post list view
+  const renderPostList = () => (
+    <>
+      {/* Post list */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
+        {/* Header with search */}
+        <div className="border-b border-gray-200 dark:border-gray-700 p-4 flex flex-col md:flex-row gap-3 justify-between">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center">
+            <RiTimeLine className="mr-2 size-4" />
+            Latest discussions
+          </h2>
+          
+          <div className="relative w-full md:w-64">
+            <RiSearchLine className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" />
+            <input
+              type="text"
+              placeholder="Search posts..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-4 py-2 w-full border border-gray-300 dark:border-gray-700 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-100"
+            />
+          </div>
+        </div>
+        
+        {/* Post list */}
+        {loading ? (
+          // Loading skeletons
+          Array(5).fill(0).map((_, index) => (
+            <div key={index} className="animate-pulse border-b border-gray-200 dark:border-gray-700 p-3">
+              <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2"></div>
+              <div className="flex items-center space-x-4 mt-2">
+                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-24"></div>
+                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-20"></div>
+                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-16"></div>
+              </div>
             </div>
+          ))
+        ) : filteredPosts.length > 0 ? (
+          <>
+            <div className="divide-y divide-gray-200 dark:divide-gray-700">
+              {paginatedPosts.map((post) => (
+                <div 
+                  key={post.id} 
+                  className={`p-4 hover:bg-gray-50 dark:hover:bg-gray-750 cursor-pointer ${
+                    post.isPinned ? "bg-blue-50/50 dark:bg-blue-900/10" : ""
+                  }`}
+                  onClick={() => setSelectedPost(post)}
+                >
+                  <div className="flex items-start">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        {post.isPinned && (
+                          <span className="inline-flex items-center text-xs font-medium text-blue-600 dark:text-blue-400">
+                            <RiPinDistanceLine className="mr-1 size-3.5" />
+                            Pinned
+                          </span>
+                        )}
+                        {post.isAnswered && (
+                          <span className="inline-flex items-center text-xs font-medium text-green-600 dark:text-green-400">
+                            <RiCheckLine className="mr-1 size-3.5" />
+                            Solved
+                          </span>
+                        )}
+                      </div>
+                      
+                      <h3 className="font-medium text-gray-900 dark:text-gray-100 truncate">
+                        {post.title}
+                      </h3>
+                      
+                      <div className="flex flex-wrap items-center text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        <span className="flex items-center">
+                          <RiUserLine className="mr-1 size-3.5" />
+                          {post.author}
+                          {post.role === "admin" && (
+                            <span className="ml-1 inline-block bg-blue-500 text-white text-xs px-1 rounded">
+                              Admin
+                            </span>
+                          )}
+                        </span>
+                        <span className="mx-2">•</span>
+                        <span>{formatTimestamp(post.timestamp)}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col items-end justify-center text-right text-xs text-gray-500 dark:text-gray-400">
+                      <div className="flex items-center">
+                        <RiChat3Line className="mr-1 size-3.5" />
+                        <span>{post.replies || 0}</span>
+                      </div>
+                      <div className="flex items-center mt-1">
+                        <RiEyeLine className="mr-1 size-3.5" />
+                        <span>{post.views || 0}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-center">
+                <div className="flex items-center space-x-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handlePageChange(1)}
+                    disabled={currentPage === 1}
+                    className="w-8 h-8 p-0 flex items-center justify-center"
+                  >
+                    1
+                  </Button>
+                  
+                  {currentPage > 3 && <span className="text-gray-500">...</span>}
+                  
+                  {Array.from({ length: 3 }, (_, i) => {
+                    const page = currentPage + i - 1;
+                    if (page > 1 && page < totalPages) {
+                      return (
+                        <Button
+                          key={page}
+                          variant={currentPage === page ? "default" : "ghost"}
+                          size="sm"
+                          onClick={() => handlePageChange(page)}
+                          className="w-8 h-8 p-0 flex items-center justify-center"
+                        >
+                          {page}
+                        </Button>
+                      );
+                    }
+                    return null;
+                  })}
+                  
+                  {currentPage < totalPages - 2 && <span className="text-gray-500">...</span>}
+                  
+                  {totalPages > 1 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handlePageChange(totalPages)}
+                      disabled={currentPage === totalPages}
+                      className="w-8 h-8 p-0 flex items-center justify-center"
+                    >
+                      {totalPages}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="p-8 text-center">
+            <div className="bg-gray-100 dark:bg-gray-800 rounded-full p-4 inline-block mb-3">
+              <RiChat3Line className="size-6 text-gray-500" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+              No posts found
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              {searchQuery ? "Try a different search term" : "Be the first to ask a question!"}
+            </p>
+            <Button onClick={() => setIsPostModalOpen(true)} className="flex items-center gap-2 mx-auto">
+              <RiAddLine className="size-4" />
+              Create New Post
+            </Button>
+          </div>
         )}
-      </main>
+      </div>
+    </>
+  );
+
+  return (
+    <main className="container max-w-5xl mx-auto p-4">
+      {/* Header */}
+      <div className="flex flex-wrap justify-between items-center mb-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
+            Community
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">
+            Ask questions, share insights, and connect with other researchers
+          </p>
+        </div>
+        
+        <Button onClick={() => setIsPostModalOpen(true)} className="flex items-center gap-2">
+          <RiAddLine className="size-4" />
+          New Post
+        </Button>
+      </div>
+      
+      {/* Main Content */}
+      <div className="space-y-6">
+        {selectedPost ? renderPostDetail() : renderPostList()}
+      </div>
+      
+      {/* New Post Modal */}
+      {isPostModalOpen && (
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-2xl">
+            <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50">Create New Post</h2>
+                <Button variant="ghost" onClick={() => setIsPostModalOpen(false)} className="h-8 w-8 p-0">
+                  <RiCloseLine className="size-5" />
+                </Button>
+              </div>
+            </div>
+            
+            <div className="p-4 sm:p-6 space-y-4">
+              <div>
+                <label htmlFor="post-title" className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Title
+                </label>
+                <input
+                  id="post-title"
+                  type="text"
+                  value={newPostTitle}
+                  onChange={(e) => setNewPostTitle(e.target.value)}
+                  placeholder="What's your question or topic?"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="post-content" className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Content
+                </label>
+                <Textarea
+                  id="post-content"
+                  value={newPostContent}
+                  onChange={(e) => setNewPostContent(e.target.value)}
+                  placeholder="Provide details about your question or topic..."
+                  className="min-h-[200px] w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800"
+                />
+              </div>
+            </div>
+            
+            <div className="p-4 sm:p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setIsPostModalOpen(false)} className="flex items-center gap-2">
+                <RiCloseLine className="size-4" />
+                Cancel
+              </Button>
+              
+              <Button
+                onClick={handleSubmitPost}
+                disabled={!newPostTitle.trim() || !newPostContent.trim()}
+                className="flex items-center gap-2"
+              >
+                <RiAddLine className="size-4" />
+                Create Post
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </main>
   );
 }
-
-// This is a mock component for the missing RiCheckLine icon
-const RiCheckLine = ({ className }) => {
-  return (
-      <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          width="24"
-          height="24"
-          className={className}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-      >
-        <polyline points="20 6 9 17 4 12"></polyline>
-      </svg>
-  );
-};

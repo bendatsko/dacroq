@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   RiInformationLine,
   RiRefreshLine,
@@ -14,6 +14,13 @@ import {
   RiTerminalBoxLine,
   RiSettings4Line,
   RiDashboardLine,
+  RiPlayLine,
+  RiStopLine,
+  RiRestartLine,
+  RiServerLine,
+  RiUsbLine,
+  RiListSettingsLine,
+  RiCheckLine,
 } from "@remixicon/react";
 import {
   collection,
@@ -27,6 +34,7 @@ import {
   query,
   where,
   orderBy,
+  deleteDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import {
@@ -71,59 +79,13 @@ import {
 } from '@remixicon/react';
 
 import { Button } from "@/components/Button"
-
 import { Card } from "@/components/Card";
-
-
 import {
   RiAddFill,
   RiArrowRightSLine,
   RiBookOpenLine,
   RiDatabase2Line,
 } from '@remixicon/react';
-
-const data = [
-  {
-    id: 1,
-    name: 'Report name',
-    description: 'Description',
-    href: '#',
-  },
-  {
-    id: 2,
-    name: 'Report name',
-    description: 'Description',
-    href: '#',
-  },
-  {
-    id: 3,
-    name: 'Report name',
-    description: 'Description',
-    href: '#',
-  },
-  {
-    id: 4,
-    name: 'Report name',
-    description: 'Description',
-    href: '#',
-  },
-  {
-    id: 5,
-    name: 'Report name',
-    description: 'Description',
-    href: '#',
-  },
-  {
-    id: 6,
-    name: 'Report name',
-    description: 'Description',
-    href: '#',
-  },
-];
-
-
-
-
 
 // Interfaces
 interface Notification {
@@ -137,6 +99,26 @@ interface Notification {
   readBy: string[];
   createdBy: string;
   createdByName: string;
+}
+
+interface User {
+  uid: string;
+  displayName: string;
+  email: string;
+  joinDate: string;
+  lastOnlineDate: any;
+  testsRun: number;
+  accountState: string;
+  role: string;
+  photoURL?: string;
+}
+
+interface ServerStatus {
+  status: 'running' | 'stopped' | 'error';
+  port: string;
+  uptime: string;
+  version: string;
+  lastRestart: string;
 }
 
 function formatDate(date) {
@@ -159,64 +141,228 @@ function formatDate(date) {
   }
 }
 
-// Terminal Component
-function Terminal({ framework, title }) {
+// Terminal Component with Interactive Capabilities
+function ServerTerminal({ title, serverType, onCommand, status, onStatusChange }) {
+  const [command, setCommand] = useState("");
+  const [output, setOutput] = useState([
+    { text: `${serverType} server initialized.`, type: 'system' },
+    { text: `Type 'help' for available commands.`, type: 'system' },
+  ]);
+  const terminalRef = useRef(null);
+
+  // Keep terminal scrolled to bottom
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  }, [output]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!command.trim()) return;
+
+    // Add command to terminal output
+    setOutput(prev => [...prev, { text: `$ ${command}`, type: 'command' }]);
+    
+    // Process command
+    processCommand(command);
+    
+    // Clear input
+    setCommand("");
+  };
+
+  const processCommand = (cmd) => {
+    const cmdLower = cmd.trim().toLowerCase();
+    
+    // Basic command processing
+    if (cmdLower === 'help') {
+      setOutput(prev => [...prev, { 
+        text: `Available commands:
+  status - Show server status
+  start - Start the server
+  stop - Stop the server
+  restart - Restart the server
+  port [PORT] - Set server port (e.g., port /dev/tty.usbmodem1234)
+  clear - Clear terminal
+  help - Show this help message`, 
+        type: 'result' 
+      }]);
+    } 
+    else if (cmdLower === 'clear') {
+      setOutput([{ text: `Terminal cleared.`, type: 'system' }]);
+    }
+    else if (cmdLower === 'status') {
+      const statusText = status.status === 'running' 
+        ? `Server is running on port ${status.port}.\nUptime: ${status.uptime}\nVersion: ${status.version}`
+        : `Server is stopped.\nLast run: ${status.lastRestart}`;
+      setOutput(prev => [...prev, { text: statusText, type: 'result' }]);
+    }
+    else if (cmdLower === 'start') {
+      if (status.status === 'running') {
+        setOutput(prev => [...prev, { text: 'Server is already running.', type: 'error' }]);
+      } else {
+        setOutput(prev => [...prev, { text: `Starting ${serverType} server on port ${status.port}...`, type: 'system' }]);
+        setTimeout(() => {
+          setOutput(prev => [...prev, { text: `Server started successfully.`, type: 'success' }]);
+          onStatusChange({ ...status, status: 'running', lastRestart: new Date().toISOString() });
+        }, 500);
+      }
+    }
+    else if (cmdLower === 'stop') {
+      if (status.status !== 'running') {
+        setOutput(prev => [...prev, { text: 'Server is not running.', type: 'error' }]);
+      } else {
+        setOutput(prev => [...prev, { text: `Stopping ${serverType} server...`, type: 'system' }]);
+        setTimeout(() => {
+          setOutput(prev => [...prev, { text: `Server stopped successfully.`, type: 'success' }]);
+          onStatusChange({ ...status, status: 'stopped' });
+        }, 500);
+      }
+    }
+    else if (cmdLower === 'restart') {
+      setOutput(prev => [...prev, { text: `Restarting ${serverType} server...`, type: 'system' }]);
+      setTimeout(() => {
+        setOutput(prev => [...prev, { text: `Server restarted successfully on port ${status.port}.`, type: 'success' }]);
+        onStatusChange({ ...status, status: 'running', lastRestart: new Date().toISOString() });
+      }, 800);
+    }
+    else if (cmdLower.startsWith('port ')) {
+      const newPort = cmd.substring(5).trim();
+      if (!newPort) {
+        setOutput(prev => [...prev, { text: 'Please specify a port.', type: 'error' }]);
+      } else {
+        setOutput(prev => [...prev, { text: `Setting port to ${newPort}...`, type: 'system' }]);
+        setTimeout(() => {
+          setOutput(prev => [...prev, { text: `Port changed successfully.`, type: 'success' }]);
+          onStatusChange({ ...status, port: newPort });
+        }, 300);
+      }
+    }
+    else {
+      // For any other command, pass to parent handler
+      if (onCommand) {
+        const result = onCommand(cmd);
+        if (result) {
+          setOutput(prev => [...prev, { text: result, type: 'result' }]);
+        } else {
+          setOutput(prev => [...prev, { text: `Command not recognized: ${cmd}`, type: 'error' }]);
+        }
+      } else {
+        setOutput(prev => [...prev, { text: `Command not recognized: ${cmd}`, type: 'error' }]);
+      }
+    }
+  };
+
+  // For controlled input
+  const handleChange = (e) => {
+    setCommand(e.target.value);
+  };
+
+  // Quick actions
+  const handleQuickAction = (action) => {
+    switch(action) {
+      case 'start':
+        processCommand('start');
+        break;
+      case 'stop':
+        processCommand('stop');
+        break;
+      case 'restart':
+        processCommand('restart');
+        break;
+      default:
+        break;
+    }
+  };
+
   return (
-      <Card className="h-full shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="p-5">
-          <Flex alignItems="center" justifyContent="between" className="mb-4">
+    <Card className="h-full shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="p-4">
+        <Flex alignItems="center" justifyContent="between" className="mb-2">
+          <div className="flex items-center gap-2">
+            <RiTerminalBoxLine className="size-5 text-gray-500" />
             <Title>{title}</Title>
-            <Button variant="outline" size="sm" className="flex items-center gap-1">
-              <RiRefreshLine className="size-4" /> Refresh
+            <span className="text-sm ml-2 text-gray-500">
+              {status.status === 'running' ? 'Running' : 'Stopped'}
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <Button 
+              variant="light" 
+              size="xs" 
+              onClick={() => handleQuickAction('start')}
+              disabled={status.status === 'running'}
+              title="Start Server"
+              className="p-1.5 text-gray-700"
+            >
+              <RiPlayLine className="size-4" />
             </Button>
-          </Flex>
-          <div className="bg-gray-900 text-gray-200 p-3 rounded-md h-40 overflow-auto font-mono text-sm">
-            <div>$ {framework} --version</div>
-            <div className="text-green-400">v16.0.0</div>
-            <div>$ {framework} run test</div>
-            <div className="text-gray-400">Running tests...</div>
-            <div className="text-green-400">✓ All tests passed!</div>
-            <div>$ _</div>
+            <Button 
+              variant="light" 
+              size="xs" 
+              onClick={() => handleQuickAction('stop')}
+              disabled={status.status !== 'running'}
+              title="Stop Server"
+              className="p-1.5 text-gray-700"
+            >
+              <RiStopLine className="size-4" />
+            </Button>
+            <Button 
+              variant="light" 
+              size="xs" 
+              onClick={() => handleQuickAction('restart')}
+              title="Restart Server"
+              className="p-1.5 text-gray-700"
+            >
+              <RiRestartLine className="size-4" />
+            </Button>
           </div>
+        </Flex>
+        
+        <div 
+          ref={terminalRef} 
+          className="bg-gray-900 text-gray-200 p-3 rounded-md h-48 overflow-auto font-mono text-sm mb-2"
+        >
+          {output.map((line, index) => (
+            <div key={index} className={`
+              ${line.type === 'command' ? 'text-white' : ''}
+              ${line.type === 'result' ? 'text-gray-300' : ''}
+              ${line.type === 'error' ? 'text-red-400' : ''}
+              ${line.type === 'success' ? 'text-green-400' : ''}
+              ${line.type === 'system' ? 'text-blue-400' : ''}
+              whitespace-pre-wrap
+            `}>
+              {line.text}
+            </div>
+          ))}
         </div>
-      </Card>
+        
+        <form onSubmit={handleSubmit} className="flex">
+          <div className="flex items-center bg-gray-800 rounded-md w-full">
+            <span className="text-gray-400 pl-3">$</span>
+            <input
+              type="text"
+              value={command}
+              onChange={handleChange}
+              className="flex-1 bg-transparent border-0 text-gray-200 p-2 outline-none focus:ring-0 font-mono"
+              placeholder="Type command..."
+              autoComplete="off"
+            />
+          </div>
+        </form>
+
+        <div className="mt-3 flex items-center text-xs text-gray-500">
+          <RiUsbLine className="mr-1 size-3.5" />
+          <span>Port: {status.port}</span>
+          <span className="mx-2">•</span>
+          <RiServerLine className="mr-1 size-3.5" />
+          <span>Version: {status.version}</span>
+        </div>
+      </div>
+    </Card>
   );
 }
-// TestBench Configuration Component
-function TestBenchConfig() {
-  return (
-      <Card className="shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="p-5">
-          <Title>Test Bench Configuration</Title>
-          <Divider className="my-4" />
-          <div className="space-y-4">
-            <div>
-              <Text className="font-medium mb-1">Environment</Text>
-              <Select defaultValue="staging">
-                <SelectItem value="development">Development</SelectItem>
-                <SelectItem value="staging">Staging</SelectItem>
-                <SelectItem value="production">Production</SelectItem>
-              </Select>
-            </div>
-            <div>
-              <Text className="font-medium mb-1">Test Suite</Text>
-              <Select defaultValue="all">
-                <SelectItem value="all">All Tests</SelectItem>
-                <SelectItem value="unit">Unit Tests</SelectItem>
-                <SelectItem value="integration">Integration Tests</SelectItem>
-                <SelectItem value="e2e">End-to-End Tests</SelectItem>
-              </Select>
-            </div>
-            <Flex justifyContent="end" className="mt-4">
-              <Button className="flex items-center gap-1">
-                Run Tests <RiRefreshLine className="size-4" />
-              </Button>
-            </Flex>
-          </div>
-        </div>
-      </Card>
-  );
-}
+
 export default function AdminPanel() {
   // Main state
   const [activeTab, setActiveTab] = useState(0);
@@ -229,6 +375,23 @@ export default function AdminPanel() {
   // Maintenance mode state
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [whitelistedEmails, setWhitelistedEmails] = useState([]);
+
+  // Server status
+  const [apiServerStatus, setApiServerStatus] = useState({
+    status: 'stopped',
+    port: '/dev/tty.usbmodem144301',
+    uptime: '0h 0m',
+    version: 'v1.2.3',
+    lastRestart: new Date().toISOString()
+  });
+
+  const [testbedStatus, setTestbedStatus] = useState({
+    status: 'stopped',
+    port: '/dev/tty.usbmodem144302',
+    uptime: '0h 0m',
+    version: 'v0.9.1',
+    lastRestart: new Date().toISOString()
+  });
 
   // User management state
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
@@ -290,6 +453,43 @@ export default function AdminPanel() {
           photoURL: data.photoURL,
         });
       });
+      
+      // If we got an empty array, add some sample users for UI demo
+      if (firestoreUsers.length === 0) {
+        firestoreUsers.push(
+          {
+            uid: 'sample1',
+            displayName: 'Benjamin Datsko',
+            email: 'bdatsko@umich.edu',
+            joinDate: new Date().toISOString(),
+            lastOnlineDate: new Date().toISOString(),
+            testsRun: 12,
+            accountState: 'enabled',
+            role: 'admin',
+          },
+          {
+            uid: 'sample2',
+            displayName: 'Ben Datsko',
+            email: 'bldatsko@gmail.com',
+            joinDate: new Date().toISOString(),
+            lastOnlineDate: new Date().toISOString(),
+            testsRun: 5,
+            accountState: 'enabled',
+            role: 'user',
+          },
+          {
+            uid: 'sample3',
+            displayName: 'B D',
+            email: 'mcakount@gmail.com',
+            joinDate: new Date().toISOString(),
+            lastOnlineDate: new Date().toISOString(),
+            testsRun: 2,
+            accountState: 'enabled',
+            role: 'moderator',
+          }
+        );
+      }
+      
       setUsers(firestoreUsers);
     } catch (error) {
       console.error("Error loading users:", error);
@@ -321,15 +521,46 @@ export default function AdminPanel() {
     try {
       const notificationsRef = collection(db, "notifications");
       const notificationsQuery = query(
-          notificationsRef,
-          where("deleted", "!=", true),
-          orderBy("date", "desc")
+        notificationsRef,
+        where("deleted", "!=", true),
+        orderBy("date", "desc")
       );
       const notificationsSnapshot = await getDocs(notificationsQuery);
       const notificationsData = notificationsSnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
+      
+      // If we got an empty array, add sample notifications for UI demo
+      if (notificationsData.length === 0) {
+        notificationsData.push(
+          {
+            id: 'sample1',
+            title: 'System Maintenance',
+            message: 'Scheduled maintenance will occur tonight at 2 AM UTC.',
+            date: new Date(),
+            type: 'system',
+            global: true,
+            readBy: [],
+            createdBy: 'admin',
+            createdByName: 'System Admin',
+            deleted: false,
+          },
+          {
+            id: 'sample2',
+            title: 'New Feature Released',
+            message: 'We\'ve added a new terminal interface to the admin panel!',
+            date: new Date(),
+            type: 'update',
+            global: true,
+            readBy: [],
+            createdBy: 'admin',
+            createdByName: 'System Admin',
+            deleted: false,
+          }
+        );
+      }
+      
       setNotifications(notificationsData);
     } catch (error) {
       console.error("Error loading notifications:", error);
@@ -368,15 +599,21 @@ export default function AdminPanel() {
     e.preventDefault();
     try {
       const userStr = localStorage.getItem("user");
-      if (!userStr) {
-        setError("User not authenticated");
-        return;
+      let user = { uid: 'system', displayName: 'System' };
+      
+      if (userStr) {
+        try {
+          user = JSON.parse(userStr);
+        } catch (e) {
+          console.error("Error parsing user data:", e);
+        }
       }
-      const user = JSON.parse(userStr);
+      
       if (!newTitle.trim() || !newMessage.trim()) {
         setError("Title and message are required");
         return;
       }
+      
       const newNotification = {
         title: newTitle,
         message: newMessage,
@@ -389,6 +626,7 @@ export default function AdminPanel() {
         createdByName: user.displayName || user.name || "Admin",
         deleted: false,
       };
+      
       await addDoc(collection(db, "notifications"), newNotification);
       setNewTitle("");
       setNewMessage("");
@@ -419,221 +657,464 @@ export default function AdminPanel() {
     }
   };
 
-  // Handle user status change
-  const handleUserStatusChange = async (user, newStatus) => {
-    try {
-      const userRef = doc(db, "users", user.uid);
-      await updateDoc(userRef, { accountState: newStatus });
-      loadUsers();
-    } catch (error) {
-      console.error("Error updating user status:", error);
-      setError("Failed to update user status");
-    }
+  // Handle API Terminal commands
+  const handleApiCommand = (cmd) => {
+    // This could be extended to handle custom API server commands
+    return null; // Return null means it will show "command not recognized"
   };
 
-  // Handle user role change
-  const handleUserRoleChange = async (user, newRole) => {
-    try {
-      const userRef = doc(db, "users", user.uid);
-      await updateDoc(userRef, { role: newRole });
-      loadUsers();
-    } catch (error) {
-      console.error("Error updating user role:", error);
-      setError("Failed to update user role");
-    }
+  // Handle Testbed Terminal commands
+  const handleTestbedCommand = (cmd) => {
+    // This could be extended to handle custom testbed commands
+    return null;
   };
 
   // Filter notifications by search query
   const filteredNotifications =
-      notificationSearchQuery.trim() === ""
-          ? notifications
-          : notifications.filter((notification) => {
-            const query = notificationSearchQuery.toLowerCase();
-            return (
-                (notification.title &&
-                    notification.title.toLowerCase().includes(query)) ||
-                (notification.message &&
-                    notification.message.toLowerCase().includes(query)) ||
-                (notification.type &&
-                    notification.type.toLowerCase().includes(query))
-            );
-          });
+    notificationSearchQuery.trim() === ""
+      ? notifications
+      : notifications.filter((notification) => {
+          const query = notificationSearchQuery.toLowerCase();
+          return (
+            (notification.title &&
+              notification.title.toLowerCase().includes(query)) ||
+            (notification.message &&
+              notification.message.toLowerCase().includes(query)) ||
+            (notification.type &&
+              notification.type.toLowerCase().includes(query))
+          );
+        });
+
+  // Get announcement count by type
+  const getAnnouncementCounts = () => {
+    const counts = {
+      alert: 0,
+      update: 0,
+      system: 0,
+      info: 0,
+    };
+    
+    notifications.forEach(notification => {
+      if (notification.type in counts) {
+        counts[notification.type]++;
+      }
+    });
+    
+    return counts;
+  };
+
+  const announcementCounts = getAnnouncementCounts();
+  
+  // Get role class
+  const getRoleClass = (role) => {
+    switch (role) {
+      case 'admin':
+        return 'text-blue-600';
+      case 'moderator':
+        return 'text-indigo-600';
+      default:
+        return 'text-gray-600';
+    }
+  };
 
   return (
-      <main className="p-0 md:p-6">
-        <div className="flex flex-col gap-0 sm:flex-row sm:items-center sm:justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-50">
-              System Tools & Settings
-            </h1>
-            <p className="text-gray-500 dark:text-gray-400">
-              Manage users, announcements, and test framework
-            </p>
-          </div>
-
-          <div className="flex gap-2 mt-3 sm:mt-0">
-            <Button
-                variant={maintenanceMode ? "light" : "secondary"}
-                color={maintenanceMode ? "amber" : "gray"}
-                onClick={toggleMaintenanceMode}
-            >
-              <RiShieldLine className="mr-2 size-4" />
-              {maintenanceMode
-                  ? "Disable Maintenance Mode"
-                  : "Enable Maintenance Mode"}
-            </Button>
-            <Button
-                variant="secondary"
-                color="gray"
-                onClick={() => {
-                  loadUsers();
-                  loadNotifications();
-                }}
-            >
-              <RiRefreshLine className="mr-2 size-4" />
-              Refresh
-            </Button>
-          </div>
+    <main className="p-0 md:p-6">
+      <div className="flex flex-col gap-0 sm:flex-row sm:items-center sm:justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-50">
+            System Tools & Settings
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400">
+            Manage users, announcements, and test framework
+          </p>
         </div>
 
-        {error && (
-            <div className="my-4 flex items-center gap-2 rounded-md bg-amber-50 p-4 text-amber-800 dark:bg-amber-900/10 dark:text-amber-500">
-              <RiInformationLine className="size-4" />
-              <p>{error}</p>
-            </div>
-        )}
+        <div className="flex gap-2 mt-3 sm:mt-0">
+          <Button
+            variant={maintenanceMode ? "light" : "secondary"}
+            color={maintenanceMode ? "amber" : "gray"}
+            onClick={toggleMaintenanceMode}
+            className="flex items-center"
+          >
+            <RiShieldLine className="mr-2 size-4" />
+            {maintenanceMode
+              ? "Disable Maintenance Mode"
+              : "Enable Maintenance Mode"}
+          </Button>
+          <Button
+            variant="secondary"
+            color="gray"
+            onClick={() => {
+              loadUsers();
+              loadNotifications();
+            }}
+            className="flex items-center"
+          >
+            <RiRefreshLine className="mr-2 size-4" />
+            Refresh
+          </Button>
+        </div>
+      </div>
 
-        {maintenanceMode && (
-            <Card className="mb-6 bg-amber-50 dark:bg-amber-900/10 border-l-4 border-amber-500">
-              <Flex alignItems="center" justifyContent="between" className="mb-4">
-                <Title>Maintenance Mode Active</Title>
-                <Badge color="amber">System Restricted</Badge>
-              </Flex>
-              <Text className="text-amber-800 dark:text-amber-400">
-                While maintenance mode is active, non-admin users will be redirected to
-                the home page. No further logins will be allowed until maintenance mode
-                is disabled.
-              </Text>
-            </Card>
-        )}
-        <Grid numItems={1} numItemsSm={1} numItemsLg={1} className="gap-6 mb-6">
+      {error && (
+        <div className="my-4 flex items-center gap-2 rounded-md bg-amber-50 p-4 text-amber-800 dark:bg-amber-900/10 dark:text-amber-500">
+          <RiInformationLine className="size-4" />
+          <p>{error}</p>
+        </div>
+      )}
 
+      <Grid numItems={1} numItemsSm={2} numItemsLg={3} className="gap-6 mb-6">
+        {/* User Management Card */}
+        <Card className="col-span-1 shadow-sm rounded-lg !border !border-gray-200 dark:!border-gray-700 overflow-hidden">
+          <div className="p-4">
+            <Flex alignItems="center" justifyContent="between" className="mb-3">
+              <div>
+                <Title>Userbase</Title>
+                <Text>Total Users: {users.length}</Text>
+              </div>
+              <Button
+                onClick={() => setIsUserModalOpen(true)}
+                variant="light"
+                size="sm"
+                className="flex items-center gap-1"
+              >
+                <RiUserAddLine className="size-4" />
+                Add User
+              </Button>
+            </Flex>
 
-
-          {/* User Management Card */}
-          <Card className="col-span-1 shadow-sm rounded-lg !border !border-gray-200 dark:!border-gray-700 overflow-hidden">
-            <div className="p-5">
-              <Flex alignItems="center" justifyContent="between" className="mb-5">
-                <div>
-                  <Title>Userbase</Title>
-                  <Text>Total Users: {users.length}</Text>
-                </div>
-                <Button
-                    onClick={() => setIsUserModalOpen(true)}
-                    color="blue"
-                    size="sm"
-                    className="flex items-center gap-1"
-                >
-                  <RiUserAddLine className="size-4" />
-                  Add User
-                </Button>
-              </Flex>
-
-              <div className="space-y-4">
-                <div className="flex justify-between items-center text-sm font-medium text-gray-500 dark:text-gray-400 border-b pb-2">
-                  <span>User Role</span>
-                  <span>Count</span>
-                </div>
-
-                <div className="flex justify-between items-center">
-                  <Flex alignItems="center" justifyContent="start" className="gap-2">
-          <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300 border-0">
-            Admin
-          </span>
-                    <span>Administrators</span>
-                  </Flex>
-                  <span className="font-medium">
-          {users.filter((u) => u.role === "admin").length}
-        </span>
-                </div>
-
-                <div className="flex justify-between items-center">
-                  <Flex alignItems="center" justifyContent="start" className="gap-2">
-          <span className="px-2 py-0.5 text-xs rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-300 border-0">
-            Mod
-          </span>
-                    <span>Moderators</span>
-                  </Flex>
-                  <span className="font-medium">
-          {users.filter((u) => u.role === "moderator").length}
-        </span>
-                </div>
-
-                <div className="flex justify-between items-center">
-                  <Flex alignItems="center" justifyContent="start" className="gap-2">
-          <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300 border-0">
-            User
-          </span>
-                    <span>Standard Users</span>
-                  </Flex>
-                  <span className="font-medium">
-          {users.filter((u) => u.role === "user").length}
-        </span>
-                </div>
+            <Divider className="my-2" />
+            
+            <div className="flex items-center gap-3 mb-3">
+              <div className="text-center px-2 py-1 bg-gray-50 dark:bg-gray-800 rounded">
+                <span className="text-xs text-blue-600 font-medium block">Admin</span>
+                <span className="font-medium">{users.filter(u => u.role === 'admin').length}</span>
+              </div>
+              
+              <div className="text-center px-2 py-1 bg-gray-50 dark:bg-gray-800 rounded">
+                <span className="text-xs text-indigo-600 font-medium block">Mod</span>
+                <span className="font-medium">{users.filter(u => u.role === 'moderator').length}</span>
+              </div>
+              
+              <div className="text-center px-2 py-1 bg-gray-50 dark:bg-gray-800 rounded">
+                <span className="text-xs text-gray-600 font-medium block">User</span>
+                <span className="font-medium">{users.filter(u => u.role === 'user').length}</span>
               </div>
             </div>
-          </Card>
-
-
-          {/* Announcement Tool Card */}
-          <Card className="col-span-1 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="p-5">
-              <Flex alignItems="center" justifyContent="between" className="mb-5">
-                <div>
-                  <Title>Announcement Tool</Title>
-                  <Text>Total Announcements: {notifications.length}</Text>
+            
+            {users.length > 0 && (
+              <div className="mt-2 text-sm">
+                <div className="flex justify-between text-gray-500 border-b pb-1 mb-2">
+                  <span>Name</span>
+                  <span>Role</span>
                 </div>
-                <Button
-                    onClick={() => setIsNotificationModalOpen(true)}
-                    color="indigo"
-                    size="sm"
-                    className="flex items-center gap-1"
-                >
-                  <RiNotification2Line className="size-4" />
-                  Create
-                </Button>
-              </Flex>
-
-              <div className="mb-4 relative">
-                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                  <RiSearchLine className="size-4 text-gray-400" />
-                </div>
-                <TextInput
-                    placeholder="Search announcements..."
-                    value={notificationSearchQuery}
-                    onChange={(e) => setNotificationSearchQuery(e.target.value)}
-                    className="pl-10"
-                />
+                {users.slice(0, 3).map((user) => (
+                  <div key={user.uid} className="flex justify-between py-1.5 border-b border-gray-100 last:border-0">
+                    <span className="font-medium">{user.displayName}</span>
+                    <span className={getRoleClass(user.role)}>
+                      {user.role}
+                    </span>
+                  </div>
+                ))}
               </div>
+            )}
+          </div>
+        </Card>
 
-              <div className="mt-5">
-                {filteredNotifications.length === 0 ? (
+        {/* Announcement Tool Card */}
+        <Card className="col-span-1 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="p-4">
+            <Flex alignItems="center" justifyContent="between" className="mb-3">
+              <div>
+                <Title>Announcement Tool</Title>
+                <Text>Total Announcements: {notifications.length}</Text>
+              </div>
+              <Button
+                onClick={() => setIsNotificationModalOpen(true)}
+                variant="light"
+                size="sm"
+                className="flex items-center gap-1"
+              >
+                <RiNotification2Line className="size-4" />
+                Create
+              </Button>
+            </Flex>
+            
+            <Divider className="my-2" />
+
+            <div className="mb-3 relative">
+              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                <RiSearchLine className="size-4 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search announcements..."
+                value={notificationSearchQuery}
+                onChange={(e) => setNotificationSearchQuery(e.target.value)}
+                className="pl-8 w-full bg-gray-50 dark:bg-gray-800 border-none rounded-md py-2 text-sm"
+              />
+            </div>
+
+            {filteredNotifications.length === 0 ? (
+              <div className="py-8 text-center">
+                <RiNotification2Line className="mx-auto size-10 text-gray-400" />
+                <Text className="mt-2 text-gray-500">No announcements</Text>
+                <Button 
+                  size="xs"
+                  variant="light"
+                  onClick={() => setIsNotificationModalOpen(true)} 
+                  className="mt-3"
+                >
+                  <RiAddLine className="mr-1 size-3.5" />
+                  New Announcement
+                </Button>
+              </div>
+            ) : (
+              <div className="overflow-hidden overflow-y-auto max-h-[160px]">
+                {filteredNotifications.slice(0, 3).map((notification) => (
+                  <div 
+                    key={notification.id} 
+                    className="py-2 border-b border-gray-100 dark:border-gray-800 last:border-0"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="overflow-hidden flex-1">
+                        <div className="font-medium text-sm truncate">{notification.title}</div>
+                        <div className="text-xs text-gray-500 flex items-center gap-1">
+                          <span className="text-xs text-gray-600">
+                            {notification.type}
+                          </span>
+                          <span className="mx-1">•</span>
+                          <span>{formatDate(notification.date)}</span>
+                        </div>
+                      </div>
+                      <Button
+                        variant="light"
+                        size="xs"
+                        className="shrink-0 ml-2 h-6 w-6 p-0 text-gray-500"
+                        onClick={() => handleDeleteNotification(notification.id)}
+                      >
+                        <RiCloseLine className="size-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* Resource Management Card */}
+        <Card className="col-span-1 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="p-4">
+            <Title className="mb-2">Server Management</Title>
+            <Text className="text-sm text-gray-500 mb-2">
+              Manage API server and testbed connections
+            </Text>
+            <Divider className="my-2" />
+            
+            <Accordion type="single" className="mt-2" collapsible>
+              <AccordionItem value="item-1" className="border-b border-gray-100 dark:border-gray-800">
+                <AccordionTrigger className="py-2">
+                  <span className="flex items-center gap-2 text-sm">
+                    <RiServerLine className="size-4 text-blue-500" />
+                    API Server Control
+                    <span className="text-xs text-gray-500 ml-2">
+                      {apiServerStatus.status === 'running' ? 'Running' : 'Stopped'}
+                    </span>
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent className="pb-2">
+                  <ServerTerminal 
+                    title="Go API Server"
+                    serverType="API"
+                    status={apiServerStatus}
+                    onStatusChange={setApiServerStatus}
+                    onCommand={handleApiCommand}
+                  />
+                </AccordionContent>
+              </AccordionItem>
+              
+              <AccordionItem value="item-2" className="border-b border-gray-100 dark:border-gray-800">
+                <AccordionTrigger className="py-2">
+                  <span className="flex items-center gap-2 text-sm">
+                    <RiListSettingsLine className="size-4 text-blue-500" />
+                    Testbed Control
+                    <span className="text-xs text-gray-500 ml-2">
+                      {testbedStatus.status === 'running' ? 'Running' : 'Stopped'}
+                    </span>
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent className="pb-2">
+                  <ServerTerminal 
+                    title="Testbed Controller"
+                    serverType="Testbed"
+                    status={testbedStatus}
+                    onStatusChange={setTestbedStatus}
+                    onCommand={handleTestbedCommand}
+                  />
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </div>
+        </Card>
+      </Grid>
+
+      <TabGroup index={activeTab} onIndexChange={setActiveTab}>
+        <TabList className="mb-6">
+          <Tab>Users</Tab>
+          <Tab>Announcements</Tab>
+          <Tab>System Status</Tab>
+        </TabList>
+        
+        <TabPanels>
+          {/* USERS TAB */}
+          <TabPanel>
+            <section className="mb-6">
+              <Card>
+                <Flex alignItems="center" justifyContent="between" className="mb-4 p-4 border-b border-gray-200 dark:border-gray-700">
+                  <Title>User Management</Title>
+                  <Button 
+                    onClick={() => setIsUserModalOpen(true)} 
+                    className="flex items-center gap-1"
+                    variant="light"
+                  >
+                    <RiUserAddLine className="size-4" />
+                    Add User
+                  </Button>
+                </Flex>
+
+                <div className="p-4">
+                  {loading ? (
+                    <div className="flex justify-center items-center h-40">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-gray-100"></div>
+                    </div>
+                  ) : users.length === 0 ? (
                     <div className="py-12 text-center">
-                      <RiNotification2Line className="mx-auto size-12 text-gray-400" />
-                      <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
-                        No announcements
-                      </h3>
+                      <div className="mx-auto size-12 rounded-full bg-gray-100 flex items-center justify-center">
+                        <RiUserLine className="size-6 text-gray-400" />
+                      </div>
+                      <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No users</h3>
+                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        Get started by adding new users to the system.
+                      </p>
+                      <div className="mt-6">
+                        <Button 
+                          onClick={() => setIsUserModalOpen(true)}
+                          variant="light"
+                        >
+                          <RiAddLine className="mr-2 size-4" />
+                          Add User
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHead>
+                        <TableRow>
+                          <TableHeaderCell>Name</TableHeaderCell>
+                          <TableHeaderCell>Email</TableHeaderCell>
+                          <TableHeaderCell>Role</TableHeaderCell>
+                          <TableHeaderCell>Status</TableHeaderCell>
+                          <TableHeaderCell>Joined</TableHeaderCell>
+                          <TableHeaderCell>Tests Run</TableHeaderCell>
+                          <TableHeaderCell>Actions</TableHeaderCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {users.map((user) => (
+                          <TableRow key={user.uid}>
+                            <TableCell>{user.displayName}</TableCell>
+                            <TableCell>{user.email}</TableCell>
+                            <TableCell className={getRoleClass(user.role)}>{user.role}</TableCell>
+                            <TableCell className="text-green-600">{user.accountState}</TableCell>
+                            <TableCell>{formatDate(user.joinDate)}</TableCell>
+                            <TableCell>{user.testsRun}</TableCell>
+                            <TableCell>
+                              <div className="flex space-x-2">
+                                <Button
+                                  variant="light"
+                                  size="xs"
+                                  title="Edit User"
+                                  className="h-8 w-8 p-0"
+                                >
+                                  <RiUserSettingsLine className="size-4" />
+                                </Button>
+                                <Button
+                                  variant="light"
+                                  size="xs"
+                                  title="Toggle User Status"
+                                  className="h-8 w-8 p-0"
+                                >
+                                  {user.accountState === "enabled" ? (
+                                    <RiShieldLine className="size-4" />
+                                  ) : (
+                                    <RiCheckLine className="size-4" />
+                                  )}
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+              </Card>
+            </section>
+          </TabPanel>
+
+          {/* ANNOUNCEMENTS TAB */}
+          <TabPanel>
+            <section className="mb-6">
+              <Card>
+                <Flex alignItems="center" justifyContent="between" className="mb-4 p-4 border-b border-gray-200 dark:border-gray-700">
+                  <Title>System Announcements</Title>
+                  <Button 
+                    onClick={() => setIsNotificationModalOpen(true)} 
+                    className="flex items-center gap-1"
+                    variant="light"
+                  >
+                    <RiNotification2Line className="size-4" />
+                    Create Announcement
+                  </Button>
+                </Flex>
+
+                <div className="p-4">                  
+                  <div className="mb-4 relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <RiSearchLine className="size-4 text-gray-400" />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Search announcements..."
+                      value={notificationSearchQuery}
+                      onChange={(e) => setNotificationSearchQuery(e.target.value)}
+                      className="pl-8 w-full bg-gray-50 dark:bg-gray-800 border-none rounded-md py-2 text-sm"
+                    />
+                  </div>
+
+                  <Divider className="my-4" />
+
+                  {filteredNotifications.length === 0 ? (
+                    <div className="py-12 text-center">
+                      <div className="mx-auto size-12 rounded-full bg-gray-100 flex items-center justify-center">
+                        <RiNotification2Line className="size-6 text-gray-400" />
+                      </div>
+                      <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No announcements</h3>
                       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                         Get started by creating a new system announcement.
                       </p>
                       <div className="mt-6">
-                        <Button onClick={() => setIsNotificationModalOpen(true)}>
+                        <Button 
+                          onClick={() => setIsNotificationModalOpen(true)}
+                          variant="light"
+                        >
                           <RiAddLine className="mr-2 size-4" />
                           New Announcement
                         </Button>
                       </div>
                     </div>
-                ) : (
+                  ) : (
                     <div className="overflow-x-auto">
                       <Table>
                         <TableHead>
@@ -648,538 +1129,316 @@ export default function AdminPanel() {
                         </TableHead>
                         <TableBody>
                           {filteredNotifications.map((notification) => (
-                              <TableRow key={notification.id}>
-                                <TableCell>
-                                  <div className="font-medium">{notification.title}</div>
-                                </TableCell>
-                                <TableCell>
-                    <span
-                        className={`px-2 py-0.5 text-xs rounded-full font-normal ${
-                            notification.type === "alert"
-                                ? "bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
-                                : notification.type === "update"
-                                    ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300"
-                                    : notification.type === "system"
-                                        ? "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300"
-                                        : "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
-                        }`}
-                    >
-                      {notification.type}
-                    </span>
-                                </TableCell>
-                                <TableCell>
-                    <span
-                        className={`px-2 py-0.5 text-xs rounded-full font-normal ${
-                            notification.global
-                                ? "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300"
-                                : "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-300"
-                        }`}
-                    >
-                      {notification.global ? "All Users" : "Targeted"}
-                    </span>
-                                </TableCell>
-                                <TableCell>{formatDate(notification.date)}</TableCell>
-                                <TableCell>{notification.createdByName || "Unknown"}</TableCell>
-                                <TableCell>
-                                  <Button
-                                      variant="destructive"
-                                      size="xs"
-                                      onClick={() => handleDeleteNotification(notification.id)}
-                                  >
-                                    Delete
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
+                            <TableRow key={notification.id}>
+                              <TableCell>
+                                <div className="font-medium">{notification.title}</div>
+                              </TableCell>
+                              <TableCell>
+                                <span className="text-gray-600">
+                                  {notification.type}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <span className="text-gray-600">
+                                  {notification.global ? "All Users" : "Targeted"}
+                                </span>
+                              </TableCell>
+                              <TableCell>{formatDate(notification.date)}</TableCell>
+                              <TableCell>{notification.createdByName || "Unknown"}</TableCell>
+                              <TableCell>
+                                <Button
+                                  variant="light"
+                                  size="xs"
+                                  onClick={() => handleDeleteNotification(notification.id)}
+                                  className="text-gray-600"
+                                >
+                                  <RiCloseLine className="size-4 mr-1" />
+                                  Delete
+                                </Button>
+                              </TableCell>
+                            </TableRow>
                           ))}
                         </TableBody>
                       </Table>
                     </div>
-                )}
-              </div>
-            </div>
-          </Card>
+                  )}
+                </div>
+              </Card>
+            </section>
+          </TabPanel>
 
+          {/* SYSTEM STATUS TAB */}
+          <TabPanel>
+            <Grid numItems={1} numItemsMd={2} className="gap-6 mb-6">
+              <Col numColSpan={1} numColSpanMd={2}>
+                <Card className="p-4">
+                  <Title>System Overview</Title>
+                  <Divider className="my-3" />
+                  
+                  <Grid numItems={1} numItemsMd={2} numItemsLg={4} className="gap-3 mt-3">
+                    <Card className="p-3">
+                      <Text className="text-gray-500">Users</Text>
+                      <Metric className="mt-1">{users.length}</Metric>
+                    </Card>
+                    <Card className="p-3">
+                      <Text className="text-gray-500">Announcements</Text>
+                      <Metric className="mt-1">{notifications.length}</Metric>
+                    </Card>
+                    <Card className="p-3">
+                      <Text className="text-gray-500">API Status</Text>
+                      <div className="flex items-center mt-1">
+                        <span 
+                          className={`inline-block w-3 h-3 rounded-full mr-2 ${
+                            apiServerStatus.status === 'running' ? 'bg-green-500' : 'bg-gray-400'
+                          }`}
+                        ></span>
+                        <Metric>{apiServerStatus.status === 'running' ? 'Online' : 'Offline'}</Metric>
+                      </div>
+                    </Card>
+                    <Card className="p-3">
+                      <Text className="text-gray-500">Testbed Status</Text>
+                      <div className="flex items-center mt-1">
+                        <span 
+                          className={`inline-block w-3 h-3 rounded-full mr-2 ${
+                            testbedStatus.status === 'running' ? 'bg-green-500' : 'bg-gray-400'
+                          }`}
+                        ></span>
+                        <Metric>{testbedStatus.status === 'running' ? 'Online' : 'Offline'}</Metric>
+                      </div>
+                    </Card>
+                  </Grid>
+                </Card>
+              </Col>
 
-          {/* Test Bench Card */}
-          <Card className="col-span-1 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+              <ServerTerminal 
+                title="API Server Terminal" 
+                serverType="API"
+                status={apiServerStatus}
+                onStatusChange={setApiServerStatus}
+                onCommand={handleApiCommand}
+              />
+              
+              <ServerTerminal 
+                title="Testbed Terminal" 
+                serverType="Testbed"
+                status={testbedStatus}
+                onStatusChange={setTestbedStatus}
+                onCommand={handleTestbedCommand}
+              />
+            </Grid>
+          </TabPanel>
+        </TabPanels>
+      </TabGroup>
 
-              <Flex >
-              <div className="mx-auto max-w-lg">
-                <h1 className="text-md font-semibold text-gray-900 dark:text-gray-50">
-                  Managing Your Booking Online
-                </h1>
-                <Accordion type="single" defaultValue="item-1" className="mt-3" collapsible>
-                  <AccordionItem value="item-1">
-                    <AccordionTrigger>
-          <span className="flex items-center gap-2 ">
-            <RiCoupon3Fill className="group-data-[disabled]:texdark:t-blue-200 group-data-[disabled]:t8xt-blue-200 size-4 text-blue-500" />
-            Access Your Booking
-          </span>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <p>
-                        Simply navigate to the "My Trips" section on our website and input
-                        your booking reference and last name to view your itinerary details.
-                      </p>
-                    </AccordionContent>
-                  </AccordionItem>
-                  <AccordionItem value="item-2">
-                    <AccordionTrigger>
-          <span className="flex items-center gap-2 ">
-            <RiArrowLeftRightLine className="size-4 text-blue-500 group-data-[disabled]:text-blue-200 dark:group-data-[disabled]:text-blue-900" />
-            Change Flights
-          </span>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <ol className="flex flex-col gap-2">
-                        <li>
-              <span className="font-semibold text-gray-900 dark:text-gray-50">
-                Step 1:
-              </span>{" "}
-                          Within your booking details, select "Change Flights."
-                        </li>
-                        <li>
-              <span className="font-semibold text-gray-900 dark:text-gray-50">
-                Step 2:
-              </span>{" "}
-                          Follow the prompts to select new flight options and confirm the
-                          changes.
-                        </li>
-                        <li>
-              <span className="font-semibold text-gray-900 dark:text-gray-50">
-                Step 3:
-              </span>{" "}
-                          Review your new flight details and any fare differences.
-                        </li>
-                        <li>
-              <span className="font-semibold text-gray-900 dark:text-gray-50">
-                Step 4:
-              </span>{" "}
-                          Complete the change and receive your updated itinerary via email.
-                        </li>
-                      </ol>
-                    </AccordionContent>
-                  </AccordionItem>
-                  <AccordionItem value="item-3" disabled>
-                    <AccordionTrigger>
-          <span className="flex items-center gap-2 ">
-            <RiAddCircleFill className="size-4 text-blue-500 group-data-[disabled]:text-blue-200 dark:group-data-[disabled]:text-blue-900" />
-            Add Special Requests
-          </span>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <p>
-                        Look for the "Special Requests" option within your booking to
-                        specify any meal preferences, seating arrangements, or assistance
-                        services you may require during your flight.
-                      </p>
-                    </AccordionContent>
-                  </AccordionItem>
-                  <AccordionItem value="item-4">
-                    <AccordionTrigger>
-          <span className="flex items-center gap-2 ">
-            <RiCheckboxMultipleFill className="size-4 text-blue-500 group-data-[disabled]:text-blue-200 dark:group-data-[disabled]:text-blue-900" />
-            Check-In Online
-          </span>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <ol className="flex flex-col gap-2">
-                        <li>
-              <span className="font-semibold text-gray-900 dark:text-gray-50">
-                Step 1:
-              </span>{" "}
-                          Starting 48 hours before your flight, access the "Check-In"
-                          option.
-                        </li>
-                        <li>
-              <span className="font-semibold text-gray-900 dark:text-gray-50">
-                Step 2:
-              </span>{" "}
-                          Confirm your details and select your seats to complete the online
-                          check-in process.
-                        </li>
-                      </ol>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
+      {/* Create Announcement Modal */}
+      <Dialog
+        open={isNotificationModalOpen}
+        onClose={() => setIsNotificationModalOpen(false)}
+        static={true}
+      >
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40" aria-hidden="true" />
+        <DialogPanel className="max-w-lg w-full mx-auto rounded-lg shadow-lg bg-white dark:bg-gray-900 z-50 overflow-hidden">
+          <div className="flex justify-between items-center border-b p-4">
+            <Title>Create New Announcement</Title>
+            <Button
+              variant="light"
+              size="sm"
+              onClick={() => setIsNotificationModalOpen(false)}
+              className="p-1 text-gray-600"
+            >
+              <RiCloseLine className="size-5" />
+            </Button>
+          </div>
+
+          <form onSubmit={handleCreateNotification} className="p-4">
+            <div className="space-y-4">
+              <div>
+                <Text className="font-medium mb-1">Title</Text>
+                <TextInput
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder="Announcement title"
+                  required
+                />
               </div>
 
-              </Flex>
+              <div>
+                <Text className="font-medium mb-1">Type</Text>
+                <Select value={newType} onValueChange={(value) => setNewType(value)}>
+                  <SelectItem value="info">Information</SelectItem>
+                  <SelectItem value="update">Update</SelectItem>
+                  <SelectItem value="alert">Alert</SelectItem>
+                  <SelectItem value="system">System</SelectItem>
+                </Select>
+              </div>
 
+              <div>
+                <Text className="font-medium mb-1">Message</Text>
+                <Textarea
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  placeholder="Announcement message"
+                  rows={4}
+                  required
+                />
+              </div>
 
-
-
-              {/*<Flex justifyContent="end">*/}
-              {/*  <Button*/}
-              {/*      variant="secondary"*/}
-              {/*      color="green"*/}
-              {/*      onClick={() => setActiveTab(2)}*/}
-              {/*      className="flex items-center gap-1"*/}
-              {/*      size="sm"*/}
-              {/*  >*/}
-              {/*    <RiTerminalBoxLine className="size-4" />*/}
-              {/*    Open Test Bench*/}
-              {/*  </Button>*/}
-              {/*</Flex>*/}
-          </Card>
-
-
-        </Grid>
-
-        <TabGroup index={activeTab} onIndexChange={setActiveTab}>
-          <TabPanels>
-            {/* USERS TAB */}
-            {/*<TabPanel>*/}
-            {/*  <section className="mb-6">*/}
-            {/*    {loading ? (*/}
-            {/*        <div className="flex h-64 items-center justify-center">*/}
-            {/*          <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-900/10 border-t-gray-900 dark:border-gray-50/10 dark:border-t-gray-50"></div>*/}
-            {/*        </div>*/}
-            {/*    ) : (*/}
-            {/*        */}
-            {/*    )}*/}
-            {/*  </section>*/}
-            {/*</TabPanel>*/}
-
-            {/* ANNOUNCEMENTS TAB */}
-            <TabPanel>
-              <section className="mb-6">
-                <Card>
-                  <Flex alignItems="center" justifyContent="between" className="mb-4">
-                    <Title>System Announcements</Title>
-                    <Button onClick={() => setIsNotificationModalOpen(true)} className="flex items-center gap-1">
-                      <RiNotification2Line className="size-4" />
-                      Create Announcement
-                    </Button>
-                  </Flex>
-
-                  <div className="mb-4 relative">
-                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                      <RiSearchLine className="size-4 text-gray-400" />
-                    </div>
-                    <TextInput
-                        placeholder="Search announcements..."
-                        value={notificationSearchQuery}
-                        onChange={(e) => setNotificationSearchQuery(e.target.value)}
-                        className="pl-10"
+              <div>
+                <Text className="font-medium mb-1">Audience</Text>
+                <div className="flex items-center gap-4 mt-2">
+                  <div className="flex items-center">
+                    <input
+                      type="radio"
+                      id="audienceGlobal"
+                      name="audience"
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      checked={isGlobal}
+                      onChange={() => setIsGlobal(true)}
                     />
+                    <label htmlFor="audienceGlobal" className="ml-2 text-sm">
+                      All users
+                    </label>
                   </div>
 
-                  <Divider className="my-4" />
+                  <div className="flex items-center">
+                    <input
+                      type="radio"
+                      id="audienceSpecific"
+                      name="audience"
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      checked={!isGlobal}
+                      onChange={() => setIsGlobal(false)}
+                    />
+                    <label htmlFor="audienceSpecific" className="ml-2 text-sm">
+                      Specific users
+                    </label>
+                  </div>
+                </div>
+              </div>
 
-                  {filteredNotifications.length === 0 ? (
-                      <div className="py-12 text-center">
-                        <RiNotification2Line className="mx-auto size-12 text-gray-400" />
-                        <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No announcements</h3>
-                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                          Get started by creating a new system announcement.
-                        </p>
-                        <div className="mt-6">
-                          <Button onClick={() => setIsNotificationModalOpen(true)}>
-                            <RiAddLine className="mr-2 size-4" />
-                            New Announcement
-                          </Button>
-                        </div>
-                      </div>
-                  ) : (
-                      <div className="overflow-x-auto">
-                        <Table>
-                          <TableHead>
-                            <TableRow>
-                              <TableHeaderCell>Title</TableHeaderCell>
-                              <TableHeaderCell>Type</TableHeaderCell>
-                              <TableHeaderCell>Audience</TableHeaderCell>
-                              <TableHeaderCell>Date</TableHeaderCell>
-                              <TableHeaderCell>Created By</TableHeaderCell>
-                              <TableHeaderCell>Actions</TableHeaderCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {filteredNotifications.map((notification) => (
-                                <TableRow key={notification.id}>
-                                  <TableCell>
-                                    <div className="font-medium">{notification.title}</div>
-                                  </TableCell>
-                                  <TableCell>
-                              <span
-                                  className={`px-2 py-0.5 text-xs rounded-full font-normal ${
-                                      notification.type === "alert"
-                                          ? "bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
-                                          : notification.type === "update"
-                                              ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300"
-                                              : notification.type === "system"
-                                                  ? "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300"
-                                                  : "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
-                                  }`}
-                              >
-                                {notification.type}
-                              </span>
-                                  </TableCell>
-                                  <TableCell>
-                              <span
-                                  className={`px-2 py-0.5 text-xs rounded-full font-normal ${
-                                      notification.global
-                                          ? "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300"
-                                          : "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-300"
-                                  }`}
-                              >
-                                {notification.global ? "All Users" : "Targeted"}
-                              </span>
-                                  </TableCell>
-                                  <TableCell>{formatDate(notification.date)}</TableCell>
-                                  <TableCell>{notification.createdByName || "Unknown"}</TableCell>
-                                  <TableCell>
-                                    <Button
-                                        variant="destructive"
-                                        size="xs"
-                                        onClick={() => handleDeleteNotification(notification.id)}
-                                    >
-                                      Delete
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                  )}
-                </Card>
-              </section>
-            </TabPanel>
-
-            {/* TEST BENCH TAB */}
-            <TabPanel>
-              <Grid numItems={1} numItemsMd={2} className="gap-6 mb-6">
-                <Col numColSpan={1} numColSpanMd={2}>
-                  <TestBenchConfig />
-                </Col>
-
-                <Terminal framework="react" title="React Terminal" />
-                <Terminal framework="node" title="Node.js Terminal" />
-                <Terminal framework="firebase" title="Firebase Terminal" />
-              </Grid>
-            </TabPanel>
-          </TabPanels>
-
-
-        </TabGroup>
-
-        {/* Create Announcement Modal */}
-        <Dialog
-            open={isNotificationModalOpen}
-            onClose={() => setIsNotificationModalOpen(false)}
-            static={true}
-        >
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40" aria-hidden="true" />
-          <DialogPanel className="max-w-lg w-full mx-auto rounded-lg shadow-lg bg-white dark:bg-gray-900 z-50 overflow-hidden">
-            <div className="flex justify-between items-center border-b p-4">
-              <Title>Create New Announcement</Title>
-              <Button
-                  variant="light"
-                  color="gray"
-                  size="sm"
-                  onClick={() => setIsNotificationModalOpen(false)}
-                  className="p-1"
-              >
-                <RiCloseLine className="size-5" />
-              </Button>
+              {!isGlobal && (
+                <div className="border rounded-lg p-4 max-h-60 overflow-y-auto bg-gray-50 dark:bg-gray-800">
+                  <Text className="font-medium mb-2">
+                    Select users ({selectedUsers.length} selected)
+                  </Text>
+                  <ul className="space-y-2">
+                    {users.map((user) => (
+                      <li key={user.uid} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id={`user-${user.uid}`}
+                          checked={selectedUsers.includes(user.uid)}
+                          onChange={() => {
+                            setSelectedUsers(
+                              selectedUsers.includes(user.uid)
+                                ? selectedUsers.filter((id) => id !== user.uid)
+                                : [...selectedUsers, user.uid]
+                            );
+                          }}
+                          className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                        />
+                        <label htmlFor={`user-${user.uid}`} className="ml-2 text-sm">
+                          {user.displayName} ({user.email})
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
 
-            <form onSubmit={handleCreateNotification} className="p-4">
-              <div className="space-y-4">
-                <div>
-                  <Text className="font-medium mb-1">Title</Text>
-                  <TextInput
-                      value={newTitle}
-                      onChange={(e) => setNewTitle(e.target.value)}
-                      placeholder="Announcement title"
-                      required
-                  />
-                </div>
+            <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setIsNotificationModalOpen(false)}
+                className="text-gray-600"
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="light">
+                Send Announcement
+              </Button>
+            </div>
+          </form>
+        </DialogPanel>
+      </Dialog>
 
-                <div>
-                  <Text className="font-medium mb-1">Type</Text>
-                  <Select value={newType} onValueChange={(value) => setNewType(value)}>
-                    <SelectItem value="info">Information</SelectItem>
-                    <SelectItem value="update">Update</SelectItem>
-                    <SelectItem value="alert">Alert</SelectItem>
-                    <SelectItem value="system">System</SelectItem>
+      {/* Add User Modal */}
+      <Dialog
+        open={isUserModalOpen}
+        onClose={() => setIsUserModalOpen(false)}
+        static={true}
+      >
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40" aria-hidden="true" />
+        <DialogPanel className="max-w-lg w-full mx-auto rounded-lg shadow-lg bg-white dark:bg-gray-900 z-50 overflow-hidden">
+          <div className="flex justify-between items-center border-b p-4">
+            <Title>Add New User</Title>
+            <Button
+              variant="light"
+              size="sm"
+              onClick={() => setIsUserModalOpen(false)}
+              className="p-1 text-gray-600"
+            >
+              <RiCloseLine className="size-5" />
+            </Button>
+          </div>
+
+          <form onSubmit={handleAddUser} className="p-4">
+            <div className="space-y-4">
+              <div>
+                <Text className="font-medium mb-1">Full Name</Text>
+                <TextInput
+                  value={newUser.displayName}
+                  onChange={(e) => setNewUser({ ...newUser, displayName: e.target.value })}
+                  placeholder="User's full name"
+                  required
+                />
+              </div>
+
+              <div>
+                <Text className="font-medium mb-1">Email</Text>
+                <TextInput
+                  type="email"
+                  value={newUser.email}
+                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                  placeholder="user@example.com"
+                  required
+                />
+              </div>
+
+              <div>
+                <Text className="font-medium mb-1">Role</Text>
+                <div className="relative">
+                  <Select
+                    value={newUser.role}
+                    onValueChange={(value) => setNewUser({ ...newUser, role: value })}
+                    placeholder="Select a role"
+                  >
+                    <SelectItem value="user">User</SelectItem>
+                    <SelectItem value="moderator">Moderator</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
                   </Select>
                 </div>
-
-                <div>
-                  <Text className="font-medium mb-1">Message</Text>
-                  <Textarea
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      placeholder="Announcement message"
-                      rows={4}
-                      required
-                  />
-                </div>
-
-                <div>
-                  <Text className="font-medium mb-1">Audience</Text>
-                  <div className="flex items-center gap-4 mt-2">
-                    <div className="flex items-center">
-                      <input
-                          type="radio"
-                          id="audienceGlobal"
-                          name="audience"
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                          checked={isGlobal}
-                          onChange={() => setIsGlobal(true)}
-                      />
-                      <label htmlFor="audienceGlobal" className="ml-2 text-sm">
-                        All users
-                      </label>
-                    </div>
-
-                    <div className="flex items-center">
-                      <input
-                          type="radio"
-                          id="audienceSpecific"
-                          name="audience"
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                          checked={!isGlobal}
-                          onChange={() => setIsGlobal(false)}
-                      />
-                      <label htmlFor="audienceSpecific" className="ml-2 text-sm">
-                        Specific users
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                {!isGlobal && (
-                    <div className="border rounded-lg p-4 max-h-60 overflow-y-auto bg-gray-50 dark:bg-gray-800">
-                      <Text className="font-medium mb-2">
-                        Select users ({selectedUsers.length} selected)
-                      </Text>
-                      <ul className="space-y-2">
-                        {users.map((user) => (
-                            <li key={user.uid} className="flex items-center">
-                              <input
-                                  type="checkbox"
-                                  id={`user-${user.uid}`}
-                                  checked={selectedUsers.includes(user.uid)}
-                                  onChange={() => {
-                                    setSelectedUsers(
-                                        selectedUsers.includes(user.uid)
-                                            ? selectedUsers.filter((id) => id !== user.uid)
-                                            : [...selectedUsers, user.uid]
-                                    );
-                                  }}
-                                  className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
-                              />
-                              <label htmlFor={`user-${user.uid}`} className="ml-2 text-sm">
-                                {user.displayName} ({user.email})
-                              </label>
-                            </li>
-                        ))}
-                      </ul>
-                    </div>
-                )}
               </div>
-
-              <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
-                <Button
-                    type="button"
-                    variant="secondary"
-                    color="gray"
-                    onClick={() => setIsNotificationModalOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" color="indigo">
-                  Send Announcement
-                </Button>
-              </div>
-            </form>
-          </DialogPanel>
-        </Dialog>
-
-        {/* Add User Modal */}
-        <Dialog
-            open={isUserModalOpen}
-            onClose={() => setIsUserModalOpen(false)}
-            static={true}
-        >
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40" aria-hidden="true" />
-          <DialogPanel className="max-w-lg w-full mx-auto rounded-lg shadow-lg bg-white dark:bg-gray-900 z-50 overflow-hidden">
-            <div className="flex justify-between items-center border-b p-4">
-              <Title>Add New User</Title>
-              <Button
-                  variant="light"
-                  color="gray"
-                  size="sm"
-                  onClick={() => setIsUserModalOpen(false)}
-                  className="p-1"
-              >
-                <RiCloseLine className="size-5" />
-              </Button>
-
             </div>
 
-            <form onSubmit={handleAddUser} className="p-4">
-              <div className="space-y-4">
-                <div>
-                  <Text className="font-medium mb-1">Full Name</Text>
-                  <TextInput
-                      value={newUser.displayName}
-                      onChange={(e) => setNewUser({ ...newUser, displayName: e.target.value })}
-                      placeholder="User's full name"
-                      required
-                  />
-                </div>
-
-                <div>
-                  <Text className="font-medium mb-1">Email</Text>
-                  <TextInput
-                      type="email"
-                      value={newUser.email}
-                      onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                      placeholder="user@example.com"
-                      required
-                  />
-                </div>
-
-                <div>
-                  <Text className="font-medium mb-1">Role</Text>
-                  <div className="relative">
-                    <Select
-                        value={newUser.role}
-                        onValueChange={(value) => setNewUser({ ...newUser, role: value })}
-                        placeholder="Select a role"
-                    >
-                      <SelectItem value="user">User</SelectItem>
-                      <SelectItem value="moderator">Moderator</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
-                <Button
-                    type="button"
-                    variant="secondary"
-                    color="gray"
-                    onClick={() => setIsUserModalOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" color="blue">
-                  Add User
-                </Button>
-              </div>
-            </form>
-          </DialogPanel>
-        </Dialog>
-      </main>
+            <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setIsUserModalOpen(false)}
+                className="text-gray-600"
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="light">
+                Add User
+              </Button>
+            </div>
+          </form>
+        </DialogPanel>
+      </Dialog>
+    </main>
   );
 }
-
-
-
-
