@@ -110,7 +110,7 @@ const CreateTestWindow: React.FC<CreateTestWindowProps> = ({ isOpen, onClose, on
                 name: testName || 'Untitled Test',
                 chipType: chipType || '3-SAT',
                 status: "completed",
-                created: serverTimestamp(),
+                created: new Date().toISOString(),
                 results: flattenedResults || {
                     timestamp: new Date().toISOString(),
                     summary: {},

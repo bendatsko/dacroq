@@ -1,6 +1,15 @@
 'use client';
 
-import { RiAddLine, RiArrowDownLine, RiArrowUpLine, RiSearchLine, RiUser3Line, RiTeamLine, RiDeleteBin5Line, RiCloseLine } from "@remixicon/react";
+import {
+  RiAddLine,
+  RiArrowDownLine,
+  RiArrowUpLine,
+  RiSearchLine,
+  RiUser3Line,
+  RiTeamLine,
+  RiDeleteBin5Line,
+  RiCloseLine,
+} from "@remixicon/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo } from "react";
 import { format, formatDistanceToNow } from "date-fns";
@@ -16,7 +25,7 @@ import TestDetails from "./TestDetails";
 
 // Firestore
 import { db } from "@/lib/firebase";
-import { addDoc, collection, onSnapshot, serverTimestamp, doc, writeBatch } from "firebase/firestore";
+import { addDoc, collection, onSnapshot, doc, writeBatch } from "firebase/firestore";
 
 // Types
 interface ChipStatus {
@@ -28,21 +37,14 @@ interface ChipStatus {
   avgRuntime?: number;
 }
 
-interface TestRun {
+export interface TestRun {
   id: string;
   name: string;
   chipType: string;
   status: string;
   created: any;
   completed?: any;
-  results?: {
-    successRate?: number;
-    solutionCount?: number;
-    evidence?: string;
-    runtime?: number;
-    inputFiles?: string[];
-    [key: string]: any;
-  };
+  results?: any; // JSON file with test results
   createdBy?: {
     uid: string;
     name: string;
@@ -53,48 +55,6 @@ interface TestRun {
     displayName?: string;
   };
 }
-
-// Interfaces for additional metrics (omitted for brevity)
-
-const resourceData = [
-  { date: "Aug 01", "GPU cluster": 7100, "Workspace usage": 4434 },
-  { date: "Aug 15", "GPU cluster": 7124, "Workspace usage": 4903 },
-  { date: "Sep 01", "GPU cluster": 12347, "Workspace usage": 4839 },
-  { date: "Sep 15", "GPU cluster": 12012, "Workspace usage": 10412 },
-  { date: "Sep 26", "GPU cluster": 17349, "Workspace usage": 10943 },
-];
-
-const performanceData = [
-  { month: "Apr", success: 91.2, failures: 8.8 },
-  { month: "May", success: 92.8, failures: 7.2 },
-  { month: "Jun", success: 93.7, failures: 6.3 },
-  { month: "Jul", success: 92.5, failures: 7.5 },
-  { month: "Aug", success: 94.3, failures: 5.7 },
-  { month: "Sep", success: 95.8, failures: 4.2 },
-];
-
-const utilizationData = [
-  { name: "3-SAT", value: 42 },
-  { name: "LDPC", value: 38 },
-  { name: "K-SAT", value: 20 },
-];
-
-const runtimeData = [
-  { date: "Aug 01", avg: 124, min: 98, max: 156 },
-  { date: "Aug 15", avg: 118, min: 92, max: 145 },
-  { date: "Sep 01", avg: 115, min: 87, max: 142 },
-  { date: "Sep 15", avg: 110, min: 85, max: 138 },
-  { date: "Sep 26", avg: 105, min: 82, max: 132 },
-];
-
-const usageSummary = [
-  { name: "Actual", value: "$8,110.15" },
-  { name: "Forecasted", value: "$10,230.25" },
-  { name: "Last invoice", value: "Sept 20, 2024" },
-];
-
-// Optional: If you use an API_URL for your backend, you could define it here
-// const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 export default function HardwareDashboard() {
   const router = useRouter();
@@ -121,6 +81,7 @@ export default function HardwareDashboard() {
     { id: "3", name: "K-SAT Solver", type: "K-SAT", status: "maintenance", successRate: 89.5, avgRuntime: 200 },
   ];
 
+  // Load tests from Firestore
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     if (!storedUser) {
@@ -139,8 +100,14 @@ export default function HardwareDashboard() {
             ...doc.data(),
           })) as TestRun[];
           testsData.sort((a, b) => {
-            const dateA = a.created?.seconds ? a.created.seconds * 1000 : new Date(a.created).getTime();
-            const dateB = b.created?.seconds ? b.created.seconds * 1000 : new Date(b.created).getTime();
+            const dateA =
+              a.created && a.created.seconds !== undefined
+                ? a.created.seconds * 1000
+                : new Date(a.created).getTime();
+            const dateB =
+              b.created && b.created.seconds !== undefined
+                ? b.created.seconds * 1000
+                : new Date(b.created).getTime();
             return dateB - dateA;
           });
           setTests(testsData);
@@ -165,7 +132,10 @@ export default function HardwareDashboard() {
     }
     const groups: { [key: string]: number } = {};
     tests.forEach((test) => {
-      const created = test.created?.seconds ? new Date(test.created.seconds * 1000) : new Date(test.created);
+      const created =
+        test.created && test.created.seconds !== undefined
+          ? new Date(test.created.seconds * 1000)
+          : new Date(test.created);
       const dateStr = created.toLocaleDateString("en-US", { month: "short", day: "numeric" });
       groups[dateStr] = (groups[dateStr] || 0) + 1;
     });
@@ -179,28 +149,27 @@ export default function HardwareDashboard() {
 
   useEffect(() => {
     if (tests.length === 0) return;
-
     const now = new Date();
     const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-
     const recentTests = tests.filter((test) => {
-      const testDate = test.created?.seconds ? new Date(test.created.seconds * 1000) : new Date(test.created);
+      const testDate =
+        test.created && test.created.seconds !== undefined
+          ? new Date(test.created.seconds * 1000)
+          : new Date(test.created);
       return testDate >= hourAgo;
     });
-
     const completedTests = tests.filter((t) => t.status === "completed");
-    const successfulTests = completedTests.filter((t) => t.results?.successRate && t.results.successRate > 0);
-
+    const successfulTests = completedTests.filter(
+      (t) => t.results?.successRate && t.results.successRate > 0
+    );
     const avgSuccess =
       successfulTests.length > 0
         ? successfulTests.reduce((acc, test) => acc + (test.results?.successRate || 0), 0) / successfulTests.length
         : 0;
-
     const avgRuntime =
       successfulTests.length > 0
         ? successfulTests.reduce((acc, test) => acc + (test.results?.runtime || 0), 0) / successfulTests.length
         : 0;
-
     setTestMetrics({
       totalTests: tests.length,
       successRate: avgSuccess,
@@ -222,7 +191,7 @@ export default function HardwareDashboard() {
         name: testName,
         chipType,
         status: "queued",
-        created: serverTimestamp(),
+        created: new Date().toISOString(),
         createdBy: {
           uid: storedUser.uid,
           name: storedUser.displayName,
@@ -254,7 +223,7 @@ export default function HardwareDashboard() {
     }, 0);
   };
 
-  // Define the columns for the DataTable
+  // Define columns for the DataTable
   const columns = [
     { accessorKey: "name", header: "Test Name" },
     {
@@ -296,16 +265,15 @@ export default function HardwareDashboard() {
         const displayStatus = status.charAt(0).toUpperCase() + status.slice(1);
         return (
           <div
-            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium 
-              ${
-                status === "completed"
-                  ? "bg-green-500/10 text-green-500"
-                  : status.includes("running")
-                  ? "bg-blue-500/10 text-blue-500"
-                  : status === "failed"
-                  ? "bg-red-500/10 text-red-500"
-                  : "bg-gray-500/10 text-gray-500"
-              }`}
+            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+              status === "completed"
+                ? "bg-green-500/10 text-green-500"
+                : status.includes("running")
+                ? "bg-blue-500/10 text-blue-500"
+                : status === "failed"
+                ? "bg-red-500/10 text-red-500"
+                : "bg-gray-500/10 text-gray-500"
+            }`}
           >
             {displayStatus}
           </div>
@@ -317,8 +285,13 @@ export default function HardwareDashboard() {
       header: "Created",
       cell: ({ row }: any) => {
         const created = row.original.created;
-        let dateObj = created?.seconds ? new Date(created.seconds * 1000) : new Date(created);
-        return isNaN(dateObj.getTime()) ? "Invalid date" : dateObj.toLocaleString();
+        let dateObj =
+          created && created.seconds !== undefined
+            ? new Date(created.seconds * 1000)
+            : new Date(created);
+        return isNaN(dateObj.getTime())
+          ? "Invalid date"
+          : dateObj.toLocaleString();
       },
     },
     {
@@ -332,7 +305,7 @@ export default function HardwareDashboard() {
     },
   ];
 
-  // TestTable Component with updated date formatting
+  // TestTable Component with filtering and date formatting
   const TestTable: React.FC<{
     tests: TestRun[];
     columns: any[];
@@ -383,7 +356,6 @@ export default function HardwareDashboard() {
       try {
         const selectedIds = Object.keys(selectedTests).filter((id) => selectedTests[id]);
         if (selectedIds.length === 0) return;
-
         if (confirm(`Are you sure you want to delete ${selectedIds.length} tests?`)) {
           const batch = writeBatch(db);
           selectedIds.forEach((id) => {
@@ -411,22 +383,26 @@ export default function HardwareDashboard() {
       setSelectedTests({});
     };
 
-    // Updated helper for date formatting that handles Firebase timestamps
     const formatDate = (dateValue: any) => {
-      if (!dateValue) return "";
-      let dateObj;
-      if (dateValue.seconds) {
-        dateObj = new Date(dateValue.seconds * 1000);
-      } else {
-        dateObj = new Date(dateValue);
-      }
-      if (isNaN(dateObj.getTime())) return "Invalid date";
-      const now = new Date();
-      const diffInDays = Math.floor((now.getTime() - dateObj.getTime()) / (1000 * 60 * 60 * 24));
-      if (diffInDays < 7) {
-        return formatDistanceToNow(dateObj, { addSuffix: true });
-      } else {
-        return format(dateObj, "MMM d, yyyy");
+      if (!dateValue) return "Pending...";
+      try {
+        let dateObj;
+        if (typeof dateValue === "string") {
+          dateObj = new Date(dateValue);
+        } else if (dateValue && typeof dateValue.toDate === "function") {
+          dateObj = dateValue.toDate();
+        } else if (dateValue && dateValue.seconds !== undefined) {
+          dateObj = new Date(dateValue.seconds * 1000);
+        } else {
+          dateObj = new Date(dateValue);
+        }
+        if (isNaN(dateObj.getTime())) return "Invalid date";
+        const now = new Date();
+        const diffInDays = Math.floor((now.getTime() - dateObj.getTime()) / (1000 * 60 * 60 * 24));
+        return diffInDays < 7 ? formatDistanceToNow(dateObj, { addSuffix: true }) : format(dateObj, "MMM d, yyyy");
+      } catch (error) {
+        console.error("Date formatting error:", error);
+        return "Error";
       }
     };
 
@@ -434,9 +410,7 @@ export default function HardwareDashboard() {
       const modifiedColumns = columns
         .map((column) => {
           if (column.id === "details") return null;
-
           const newColumn = { ...column };
-
           if (column.accessorKey === "name") {
             newColumn.cell = ({ row }: any) => {
               const test = row.original;
@@ -448,26 +422,22 @@ export default function HardwareDashboard() {
               );
             };
           }
-
           if (column.accessorKey === "created") {
             newColumn.cell = ({ row }: any) => {
               const created = row.original.created;
               return <span className="text-gray-500 text-sm">{formatDate(created)}</span>;
             };
           }
-
           return newColumn;
         })
         .filter(Boolean);
-
       const selectionColumn = {
         id: "select",
         header: ({ table }: any) => {
           const canSelectAll = adminMode || currentUser;
           if (!canSelectAll) return null;
-
-          const allVisibleSelected = filteredTests.length > 0 && filteredTests.every((test) => selectedTests[test.id]);
-
+          const allVisibleSelected =
+            filteredTests.length > 0 && filteredTests.every((test) => selectedTests[test.id]);
           return (
             <input
               type="checkbox"
@@ -510,7 +480,6 @@ export default function HardwareDashboard() {
           );
         },
       };
-
       return [selectionColumn, ...modifiedColumns];
     }, [columns, selectedTests, adminMode, currentUser, filteredTests]);
 
@@ -590,21 +559,9 @@ export default function HardwareDashboard() {
   }
 
   if (selectedTest) {
-    return (
-      <TestDetails
-        test={selectedTest}
-        onBack={handleBackToDashboard}
-        performanceData={performanceData}
-        utilizationData={utilizationData}
-        runtimeData={runtimeData}
-        aggregatedData={aggregatedData}
-        usageSummary={usageSummary}
-        resourceData={resourceData}
-      />
-    );
+    return <TestDetails test={selectedTest} onBack={handleBackToDashboard} />;
   }
 
-  // Calculate metrics for dashboard cards
   const onlineChips = mockChips.filter((c) => c.status === "online").length;
   const totalChips = mockChips.length;
 
@@ -612,7 +569,9 @@ export default function HardwareDashboard() {
     <main className="p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">Hardware Dashboard</h1>
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
+            Hardware Dashboard
+          </h1>
           <p className="text-gray-500 sm:text-sm/6 dark:text-gray-500 mt-1">
             Real-time monitoring of hardware solvers with performance metrics
           </p>
@@ -629,7 +588,9 @@ export default function HardwareDashboard() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-medium text-gray-900 dark:text-gray-50">Recent Tests</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">View and manage your test runs</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              View and manage your test runs
+            </p>
           </div>
           <button
             onClick={() => setIsCardsExpanded(!isCardsExpanded)}
@@ -652,7 +613,7 @@ export default function HardwareDashboard() {
         </div>
         <div
           id="dashboard-stats"
-          className={`transition-all duration-300 ease-in-out ${isCardsExpanded ? 'opacity-100 max-h-[1000px]' : 'opacity-0 max-h-0 overflow-hidden'}`}
+          className={`transition-all duration-300 ease-in-out ${isCardsExpanded ? "opacity-100 max-h-[1000px]" : "opacity-0 max-h-0 overflow-hidden"}`}
           role="region"
           aria-label="Dashboard statistics"
         >
@@ -709,7 +670,11 @@ export default function HardwareDashboard() {
         </div>
         <TestTable tests={tests} columns={columns} handleViewResults={handleViewResults} isAdmin={isAdmin} />
       </div>
-      <CreateTestWindow isOpen={isOpen} onClose={() => setIsOpen(false)} onCreateTest={handleCreateTest} />
+      <CreateTestWindow
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        onCreateTest={handleCreateTest}
+      />
     </main>
   );
 }
