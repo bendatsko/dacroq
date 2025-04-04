@@ -23,30 +23,25 @@ import {
 } from "@remixicon/react";
 
 // Documentation content sections
-// Documentation content sections
 const DocsContent = {
   introduction: {
     title: "Introduction",
     content: `
-## Dacroq Platform
-
-Dacroq is a specialized web platform for solving complex Boolean satisfiability problems using custom hardware accelerators. Our system integrates a modern Next.js web interface with a Go-based API server, enabling high-performance and low-latency computing solutions.
-
-## What is Dacroq?
-Dacroq stands for Digitally Assisted CMOS Relaxation Oscillator based Quantum-inspired computing. It provides researchers and engineers with a seamless interface to access our advanced hardware solvers.
-
-## Platform Architecture
-The Dacroq platform comprises:
-- A Next.js web frontend for user interaction (located in /dacroq_web)
-- A Go-based API server for backend processing (located in /api)
-- Custom hardware solvers for 3-SAT, K-SAT, and LDPC problems
-- Specialized problem libraries and presets for various test cases
-
-## Current Capabilities
-- 3-SAT solving using our primary hardware accelerator (Daedalus)
-- Advanced problem preprocessing and decomposition techniques
-- Comprehensive performance benchmarking and metrics analysis
-- Support for multiple input formats including DIMACS CNF and batch processing via ZIP files`
+    ## What is Dacroq?
+    Dacroq stands for Digitally Assisted CMOS Relaxation Oscillator-based Quantum-inspired computing. Specifically, the Dacroq Test Framework system integrates a Next.js web interface with a Go-based API server, enabling hardware-accelerated optimization problem-solving. 
+    
+    ## Current Capabilities
+    - 3-SAT solving using our primary hardware accelerator (Daedalus)
+    - Support for multiple input formats, including DIMACS CNF and batch processing via ZIP files
+    - Comprehensive performance benchmarking and metrics analysis
+    - Specialized problem libraries and preset loading for test cases
+    
+    ## Platform Architecture
+    The Dacroq platform comprises:
+    - A Next.js web frontend for user interaction
+    - A Go-based API server for backend processing
+    - Custom hardware solvers for 3-SAT, K-SAT, and LDPC problems
+    `
   },
 
   "quick-start": {

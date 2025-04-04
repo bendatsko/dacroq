@@ -6,7 +6,6 @@ import { Dialog, DialogPanel } from "@tremor/react";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import React, { useEffect, useState } from "react";
 import { useDropzone } from "react-dropzone";
-import "./test-window.css";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/Select";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -18,7 +17,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 interface CreateTestWindowProps {
     isOpen: boolean;
     onClose: () => void;
-    onTestComplete: (testId: string) => void;
+    onTestComplete?: (testId: string) => void;
 }
 
 function classNames(...classes: string[]) {
@@ -43,8 +42,120 @@ const CreateTestWindow: React.FC<CreateTestWindowProps> = ({ isOpen, onClose, on
     const [currentStep, setCurrentStep] = useState('');
     const [isResultsExpanded, setIsResultsExpanded] = useState(false);
 
-    // All the useEffect hooks and helper functions remain the same as in your original code
-    // [Previous code for checkApiConnection, fetchPresets, fetchMaxTests, etc.]
+    // Initialize dropzone
+    const { getRootProps, getInputProps, isDragActive } = useDropzone({
+        onDrop: (acceptedFiles) => {
+            setFiles((prev) => [...prev, ...acceptedFiles]);
+        }
+    });
+
+    const removeFile = (fileName: string) => {
+        setFiles((prev) => prev.filter(file => file.name !== fileName));
+    };
+
+    // Check API connection
+    const checkApiConnection = async () => {
+        try {
+            console.log("Checking API connection...");
+            const response = await fetch("http://localhost:8080/presets", {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            });
+            
+            console.log("API response status:", response.status);
+            if (response.ok) {
+                const data = await response.json();
+                console.log("API connection successful, presets:", data.presets);
+                setIsApiConnected(true);
+                return true;
+            } else {
+                console.error("API connection failed with status:", response.status);
+                setIsApiConnected(false);
+                return false;
+            }
+        } catch (error) {
+            console.error("API connection error:", error);
+            setIsApiConnected(false);
+            return false;
+        }
+    };
+
+    // Fetch available presets from the API
+    const fetchPresets = async () => {
+        try {
+            console.log("Fetching presets...");
+            const response = await fetch("http://localhost:8080/presets", {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            });
+            
+            console.log("Presets response status:", response.status);
+            if (response.ok) {
+                const data = await response.json();
+                console.log("Fetched presets:", data.presets);
+                if (data.presets && Array.isArray(data.presets)) {
+                    setPresets(data.presets);
+                    return data.presets;
+                }
+            } else {
+                console.error("Failed to fetch presets with status:", response.status);
+            }
+            return [];
+        } catch (error) {
+            console.error("Error fetching presets:", error);
+            return [];
+        }
+    };
+
+    // Fetch maximum number of tests for a preset
+    const fetchMaxTests = async (preset: string) => {
+        try {
+            const response = await fetch(`http://localhost:8080/max-tests?preset=${encodeURIComponent(preset)}`, {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data.total_tests) {
+                    setMaxTests(data.total_tests);
+                    return data.total_tests;
+                }
+            }
+            return 100; // Default value
+        } catch (error) {
+            console.error("Error fetching max tests:", error);
+            return 100; // Default value
+        }
+    };
+
+    // Check API connection and fetch presets when component mounts or dialog opens
+    useEffect(() => {
+        const initializeApi = async () => {
+            const isConnected = await checkApiConnection();
+            if (isConnected) {
+                await fetchPresets();
+                await fetchMaxTests(testBatch);
+            }
+        };
+        
+        if (isOpen) {
+            initializeApi();
+        }
+    }, [isOpen, testBatch]);
+
+    // Update max tests when test batch changes
+    useEffect(() => {
+        if (isApiConnected && testBatch) {
+            fetchMaxTests(testBatch);
+        }
+    }, [testBatch, isApiConnected]);
 
     // Function to submit the test request to the API.
     const submitToApi = async (testName: string, chipType: string) => {
@@ -168,7 +279,14 @@ const CreateTestWindow: React.FC<CreateTestWindowProps> = ({ isOpen, onClose, on
                 setCurrentStep('Test completed successfully');
                 setProgress(100);
                 setTestStatus('completed');
-                setIsResultsExpanded(true);
+                setIsResultsExpanded(false);
+                setApiResponse({ 
+                    id: result.docId,
+                    name: testName || 'Untitled Test',
+                    chipType: newChipType,
+                    status: 'completed',
+                    created: new Date().toISOString()
+                });
             } else {
                 setError(result.error || 'Failed to create test');
                 setTestStatus('error');
@@ -188,18 +306,13 @@ const CreateTestWindow: React.FC<CreateTestWindowProps> = ({ isOpen, onClose, on
                 {/* Header Section */}
                 <div className="border-b border-gray-200 dark:border-gray-700 p-6">
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                            <div className="inline-flex shrink-0 items-center justify-center rounded bg-blue-100 p-3 dark:bg-blue-900">
-                                <RiAppsFill className="h-6 w-6 text-blue-600 dark:text-blue-300" />
-                            </div>
-                            <div>
-                                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                                    SAT Solver Performance Test
-                                </h2>
-                                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                                    Benchmark and evaluate your solver's efficiency
-                                </p>
-                            </div>
+                        <div>
+                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                                New Performance Test
+                            </h2>
+                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                Benchmark and evaluate your solver's efficiency
+                            </p>
                         </div>
                         <div className="flex items-center space-x-4">
                             <div className={classNames(
@@ -388,7 +501,7 @@ const CreateTestWindow: React.FC<CreateTestWindowProps> = ({ isOpen, onClose, on
                                     disabled={isSubmitting}
                                     className="bg-blue-600 text-white hover:bg-blue-700"
                                 >
-                                    {isSubmitting ? "Creating Test..." : "Create Test"}
+                                    {isSubmitting ? "Running..." : "Start Benchmark"}
                                 </Button>
                             </div>
                         </form>
@@ -398,7 +511,7 @@ const CreateTestWindow: React.FC<CreateTestWindowProps> = ({ isOpen, onClose, on
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between">
                                     <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                                        Test Progress
+                                        Performance Test
                                     </h3>
                                     <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
                                         {progress}%
@@ -428,11 +541,32 @@ const CreateTestWindow: React.FC<CreateTestWindowProps> = ({ isOpen, onClose, on
                                             {isResultsExpanded ? "Show Less" : "Show More"}
                                         </Button>
                                     </div>
-                                    {isResultsExpanded && (
+                                    {isResultsExpanded ? (
                                         <div className="p-4 max-h-96 overflow-auto">
                                             <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
                                                 {JSON.stringify(apiResponse, null, 2)}
                                             </pre>
+                                        </div>
+                                    ) : (
+                                        <div className="p-4">
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Test Name</p>
+                                                    <p className="text-sm font-medium">{apiResponse.name}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Chip Type</p>
+                                                    <p className="text-sm font-medium">{apiResponse.chipType}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Status</p>
+                                                    <p className="text-sm font-medium text-green-600 dark:text-green-400">{apiResponse.status}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400">Created</p>
+                                                    <p className="text-sm font-medium">{new Date(apiResponse.created).toLocaleString()}</p>
+                                                </div>
+                                            </div>
                                         </div>
                                     )}
                                 </Card>
@@ -449,7 +583,15 @@ const CreateTestWindow: React.FC<CreateTestWindowProps> = ({ isOpen, onClose, on
                                 </Button>
                                 {testStatus === 'completed' && (
                                     <Button
-                                        onClick={() => onTestComplete(apiResponse?.id)}
+                                        onClick={() => {
+                                            if (onTestComplete && apiResponse?.id) {
+                                                console.log("Calling onTestComplete with ID:", apiResponse.id);
+                                                onTestComplete(apiResponse.id);
+                                            } else {
+                                                console.error("Cannot view full report: Missing test ID or onTestComplete function");
+                                            }
+                                            onClose();
+                                        }}
                                         className="bg-blue-600 text-white hover:bg-blue-700"
                                     >
                                         View Full Report

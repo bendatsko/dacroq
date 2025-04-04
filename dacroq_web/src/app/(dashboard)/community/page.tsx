@@ -46,12 +46,10 @@ const formatTimestamp = (timestamp) => {
   if (diffDays > 0) {
     if (diffDays === 1) return "Yesterday";
     if (diffDays < 7) return `${diffDays} days ago`;
-    
-    // For older dates, show the actual date
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined 
+    return date.toLocaleDateString("en-US", { 
+      month: "short", 
+      day: "numeric", 
+      year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined 
     });
   }
   if (diffHours > 0) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
@@ -91,11 +89,8 @@ export default function Community() {
 
   // State for posts from Firestore
   const [posts, setPosts] = useState([]);
-  // Loading state
   const [loading, setLoading] = useState(true);
-  // Search query
   const [searchQuery, setSearchQuery] = useState("");
-  // Current page
   const [currentPage, setCurrentPage] = useState(1);
   const postsPerPage = 15;
   
@@ -143,7 +138,6 @@ export default function Community() {
         }));
         setReplies(repliesData);
         setRepliesLoading(false);
-        
         // Update view count
         incrementViewCount(selectedPost.id);
       });
@@ -156,13 +150,12 @@ export default function Community() {
   // Filter posts by search query
   const filteredPosts = useMemo(() => {
     if (!searchQuery.trim()) return posts;
-    
-    const query = searchQuery.toLowerCase();
+    const queryStr = searchQuery.toLowerCase();
     return posts.filter(
       (post) =>
-        post.title?.toLowerCase().includes(query) ||
-        post.content?.toLowerCase().includes(query) ||
-        post.author?.toLowerCase().includes(query)
+        post.title?.toLowerCase().includes(queryStr) ||
+        post.content?.toLowerCase().includes(queryStr) ||
+        post.author?.toLowerCase().includes(queryStr)
     );
   }, [posts, searchQuery]);
 
@@ -173,9 +166,7 @@ export default function Community() {
   }, [filteredPosts, currentPage]);
 
   // Calculate total pages
-  const totalPages = useMemo(() => {
-    return Math.ceil(filteredPosts.length / postsPerPage);
-  }, [filteredPosts]);
+  const totalPages = useMemo(() => Math.ceil(filteredPosts.length / postsPerPage), [filteredPosts]);
 
   // Handle page changes
   const handlePageChange = (page) => {
@@ -219,7 +210,7 @@ export default function Community() {
     }
   };
 
-  // Handle new reply submission
+  // Handle new reply submission with notification to post author
   const handleSubmitReply = async () => {
     if (!selectedPost || !newReplyContent.trim()) return;
     
@@ -237,6 +228,24 @@ export default function Community() {
       await updateDoc(postRef, {
         replies: (selectedPost.replies || 0) + 1
       });
+      
+      // Send notification to the original post's author if not replying to your own post
+      if (currentUser?.uid && selectedPost.uid && currentUser.uid !== selectedPost.uid) {
+        const notificationsRef = collection(db, "notifications");
+        await addDoc(notificationsRef, {
+          title: "New reply to your post",
+          message: `${currentUser.displayName || "Someone"} replied to your post: "${selectedPost.title}"`,
+          type: "reply",
+          date: serverTimestamp(),
+          global: false,
+          forUsers: [selectedPost.uid],
+          readBy: [],
+          createdBy: currentUser.uid,
+          createdByName: currentUser.displayName || "Anonymous",
+          deleted: false,
+        });
+      }
+      
       setNewReplyContent("");
     } catch (error) {
       console.error("Error submitting reply:", error);
@@ -293,7 +302,6 @@ export default function Community() {
             Back
           </Button>
         </div>
-        
         {/* Admin actions */}
         {currentUser?.role === "admin" && (
           <div className="flex items-center gap-1">
@@ -306,7 +314,6 @@ export default function Community() {
             >
               <RiPinDistanceLine className="size-4" />
             </Button>
-            
             <Button
               variant="ghost"
               size="sm"
@@ -316,7 +323,6 @@ export default function Community() {
             >
               <RiCheckLine className="size-4" />
             </Button>
-            
             <Button
               variant="ghost"
               onClick={() => handleDeletePost(selectedPost.id)}
@@ -328,13 +334,11 @@ export default function Community() {
           </div>
         )}
       </div>
-      
       {/* Post Content */}
       <div className="p-5">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
           {selectedPost?.title}
         </h2>
-        
         <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 mb-4">
           <span className="flex items-center">
             <RiUserLine className="mr-1 size-3.5" />
@@ -351,17 +355,14 @@ export default function Community() {
             {selectedPost?.views || 0} views
           </span>
         </div>
-        
         <div className="text-gray-800 dark:text-gray-200 my-4 pb-4 border-b border-gray-200 dark:border-gray-700">
           <p>{selectedPost?.content}</p>
         </div>
-        
         {/* Replies */}
         <div className="mt-6">
           <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4">
             Replies ({replies.length})
           </h3>
-          
           <div className="space-y-4">
             {repliesLoading ? (
               <div className="animate-pulse">
@@ -411,11 +412,9 @@ export default function Community() {
               </div>
             )}
           </div>
-          
           {/* Reply Form */}
           <div className="mt-6">
             <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-3">Add a reply</h3>
-            
             <div className="relative">
               <Textarea
                 value={newReplyContent}
@@ -423,7 +422,6 @@ export default function Community() {
                 placeholder="Write your reply here..."
                 className="min-h-[120px] w-full pr-14 border border-gray-300 dark:border-gray-700 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-800"
               />
-              
               <Button
                 onClick={handleSubmitReply}
                 disabled={!newReplyContent.trim()}
@@ -442,15 +440,12 @@ export default function Community() {
   // Render the post list view
   const renderPostList = () => (
     <>
-      {/* Post list */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
-        {/* Header with search */}
         <div className="border-b border-gray-200 dark:border-gray-700 p-4 flex flex-col md:flex-row gap-3 justify-between">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center">
             <RiTimeLine className="mr-2 size-4" />
             Latest discussions
           </h2>
-          
           <div className="relative w-full md:w-64">
             <RiSearchLine className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" />
             <input
@@ -462,29 +457,17 @@ export default function Community() {
             />
           </div>
         </div>
-        
-        {/* Post list */}
         {loading ? (
-          // Loading skeletons
-          Array(5).fill(0).map((_, index) => (
-            <div key={index} className="animate-pulse border-b border-gray-200 dark:border-gray-700 p-3">
-              <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2"></div>
-              <div className="flex items-center space-x-4 mt-2">
-                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-24"></div>
-                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-20"></div>
-                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-16"></div>
-              </div>
-            </div>
-          ))
+          <div className="flex justify-center items-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-gray-100"></div>
+          </div>
         ) : filteredPosts.length > 0 ? (
           <>
             <div className="divide-y divide-gray-200 dark:divide-gray-700">
               {paginatedPosts.map((post) => (
                 <div 
                   key={post.id} 
-                  className={`p-4 hover:bg-gray-50 dark:hover:bg-gray-750 cursor-pointer ${
-                    post.isPinned ? "bg-blue-50/50 dark:bg-blue-900/10" : ""
-                  }`}
+                  className={`p-4 hover:bg-gray-50 dark:hover:bg-gray-750 cursor-pointer ${post.isPinned ? "bg-blue-50/50 dark:bg-blue-900/10" : ""}`}
                   onClick={() => setSelectedPost(post)}
                 >
                   <div className="flex items-start">
@@ -503,11 +486,9 @@ export default function Community() {
                           </span>
                         )}
                       </div>
-                      
                       <h3 className="font-medium text-gray-900 dark:text-gray-100 truncate">
                         {post.title}
                       </h3>
-                      
                       <div className="flex flex-wrap items-center text-xs text-gray-500 dark:text-gray-400 mt-1">
                         <span className="flex items-center">
                           <RiUserLine className="mr-1 size-3.5" />
@@ -522,7 +503,6 @@ export default function Community() {
                         <span>{formatTimestamp(post.timestamp)}</span>
                       </div>
                     </div>
-                    
                     <div className="flex flex-col items-end justify-center text-right text-xs text-gray-500 dark:text-gray-400">
                       <div className="flex items-center">
                         <RiChat3Line className="mr-1 size-3.5" />
@@ -537,8 +517,6 @@ export default function Community() {
                 </div>
               ))}
             </div>
-            
-            {/* Pagination */}
             {totalPages > 1 && (
               <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-center">
                 <div className="flex items-center space-x-1">
@@ -551,9 +529,7 @@ export default function Community() {
                   >
                     1
                   </Button>
-                  
                   {currentPage > 3 && <span className="text-gray-500">...</span>}
-                  
                   {Array.from({ length: 3 }, (_, i) => {
                     const page = currentPage + i - 1;
                     if (page > 1 && page < totalPages) {
@@ -571,9 +547,7 @@ export default function Community() {
                     }
                     return null;
                   })}
-                  
                   {currentPage < totalPages - 2 && <span className="text-gray-500">...</span>}
-                  
                   {totalPages > 1 && (
                     <Button
                       variant="ghost"
@@ -622,18 +596,15 @@ export default function Community() {
             Ask questions, share insights, and connect with other researchers
           </p>
         </div>
-        
         <Button onClick={() => setIsPostModalOpen(true)} className="flex items-center gap-2">
           <RiAddLine className="size-4" />
           New Post
         </Button>
       </div>
-      
       {/* Main Content */}
       <div className="space-y-6">
         {selectedPost ? renderPostDetail() : renderPostList()}
       </div>
-      
       {/* New Post Modal */}
       {isPostModalOpen && (
         <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center p-4 z-50">
@@ -646,7 +617,6 @@ export default function Community() {
                 </Button>
               </div>
             </div>
-            
             <div className="p-4 sm:p-6 space-y-4">
               <div>
                 <label htmlFor="post-title" className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -661,7 +631,6 @@ export default function Community() {
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800"
                 />
               </div>
-              
               <div>
                 <label htmlFor="post-content" className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
                   Content
@@ -675,13 +644,11 @@ export default function Community() {
                 />
               </div>
             </div>
-            
             <div className="p-4 sm:p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
               <Button variant="outline" onClick={() => setIsPostModalOpen(false)} className="flex items-center gap-2">
                 <RiCloseLine className="size-4" />
                 Cancel
               </Button>
-              
               <Button
                 onClick={handleSubmitPost}
                 disabled={!newPostTitle.trim() || !newPostContent.trim()}

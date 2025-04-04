@@ -9,6 +9,7 @@ import {
   RiTeamLine,
   RiDeleteBin5Line,
   RiCloseLine,
+  RiEyeLine,
 } from "@remixicon/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo } from "react";
@@ -281,26 +282,21 @@ export default function HardwareDashboard() {
       },
     },
     {
-      accessorKey: "created",
-      header: "Created",
-      cell: ({ row }: any) => {
-        const created = row.original.created;
-        let dateObj =
-          created && created.seconds !== undefined
-            ? new Date(created.seconds * 1000)
-            : new Date(created);
-        return isNaN(dateObj.getTime())
-          ? "Invalid date"
-          : dateObj.toLocaleString();
-      },
-    },
-    {
-      id: "details",
-      header: "Results",
+      id: "actions",
+      header: "",
       cell: ({ row }: any) => (
-        <Button className="text-sm" variant="secondary" onClick={() => handleViewResults(row.original)}>
-          View
-        </Button>
+        <div className="flex justify-end">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleViewResults(row.original);
+            }}
+            className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            title="View test details"
+          >
+            <RiEyeLine className="h-4 w-4" />
+          </button>
+        </div>
       ),
     },
   ];
@@ -318,6 +314,8 @@ export default function HardwareDashboard() {
     const [searchQuery, setSearchQuery] = useState("");
     const [adminMode, setAdminMode] = useState(false);
     const [isFilterVisible, setIsFilterVisible] = useState(false);
+    const [filterMenuOpen, setFilterMenuOpen] = useState(false);
+    const [adminMenuOpen, setAdminMenuOpen] = useState(false);
 
     const currentUser = useMemo(() => {
       try {
@@ -484,68 +482,168 @@ export default function HardwareDashboard() {
     }, [columns, selectedTests, adminMode, currentUser, filteredTests]);
 
     return (
-      <Card className="mt-6">
-        <div className="p-4 sm:flex sm:items-center sm:justify-between">
-          <div className="relative">
-            <RiSearchLine className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search tests..."
-              className="pl-10 pr-4 py-2 w-full sm:w-96 rounded-md border border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-400 dark:focus:ring-blue-400"
+      <Card className="mt-6 overflow-hidden">
+        <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <div className="py-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              {/* Title Section */}
+              <div className="min-w-0 flex-shrink-0">
+                <h3 className="text-base font-semibold leading-6 text-gray-900 dark:text-white truncate">Test Results</h3>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 truncate">
+                  View and manage your quantum solver test results
+                </p>
+              </div>
+              
+              {/* Controls Section */}
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center lg:flex-1 lg:justify-end">
+                {/* Action Buttons */}
+                <div className="flex items-center gap-2 order-2 sm:order-1">
+                  {/* Filter Dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setFilterMenuOpen(!filterMenuOpen)}
+                      className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600"
+                    >
+                      <RiTeamLine className="h-4 w-4 flex-shrink-0" />
+                      Filters
+                    </button>
+                    {filterMenuOpen && (
+                      <div className="absolute left-0 mt-2 w-48 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 dark:bg-gray-800 z-10">
+                        <div className="py-1" role="menu">
+                          <button
+                            onClick={() => {
+                              setShowOnlyMyTests(!showOnlyMyTests);
+                              setFilterMenuOpen(false);
+                            }}
+                            className={`w-full px-4 py-2 text-left text-sm ${
+                              showOnlyMyTests
+                                ? "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
+                                : "text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                            }`}
+                          >
+                            {showOnlyMyTests ? "Show All Tests" : "Show My Tests Only"}
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleResetFilters();
+                              setFilterMenuOpen(false);
+                            }}
+                            className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                          >
+                            Reset Filters
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Admin Actions Dropdown */}
+                  {isAdmin && (
+                    <div className="relative">
+                      <button
+                        onClick={() => setAdminMenuOpen(!adminMenuOpen)}
+                        className={`inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                          adminMode
+                            ? "bg-amber-50 text-amber-700 ring-amber-500 dark:bg-amber-900/20 dark:text-amber-400"
+                            : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600"
+                        }`}
+                      >
+                        Admin Actions
+                      </button>
+                      {adminMenuOpen && (
+                        <div className="absolute right-0 mt-2 w-48 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 dark:bg-gray-800 z-10">
+                          <div className="py-1" role="menu">
+                            <button
+                              onClick={() => {
+                                handleToggleAdminMode();
+                                setAdminMenuOpen(false);
+                              }}
+                              className={`w-full px-4 py-2 text-left text-sm ${
+                                adminMode
+                                  ? "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"
+                                  : "text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                              }`}
+                            >
+                              {adminMode ? "Exit Admin Mode" : "Enter Admin Mode"}
+                            </button>
+                            {adminMode && (
+                              <button
+                                onClick={handleBulkDelete}
+                                className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                                disabled={!Object.keys(selectedTests).some((id) => selectedTests[id])}
+                              >
+                                Delete Selected Tests
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Search Bar */}
+                <div className="relative flex-1 sm:max-w-xs order-1 sm:order-2">
+                  <RiSearchLine className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search tests..."
+                    className="w-full pl-10 pr-4 py-2 rounded-md border border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <RiCloseLine className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Admin Mode Warning */}
+        {adminMode && (
+          <div className="border-b border-amber-200 bg-amber-50/50 px-4 py-3 sm:px-6 dark:border-amber-800 dark:bg-amber-900/20">
+            <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400">
+              <RiTeamLine className="h-4 w-4 flex-shrink-0" />
+              <p>Admin mode active - You can manage all tests in the system</p>
+            </div>
+          </div>
+        )}
+
+        {/* Table Section */}
+        <div className="overflow-x-auto">
+          <div className="min-w-full">
+            <DataTable
+              data={filteredTests}
+              columns={enhancedColumns}
+              onRowClick={({ original }) => handleViewResults(original)}
+              rowClassName="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
             />
           </div>
-          <div className="mt-4 flex items-center gap-4 sm:mt-0">
-            <button
-              onClick={() => setShowOnlyMyTests(!showOnlyMyTests)}
-              className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
-                showOnlyMyTests
-                  ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
-                  : "text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
-              }`}
-            >
-              {showOnlyMyTests ? <RiUser3Line /> : <RiTeamLine />}
-              {showOnlyMyTests ? "My Tests" : "All Tests"}
-            </button>
-            {Object.keys(selectedTests).some((id) => selectedTests[id]) && (
-              <button
-                onClick={handleBulkDelete}
-                className="flex items-center gap-2 rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
-              >
-                <RiDeleteBin5Line />
-                Delete Selected
-              </button>
-            )}
+        </div>
+
+        {/* No Results State */}
+        {filteredTests.length === 0 && (
+          <div className="px-4 py-12 text-center border-t border-gray-200 sm:px-6 dark:border-gray-700">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              No tests found matching your criteria
+            </p>
             {(searchQuery || showOnlyMyTests) && (
               <button
                 onClick={handleResetFilters}
-                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
+                className="mt-2 text-sm text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
               >
-                <RiCloseLine />
-                Reset Filters
-              </button>
-            )}
-            {isAdmin && (
-              <button
-                onClick={handleToggleAdminMode}
-                className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
-                  adminMode
-                    ? "bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400"
-                    : "text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
-                }`}
-              >
-                {adminMode ? "Exit Admin Mode" : "Admin Mode"}
+                Clear all filters
               </button>
             )}
           </div>
-        </div>
-        <DataTable
-          data={filteredTests}
-          columns={enhancedColumns}
-          onRowClick={({ original }) => handleViewResults(original)}
-          rowClassName="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-        />
+        )}
       </Card>
     );
   };
@@ -578,7 +676,7 @@ export default function HardwareDashboard() {
         </div>
         <div className="flex gap-4">
           <Button onClick={() => setIsOpen(true)} className="flex items-center gap-2 text-base sm:text-sm">
-            Create Test
+            New Hardware Benchmark Test
             <RiAddLine className="-mr-0.5 size-5 shrink-0" aria-hidden="true" />
           </Button>
         </div>
@@ -673,7 +771,16 @@ export default function HardwareDashboard() {
       <CreateTestWindow
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
-        onCreateTest={handleCreateTest}
+        onTestComplete={(testId) => {
+          // Find the test in the tests array
+          const test = tests.find(t => t.id === testId);
+          if (test) {
+            // Set the selected test to show the TestDetails component
+            setSelectedTest(test);
+          } else {
+            console.error("Test not found with ID:", testId);
+          }
+        }}
       />
     </main>
   );
