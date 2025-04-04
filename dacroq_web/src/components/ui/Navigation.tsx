@@ -56,34 +56,34 @@ function Navigation() {
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6 pt-3">
         <div>
           <span className="sr-only">Dacroq</span>
-          <div className="relative">
-            <img src="/Logo.svg" alt="Logo" className="block dark:hidden" />
-            <img src="/Logo_White.svg" alt="Logo" className="hidden dark:block" />
-          </div>
+          <Link href="/" className="block">
+            <div className="relative">
+              <img src="/Logo.svg" alt="Logo" className="block dark:hidden h-8" />
+              <img src="/Logo_White.svg" alt="Logo" className="hidden dark:block h-8" />
+            </div>
+          </Link>
         </div>
-        <div className="flex h-[42px] flex-nowrap gap-1">
+        <div className="flex h-10 items-center gap-2">
           <Notifications />
           <DropdownUserProfile />
         </div>
       </div>
-      <TabNavigation className="mt-5">
-        <div className="mx-auto flex w-full max-w-7xl items-center px-6">
+      <TabNavigation className="mt-4">
+        <div className="mx-auto flex w-full max-w-7xl items-center px-4 sm:px-6">
           <TabNavigationLink
             className="inline-flex gap-2"
             asChild
             active={pathname === "/"}
           >
-            <Link href="/">Overview</Link>
+            <Link href="/">Dashboard</Link>
           </TabNavigationLink>
 
-
-
           <TabNavigationLink
-            className="inline-flex gap-2"
-            asChild
-            active={pathname === "/documentation"}
+              className="inline-flex gap-2"
+              asChild
+              active={pathname === "/tools"}
           >
-            <Link href="/documentation">Documentation</Link>
+            <Link href="/tools">Tools</Link>
           </TabNavigationLink>
 
           <TabNavigationLink
@@ -91,8 +91,21 @@ function Navigation() {
               asChild
               active={pathname === "/community"}
           >
-            <Link href="/community">Community</Link>
+            <Link href="/community">Discussion</Link>
           </TabNavigationLink>
+
+          <TabNavigationLink
+            className="inline-flex gap-2"
+            asChild
+            active={pathname === "/documentation"}
+          >
+            <Link href="/documentation">Docs</Link>
+          </TabNavigationLink>
+
+
+
+       
+
 
           {/* Admin tab - only rendered if user is admin */}
           {isAdmin && (

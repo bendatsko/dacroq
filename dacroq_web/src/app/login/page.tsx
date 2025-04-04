@@ -7,7 +7,7 @@ import { signInWithGoogle, auth } from "@/lib/firebase";
 import { doc, setDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useState, useEffect } from "react";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,14 +15,29 @@ export default function LoginPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Ensure this code runs only client-side.
   useEffect(() => {
     console.log("LoginPage mounted");
     setIsMounted(true);
 
-    // Listen for authentication state changes as a backup
+    // Check for intentional logout first
+    const wasIntentionalLogout = sessionStorage.getItem("intentionalLogout") === "true";
+    if (wasIntentionalLogout) {
+      console.log("Detected intentional logout, clearing auth state");
+      // Clear any lingering auth state
+      auth.signOut();
+      return;
+    }
+
+    // Only set up auth listener if not an intentional logout
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       console.log("Auth state changed:", user ? "User logged in" : "No user");
+
+      // Recheck logout flag in case it was set after initial check
+      const currentLogoutState = sessionStorage.getItem("intentionalLogout") === "true";
+      if (currentLogoutState) {
+        console.log("Logout flag detected, preventing auto-login");
+        return;
+      }
 
       if (user && !isProcessing) {
         await handleSuccessfulLogin(user);
@@ -33,7 +48,7 @@ export default function LoginPage() {
   }, [router, isMounted]);
 
   // Function to handle successful login
-  const handleSuccessfulLogin = async (user) => {
+  const handleSuccessfulLogin = async (user: FirebaseUser) => {
     if (isProcessing) return; // Prevent duplicate processing
     setIsProcessing(true);
 
@@ -84,7 +99,7 @@ export default function LoginPage() {
         { merge: true }
       );
 
-// Store minimal user info in localStorage.
+      // Store minimal user info in localStorage.
       if (isMounted) {
         localStorage.setItem(
           "user",
@@ -99,17 +114,7 @@ export default function LoginPage() {
       }
 
       console.log("Redirecting to dashboard...");
-
-      // Try both methods for redirection
       router.push("/");
-
-      // Method 2: Add a backup with a slight delay using window.location
-      setTimeout(() => {
-        if (document.location.pathname.includes("login")) {
-          console.log("Backup redirect triggered");
-          window.location.href = "/";
-        }
-      }, 1000);
 
     } catch (err) {
       console.error("Error handling login:", err);
@@ -121,10 +126,9 @@ export default function LoginPage() {
   const handleGoogleSignIn = async () => {
     try {
       console.log("Starting Google sign-in process...");
-      // Clear any previous errors
       setError(null);
+      setIsProcessing(true);
 
-      // Using popup authentication - this will handle everything in the current window
       const result = await signInWithGoogle();
       console.log("Sign-in successful, user:", result.user.email);
 
@@ -133,6 +137,7 @@ export default function LoginPage() {
     } catch (error) {
       console.error("Error during sign-in", error);
       setError("An error occurred during sign in. Please try again.");
+      setIsProcessing(false);
     }
   };
 
@@ -142,7 +147,6 @@ export default function LoginPage() {
       suppressHydrationWarning
     >
       <div className="relative sm:mx-auto sm:w-full sm:max-w-sm">
-        {/* Background decoration and logo code remains unchanged */}
         <div className="relative mx-auto w-fit">
           <span className="sr-only">Dacroq</span>
           <div className="relative">

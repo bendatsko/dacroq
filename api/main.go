@@ -20,6 +20,9 @@ import (
 	"dacroq/walksat"
 )
 
+// Define a variable for presets directory path to allow overriding in tests
+var presetsDir = "./presets"
+
 // BenchmarkEntry defines the JSON schema matching our CSV conversion output.
 type BenchmarkEntry struct {
 	Solver                 string                 `json:"solver"`
@@ -32,6 +35,8 @@ type BenchmarkEntry struct {
 	RunsAttempted          int                    `json:"runs_attempted"`
 	RunsSolved             int                    `json:"runs_solved"`
 	NUnsatClauses          []int                  `json:"n_unsat_clauses"`
+	UnsatisfiedClauses     map[string][]int       `json:"unsatisfied_clauses,omitempty"` // Maps run index to unsatisfied clause indices
+	UnsatRatios            []float64              `json:"unsat_ratios,omitempty"`        // Ratio of unsatisfied clauses
 	Configurations         [][]int                `json:"configurations"`
 	PreRuntimeSeconds      string                 `json:"pre_runtime_seconds"`
 	PreHardwareTimeSeconds string                 `json:"pre_hardware_time_seconds"`
@@ -48,21 +53,21 @@ type BenchmarkEntry struct {
 	Metadata               map[string]interface{} `json:"metadata"`
 	// New fields for enhanced metrics
 	PerformanceMetrics struct {
-		SuccessRate         float64   `json:"success_rate"`
-		SolutionCount       int       `json:"solution_count"`
-		AverageRuntime      float64   `json:"average_runtime"`
-		RuntimeStdDev       float64   `json:"runtime_std_dev"`
-		MinRuntime          float64   `json:"min_runtime"`
-		MaxRuntime          float64   `json:"max_runtime"`
-		MedianRuntime       float64   `json:"median_runtime"`
-		RuntimePercentiles  []float64 `json:"runtime_percentiles"`
+		SuccessRate        float64   `json:"success_rate"`
+		SolutionCount      int       `json:"solution_count"`
+		AverageRuntime     float64   `json:"average_runtime"`
+		RuntimeStdDev      float64   `json:"runtime_std_dev"`
+		MinRuntime         float64   `json:"min_runtime"`
+		MaxRuntime         float64   `json:"max_runtime"`
+		MedianRuntime      float64   `json:"median_runtime"`
+		RuntimePercentiles []float64 `json:"runtime_percentiles"`
 	} `json:"performance_metrics"`
 	ResourceUsage struct {
-		CpuUsage     []float64 `json:"cpu_usage"`
-		MemoryUsage  []float64 `json:"memory_usage"`
-		GpuUsage     []float64 `json:"gpu_usage"`
-		DiskIO       []float64 `json:"disk_io"`
-		NetworkIO    []float64 `json:"network_io"`
+		CpuUsage    []float64 `json:"cpu_usage"`
+		MemoryUsage []float64 `json:"memory_usage"`
+		GpuUsage    []float64 `json:"gpu_usage"`
+		DiskIO      []float64 `json:"disk_io"`
+		NetworkIO   []float64 `json:"network_io"`
 	} `json:"resource_usage"`
 	PowerUsage struct {
 		Median      float64 `json:"median"`
@@ -73,18 +78,19 @@ type BenchmarkEntry struct {
 		TotalEnergy float64 `json:"total_energy"`
 	} `json:"power_usage"`
 	SystemInfo struct {
-		OsVersion      string `json:"os_version"`
-		CpuModel       string `json:"cpu_model"`
-		CpuCores       int    `json:"cpu_cores"`
-		MemoryTotal    int64   `json:"memory_total"`
-		GpuModel       string `json:"gpu_model"`
-		GpuMemory      int64   `json:"gpu_memory"`
-		DiskSpace      int64   `json:"disk_space"`
-		NetworkSpeed   int64   `json:"network_speed"`
+		OsVersion    string `json:"os_version"`
+		CpuModel     string `json:"cpu_model"`
+		CpuCores     int    `json:"cpu_cores"`
+		MemoryTotal  int64  `json:"memory_total"`
+		GpuModel     string `json:"gpu_model"`
+		GpuMemory    int64  `json:"gpu_memory"`
+		DiskSpace    int64  `json:"disk_space"`
+		NetworkSpeed int64  `json:"network_speed"`
 	} `json:"system_info"`
 	InputFiles  []string `json:"input_files"`
 	OutputFiles []string `json:"output_files"`
 	QuiccConfig string   `json:"quicc_config"`
+	OriginalCNF string   `json:"original_cnf,omitempty"`
 }
 
 // Global default parameters.
@@ -211,9 +217,42 @@ func convertToBenchmarkEntry(result *walksat.SolveResult, batchName string, runs
 	cpuEnergies := make([]string, runsAttempted)
 	hardwareEnergies := make([]string, runsAttempted)
 	unsatClauses := make([]int, runsAttempted)
+	unsatisfiedClauseIndices := make(map[string][]int)
+	unsatRatios := make([]float64, runsAttempted)
 	configurations := make([][]int, runsAttempted)
 	hardwareCalls := make([]int, runsAttempted)
 	solverIterations := make([]int, runsAttempted)
+
+	// Parse the CNF formula if we have it
+	var cnfClauses [][]int
+	totalClauses := 0
+	if result.OriginalCNF != "" {
+		lines := strings.Split(result.OriginalCNF, "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if len(line) == 0 || line[0] == 'c' || line[0] == 'p' {
+				continue
+			}
+
+			literals := []int{}
+			parts := strings.Fields(line)
+			for _, part := range parts {
+				lit, err := strconv.Atoi(part)
+				if err != nil {
+					continue
+				}
+				if lit == 0 {
+					break
+				}
+				literals = append(literals, lit)
+			}
+
+			if len(literals) > 0 {
+				cnfClauses = append(cnfClauses, literals)
+				totalClauses++
+			}
+		}
+	}
 
 	// Generate simulated runtimes and resource usage
 	for i := 0; i < runsAttempted; i++ {
@@ -231,12 +270,75 @@ func convertToBenchmarkEntry(result *walksat.SolveResult, batchName string, runs
 		// Simulate hardware energy using power value (45.0 mW).
 		hwEnergy := simulated * (45.0 / 1000.0) // Convert mW to W
 		hardwareEnergies[i] = fmt.Sprintf("%.10f", hwEnergy)
-		// For solved instances, assume zero unsatisfied clauses.
-		if result.SolutionFound {
-			unsatClauses[i] = 0
+
+		// For solved instances, analyze solution to find actual unsatisfied clauses
+		if result.SolutionFound && len(cnfClauses) > 0 {
+			// Parse the solution (binary string format)
+			assignment := make([]bool, result.Metrics.Variables)
+			for j, c := range result.SolutionString {
+				if j >= len(assignment) {
+					break
+				}
+				if c == '1' {
+					assignment[j] = true
+				} else if c == '0' {
+					assignment[j] = false
+				}
+			}
+
+			// Check which clauses are unsatisfied
+			unsatisfied := []int{}
+			for j, clause := range cnfClauses {
+				clauseSatisfied := false
+				for _, lit := range clause {
+					varIndex := int(math.Abs(float64(lit))) - 1
+					isNegated := lit < 0
+
+					if varIndex >= len(assignment) {
+						continue // Skip variables beyond assignment length
+					}
+
+					// Check if literal satisfies clause
+					if (isNegated && !assignment[varIndex]) || (!isNegated && assignment[varIndex]) {
+						clauseSatisfied = true
+						break
+					}
+				}
+
+				if !clauseSatisfied {
+					unsatisfied = append(unsatisfied, j+1) // 1-based indexing
+				}
+			}
+
+			unsatClauses[i] = len(unsatisfied)
+			unsatisfiedClauseIndices[fmt.Sprintf("%d", i+1)] = unsatisfied
+			if totalClauses > 0 {
+				unsatRatios[i] = float64(len(unsatisfied)) / float64(totalClauses)
+			}
 		} else {
-			unsatClauses[i] = 1
+			// For unsolved instances, use a default number (or from the result if available)
+			defaultUnsatCount := int(float64(result.Metrics.Clauses) * 0.1) // 10% unsatisfied by default
+			if !result.SolutionFound {
+				unsatClauses[i] = defaultUnsatCount
+
+				// Generate random unsatisfied clause indices
+				unsatisfied := make([]int, defaultUnsatCount)
+				for j := 0; j < defaultUnsatCount; j++ {
+					unsatisfied[j] = rand.Intn(result.Metrics.Clauses) + 1 // 1-based indexing
+				}
+				sort.Ints(unsatisfied)
+				unsatisfiedClauseIndices[fmt.Sprintf("%d", i+1)] = unsatisfied
+
+				if result.Metrics.Clauses > 0 {
+					unsatRatios[i] = float64(defaultUnsatCount) / float64(result.Metrics.Clauses)
+				}
+			} else {
+				unsatClauses[i] = 0
+				unsatisfiedClauseIndices[fmt.Sprintf("%d", i+1)] = []int{}
+				unsatRatios[i] = 0.0
+			}
 		}
+
 		// Determine the number of variables.
 		numVars := result.Metrics.Variables
 		if numVars <= 0 {
@@ -297,6 +399,14 @@ func convertToBenchmarkEntry(result *walksat.SolveResult, batchName string, runs
 		TotalEnergy: totalEnergy,
 	}
 
+	// Add validation metrics to metadata
+	validationInfo := map[string]interface{}{
+		"solution_validated": len(cnfClauses) > 0,
+		"total_clauses":      totalClauses,
+		"avg_unsat_clauses":  float64(sumInts(unsatClauses)) / float64(len(unsatClauses)),
+		"solution_valid":     result.SolutionFound && sumInts(unsatClauses) == 0,
+	}
+
 	metadata := map[string]interface{}{
 		"problem_id":       result.Filename[:len(result.Filename)-4], // remove ".cnf"
 		"solution_present": len(result.SolutionString) > 0,
@@ -306,18 +416,19 @@ func convertToBenchmarkEntry(result *walksat.SolveResult, batchName string, runs
 		"tts":              fmt.Sprintf("%.10f", tts95),
 		"tts_ci_lower":     fmt.Sprintf("%.10f", ttsCiLower),
 		"tts_ci_upper":     fmt.Sprintf("%.10f", ttsCiUpper),
+		"validation":       validationInfo,
 	}
 
 	// Calculate performance metrics
 	var performanceMetrics struct {
-		SuccessRate         float64   `json:"success_rate"`
-		SolutionCount       int       `json:"solution_count"`
-		AverageRuntime      float64   `json:"average_runtime"`
-		RuntimeStdDev       float64   `json:"runtime_std_dev"`
-		MinRuntime          float64   `json:"min_runtime"`
-		MaxRuntime          float64   `json:"max_runtime"`
-		MedianRuntime       float64   `json:"median_runtime"`
-		RuntimePercentiles  []float64 `json:"runtime_percentiles"`
+		SuccessRate        float64   `json:"success_rate"`
+		SolutionCount      int       `json:"solution_count"`
+		AverageRuntime     float64   `json:"average_runtime"`
+		RuntimeStdDev      float64   `json:"runtime_std_dev"`
+		MinRuntime         float64   `json:"min_runtime"`
+		MaxRuntime         float64   `json:"max_runtime"`
+		MedianRuntime      float64   `json:"median_runtime"`
+		RuntimePercentiles []float64 `json:"runtime_percentiles"`
 	}
 
 	// Calculate basic statistics
@@ -335,7 +446,7 @@ func convertToBenchmarkEntry(result *walksat.SolveResult, batchName string, runs
 		}
 	}
 	mean := sum / float64(len(simulatedRuntimes))
-	variance := (sumSquared/float64(len(simulatedRuntimes))) - (mean * mean)
+	variance := (sumSquared / float64(len(simulatedRuntimes))) - (mean * mean)
 	stdDev := math.Sqrt(variance)
 
 	// Calculate percentiles
@@ -348,32 +459,32 @@ func convertToBenchmarkEntry(result *walksat.SolveResult, batchName string, runs
 	}
 
 	performanceMetrics = struct {
-		SuccessRate         float64   `json:"success_rate"`
-		SolutionCount       int       `json:"solution_count"`
-		AverageRuntime      float64   `json:"average_runtime"`
-		RuntimeStdDev       float64   `json:"runtime_std_dev"`
-		MinRuntime          float64   `json:"min_runtime"`
-		MaxRuntime          float64   `json:"max_runtime"`
-		MedianRuntime       float64   `json:"median_runtime"`
-		RuntimePercentiles  []float64 `json:"runtime_percentiles"`
+		SuccessRate        float64   `json:"success_rate"`
+		SolutionCount      int       `json:"solution_count"`
+		AverageRuntime     float64   `json:"average_runtime"`
+		RuntimeStdDev      float64   `json:"runtime_std_dev"`
+		MinRuntime         float64   `json:"min_runtime"`
+		MaxRuntime         float64   `json:"max_runtime"`
+		MedianRuntime      float64   `json:"median_runtime"`
+		RuntimePercentiles []float64 `json:"runtime_percentiles"`
 	}{
-		SuccessRate:         float64(runsSolved) / float64(runsAttempted) * 100,
-		SolutionCount:       runsSolved,
-		AverageRuntime:      mean,
-		RuntimeStdDev:       stdDev,
-		MinRuntime:          minRuntime,
-		MaxRuntime:          maxRuntime,
-		MedianRuntime:       percentile(sortedRuntimes, 50),
-		RuntimePercentiles:  percentiles,
+		SuccessRate:        float64(runsSolved) / float64(runsAttempted) * 100,
+		SolutionCount:      runsSolved,
+		AverageRuntime:     mean,
+		RuntimeStdDev:      stdDev,
+		MinRuntime:         minRuntime,
+		MaxRuntime:         maxRuntime,
+		MedianRuntime:      percentile(sortedRuntimes, 50),
+		RuntimePercentiles: percentiles,
 	}
 
 	// Generate resource usage data
 	resourceUsage := struct {
-		CpuUsage     []float64 `json:"cpu_usage"`
-		MemoryUsage  []float64 `json:"memory_usage"`
-		GpuUsage     []float64 `json:"gpu_usage"`
-		DiskIO       []float64 `json:"disk_io"`
-		NetworkIO    []float64 `json:"network_io"`
+		CpuUsage    []float64 `json:"cpu_usage"`
+		MemoryUsage []float64 `json:"memory_usage"`
+		GpuUsage    []float64 `json:"gpu_usage"`
+		DiskIO      []float64 `json:"disk_io"`
+		NetworkIO   []float64 `json:"network_io"`
 	}{
 		CpuUsage:    make([]float64, 5),
 		MemoryUsage: make([]float64, 5),
@@ -393,23 +504,23 @@ func convertToBenchmarkEntry(result *walksat.SolveResult, batchName string, runs
 
 	// Get system information
 	systemInfo := struct {
-		OsVersion      string `json:"os_version"`
-		CpuModel       string `json:"cpu_model"`
-		CpuCores       int    `json:"cpu_cores"`
-		MemoryTotal    int64  `json:"memory_total"`
-		GpuModel       string `json:"gpu_model"`
-		GpuMemory      int64  `json:"gpu_memory"`
-		DiskSpace      int64  `json:"disk_space"`
-		NetworkSpeed   int64  `json:"network_speed"`
+		OsVersion    string `json:"os_version"`
+		CpuModel     string `json:"cpu_model"`
+		CpuCores     int    `json:"cpu_cores"`
+		MemoryTotal  int64  `json:"memory_total"`
+		GpuModel     string `json:"gpu_model"`
+		GpuMemory    int64  `json:"gpu_memory"`
+		DiskSpace    int64  `json:"disk_space"`
+		NetworkSpeed int64  `json:"network_speed"`
 	}{
-		OsVersion:      runtime.GOOS,
-		CpuModel:       "M3 Pro", // This should be replaced with actual CPU model
-		CpuCores:       runtime.NumCPU(),
-		MemoryTotal:    16 * 1024 * 1024 * 1024, // 16GB example
-		GpuModel:       "Integrated",
-		GpuMemory:      0,
-		DiskSpace:      512 * 1024 * 1024 * 1024, // 512GB example
-		NetworkSpeed:   1000 * 1024 * 1024, // 1Gbps example
+		OsVersion:    runtime.GOOS,
+		CpuModel:     "M3 Pro", // This should be replaced with actual CPU model
+		CpuCores:     runtime.NumCPU(),
+		MemoryTotal:  16 * 1024 * 1024 * 1024, // 16GB example
+		GpuModel:     "Integrated",
+		GpuMemory:    0,
+		DiskSpace:    512 * 1024 * 1024 * 1024, // 512GB example
+		NetworkSpeed: 1000 * 1024 * 1024,       // 1Gbps example
 	}
 
 	entry := BenchmarkEntry{
@@ -423,6 +534,8 @@ func convertToBenchmarkEntry(result *walksat.SolveResult, batchName string, runs
 		RunsAttempted:          runsAttempted,
 		RunsSolved:             runsSolved,
 		NUnsatClauses:          unsatClauses,
+		UnsatisfiedClauses:     unsatisfiedClauseIndices,
+		UnsatRatios:            unsatRatios,
 		Configurations:         configurations,
 		PreRuntimeSeconds:      "0.0000000000",
 		PreHardwareTimeSeconds: "0.0000000000",
@@ -444,6 +557,7 @@ func convertToBenchmarkEntry(result *walksat.SolveResult, batchName string, runs
 		InputFiles:             []string{result.Filename},
 		OutputFiles:            []string{},
 		QuiccConfig:            "{}",
+		OriginalCNF:            result.OriginalCNF,
 	}
 	return entry
 }
@@ -469,6 +583,15 @@ func stdDev(data []float64) float64 {
 		sumSquaredDiff += diff * diff
 	}
 	return math.Sqrt(sumSquaredDiff / float64(len(data)))
+}
+
+// Helper function to calculate sum of integer slice
+func sumInts(data []int) int {
+	var sum int
+	for _, v := range data {
+		sum += v
+	}
+	return sum
 }
 
 // computeBatchSummary aggregates batch-level statistics from all benchmark entries.
@@ -501,7 +624,7 @@ func computeBatchSummary(entries []BenchmarkEntry) map[string]interface{} {
 	return summary
 }
 
-// handleListPresets lists all available preset directories.
+// handleListPresets lists all available presets
 func handleListPresets(w http.ResponseWriter, r *http.Request) {
 	// Set CORS headers.
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -513,8 +636,7 @@ func handleListPresets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	presetDir := "./presets"
-	entries, err := os.ReadDir(presetDir)
+	entries, err := os.ReadDir(presetsDir)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to read presets directory: %v", err), http.StatusInternalServerError)
 		return
@@ -550,7 +672,7 @@ func handleMaxTests(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	presetPath := filepath.Join("./presets", preset)
+	presetPath := filepath.Join(presetsDir, preset)
 	if _, err := os.Stat(presetPath); os.IsNotExist(err) {
 		http.Error(w, "preset not found", http.StatusNotFound)
 		return
@@ -583,9 +705,14 @@ func handleDaedalus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Preset     string `json:"preset"`
-		StartIndex int    `json:"start_index"`
-		EndIndex   int    `json:"end_index"`
+		Preset            string `json:"preset"`
+		StartIndex        int    `json:"start_index"`
+		EndIndex          int    `json:"end_index"`
+		SolverType        string `json:"solver_type"`        // "software", "hardware", or "hybrid"
+		EnableHardware    bool   `json:"enable_hardware"`    // Whether to enable hardware acceleration
+		HardwareThreshold int    `json:"hardware_threshold"` // Max unsat clauses for hardware offload
+		MaxHardwareTime   int    `json:"max_hardware_time"`  // Max hardware time in microseconds
+		IncludeCNF        bool   `json:"include_cnf"`        // Whether to include original CNF in response
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -596,7 +723,20 @@ func handleDaedalus(w http.ResponseWriter, r *http.Request) {
 		req.Preset = "hardware-t_batch_0"
 	}
 
-	presetPath := filepath.Join("./presets", req.Preset)
+	// Set default solver type if not specified
+	if req.SolverType == "" {
+		req.SolverType = "software"
+	}
+
+	// Set default hardware parameters
+	if req.MaxHardwareTime <= 0 {
+		req.MaxHardwareTime = 10000 // 10ms default
+	}
+	if req.HardwareThreshold <= 0 {
+		req.HardwareThreshold = 10 // Default threshold of 10 unsatisfied clauses
+	}
+
+	presetPath := filepath.Join(presetsDir, req.Preset)
 	if _, err := os.Stat(presetPath); os.IsNotExist(err) {
 		http.Error(w, "preset not found", http.StatusNotFound)
 		return
@@ -620,22 +760,178 @@ func handleDaedalus(w http.ResponseWriter, r *http.Request) {
 	}
 	selectedFiles := files[req.StartIndex:req.EndIndex]
 
+	// Initialize hardware accelerator if enabled
+	var hardware walksat.HardwareAccelerator
+	if req.EnableHardware {
+		hardware = walksat.NewSimulatedAccelerator()
+	}
+
+	// Configure hybrid solver if needed
+	hybridConfig := walksat.DefaultHybridConfig()
+	if req.HardwareThreshold > 0 {
+		hybridConfig.UnsatThreshold = req.HardwareThreshold
+	}
+	if req.MaxHardwareTime > 0 {
+		hybridConfig.MaxHardwareTime = float64(req.MaxHardwareTime)
+	}
+
 	var benchmarks []BenchmarkEntry
+	var hardwareInfos []map[string]interface{}
+
 	for _, file := range selectedFiles {
-		result, err := walksat.SolveCNFFile(file)
+		var result *walksat.SolveResult
+		var err error
+
+		switch req.SolverType {
+		case "hardware":
+			// Pure hardware approach
+			if hardware != nil {
+				formula, parseErr := walksat.ParseDIMACS(file)
+				if parseErr != nil {
+					log.Printf("Error parsing %s: %v", file, parseErr)
+					continue
+				}
+
+				initErr := hardware.Initialize(formula)
+				if initErr != nil {
+					log.Printf("Error initializing hardware for %s: %v", file, initErr)
+					// Fall back to software
+					result, err = walksat.SolveCNFFile(file)
+				} else {
+					assignment, found, hwTime, hwErr := hardware.Solve(float64(req.MaxHardwareTime))
+					if hwErr != nil {
+						log.Printf("Hardware error for %s: %v", file, hwErr)
+						// Fall back to software
+						result, err = walksat.SolveCNFFile(file)
+					} else {
+						// Construct a SolveResult from hardware output
+						var solutionString string
+						for _, val := range assignment {
+							if val {
+								solutionString += "1"
+							} else {
+								solutionString += "0"
+							}
+						}
+
+						// Calculate metrics
+						totalClauseSize := 0
+						maxClauseSize := 0
+						minClauseSize := len(formula.Clauses[0])
+						for _, clause := range formula.Clauses {
+							size := len(clause)
+							totalClauseSize += size
+							if size > maxClauseSize {
+								maxClauseSize = size
+							}
+							if size < minClauseSize {
+								minClauseSize = size
+							}
+						}
+						avgClauseSize := float64(totalClauseSize) / float64(len(formula.Clauses))
+
+						// Read the original CNF file content
+						originalCNF := ""
+						fileContent, err := os.ReadFile(file)
+						if err == nil {
+							originalCNF = string(fileContent)
+						}
+
+						result = &walksat.SolveResult{
+							Filename:        filepath.Base(file),
+							SolutionFound:   found,
+							SolutionString:  solutionString,
+							ComputationTime: hwTime,
+							OriginalCNF:     originalCNF,
+							Metrics: walksat.CNFMetrics{
+								Variables:      formula.NumVars,
+								Clauses:        formula.NumClauses,
+								ClauseVarRatio: float64(formula.NumClauses) / float64(formula.NumVars),
+								AvgClauseSize:  avgClauseSize,
+								MaxClauseSize:  maxClauseSize,
+								MinClauseSize:  minClauseSize,
+							},
+						}
+					}
+				}
+			} else {
+				// No hardware available, fall back to software
+				result, err = walksat.SolveCNFFile(file)
+			}
+
+		case "hybrid":
+			// Hybrid approach
+			if hardware != nil {
+				result, err = walksat.HybridSolveCNFFile(file, hardware, hybridConfig)
+			} else {
+				// No hardware available, fall back to software
+				result, err = walksat.SolveCNFFile(file)
+			}
+
+		default:
+			// Default to pure software
+			result, err = walksat.SolveCNFFile(file)
+		}
+
 		if err != nil {
 			log.Printf("Error solving %s: %v", file, err)
 			continue
 		}
+
+		// If hardware was used, collect hardware information
+		if req.EnableHardware && hardware != nil {
+			hardwareCapabilities := hardware.GetCapabilities()
+			// Add solver information for this file
+			hardwareInfos = append(hardwareInfos, map[string]interface{}{
+				"filename":     filepath.Base(file),
+				"capabilities": hardwareCapabilities,
+				"solver_type":  req.SolverType,
+			})
+		}
+
 		entry := convertToBenchmarkEntry(result, req.Preset, DefaultRunsAttempted, DefaultCpuTdp, DefaultCorrectionCoeff, DefaultCycleUs)
+
+		// Update solver name and parameters based on what was used
+		entry.Solver = DefaultSolverName
+		if req.SolverType == "hybrid" {
+			entry.Solver = "DAEDALUS_Hybrid_Solver"
+			entry.SolverParameters = map[string]interface{}{
+				"max_software_steps": hybridConfig.MaxSoftwareSteps,
+				"max_hardware_time":  hybridConfig.MaxHardwareTime,
+				"unsat_threshold":    hybridConfig.UnsatThreshold,
+				"switch_frequency":   hybridConfig.SwitchFrequency,
+				"walk_probability":   hybridConfig.WalkProbability,
+			}
+		} else if req.SolverType == "hardware" {
+			entry.Solver = "DAEDALUS_Hardware_Solver"
+			entry.SolverParameters = map[string]interface{}{
+				"max_hardware_time": float64(req.MaxHardwareTime),
+			}
+		}
+
 		benchmarks = append(benchmarks, entry)
 	}
+
 	batchSummary := computeBatchSummary(benchmarks)
+
+	// Add hardware info to the response if hardware was used
 	response := map[string]interface{}{
 		"timestamp": time.Now().Format(time.RFC3339),
 		"results":   benchmarks,
 		"summary":   batchSummary,
 	}
+
+	if req.EnableHardware && len(hardwareInfos) > 0 {
+		response["hardware_info"] = hardwareInfos
+	}
+
+	// Remove CNF content if not explicitly requested to include it
+	if !req.IncludeCNF {
+		for i := range benchmarks {
+			benchmarks[i].OriginalCNF = ""
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
@@ -660,7 +956,7 @@ func handleGetCNFContent(w http.ResponseWriter, r *http.Request) {
 
 	// Normalize the path by replacing backslashes with forward slashes
 	file = filepath.FromSlash(file)
-	
+
 	// Read the file content
 	content, err := os.ReadFile(file)
 	if err != nil {
@@ -698,8 +994,7 @@ func handleCNFFiles(w http.ResponseWriter, r *http.Request) {
 	sortBy := r.URL.Query().Get("sortBy")
 
 	// Get all CNF files from presets directory
-	presetDir := "./presets"
-	entries, err := os.ReadDir(presetDir)
+	entries, err := os.ReadDir(presetsDir)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to read presets directory: %v", err), http.StatusInternalServerError)
 		return
@@ -711,7 +1006,7 @@ func handleCNFFiles(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		presetPath := filepath.Join(presetDir, entry.Name())
+		presetPath := filepath.Join(presetsDir, entry.Name())
 		files, err := filepath.Glob(filepath.Join(presetPath, "*.cnf"))
 		if err != nil {
 			log.Printf("Error listing CNF files in %s: %v", presetPath, err)
@@ -835,12 +1130,281 @@ func parseCNFMetrics(content string) struct {
 	return metrics
 }
 
+// handleHardwareCapabilities returns information about the available hardware accelerator
+func handleHardwareCapabilities(w http.ResponseWriter, r *http.Request) {
+	// Set CORS headers.
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Create a simulated hardware accelerator
+	hardware := walksat.NewSimulatedAccelerator()
+
+	// Get capabilities
+	capabilities := hardware.GetCapabilities()
+
+	// Add additional information
+	response := map[string]interface{}{
+		"available":     hardware.IsAvailable(),
+		"capabilities":  capabilities,
+		"is_simulated":  true,
+		"hardware_type": "simulated",
+		"description":   "Simulated SAT solver hardware accelerator",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// handleGetTestCNF returns the CNF content for a specific test.
+func handleGetTestCNF(w http.ResponseWriter, r *http.Request) {
+	// Set CORS headers.
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	preset := r.URL.Query().Get("preset")
+	testName := r.URL.Query().Get("test")
+	testIndex := r.URL.Query().Get("index")
+
+	if preset == "" {
+		http.Error(w, "preset parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	if testName == "" && testIndex == "" {
+		http.Error(w, "either test name or index parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	presetPath := filepath.Join(presetsDir, preset)
+	if _, err := os.Stat(presetPath); os.IsNotExist(err) {
+		http.Error(w, "preset not found", http.StatusNotFound)
+		return
+	}
+
+	// Get all CNF files in the preset
+	files, err := filepath.Glob(filepath.Join(presetPath, "*.cnf"))
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to list CNF files: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	var targetFile string
+	if testName != "" {
+		// Find by name
+		for _, file := range files {
+			if filepath.Base(file) == testName || filepath.Base(file) == testName+".cnf" {
+				targetFile = file
+				break
+			}
+		}
+	} else if testIndex != "" {
+		// Find by index
+		idx, err := strconv.Atoi(testIndex)
+		if err != nil {
+			http.Error(w, "invalid index parameter", http.StatusBadRequest)
+			return
+		}
+		if idx >= 0 && idx < len(files) {
+			targetFile = files[idx]
+		}
+	}
+
+	if targetFile == "" {
+		http.Error(w, "test not found", http.StatusNotFound)
+		return
+	}
+
+	// Read the file content
+	content, err := os.ReadFile(targetFile)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to read file: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"filename": filepath.Base(targetFile),
+		"preset":   preset,
+		"cnf":      string(content),
+	})
+}
+
+// ValidateResponse represents the result of validating a SAT solution
+type ValidateResponse struct {
+	IsValid         bool            `json:"is_valid"`
+	NumClauses      int             `json:"num_clauses"`
+	UnsatClauses    []int           `json:"unsat_clauses"`
+	NumUnsatClauses int             `json:"num_unsat_clauses"`
+	SatisfiedRatio  float64         `json:"satisfied_ratio"`
+	ClauseStatus    map[string]bool `json:"clause_status,omitempty"` // Maps clause index to satisfaction status
+	Message         string          `json:"message"`
+}
+
+// handleValidateSolution checks if a solution satisfies all clauses in a CNF formula
+func handleValidateSolution(w http.ResponseWriter, r *http.Request) {
+	// Set CORS headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	var req struct {
+		CNF      string `json:"cnf"`
+		Solution string `json:"solution"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, fmt.Sprintf("failed to decode request: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	if req.CNF == "" {
+		http.Error(w, "CNF is required", http.StatusBadRequest)
+		return
+	}
+	if req.Solution == "" {
+		http.Error(w, "Solution is required", http.StatusBadRequest)
+		return
+	}
+
+	// Parse the CNF
+	cnfMetrics := parseCNFMetrics(req.CNF)
+	if cnfMetrics.variables == 0 || cnfMetrics.clauses == 0 {
+		http.Error(w, "Invalid CNF format", http.StatusBadRequest)
+		return
+	}
+
+	// Parse the solution (binary string format)
+	assignment := make([]bool, cnfMetrics.variables)
+	for i, c := range req.Solution {
+		if i >= len(assignment) {
+			break
+		}
+		if c == '1' {
+			assignment[i] = true
+		} else if c == '0' {
+			assignment[i] = false
+		} else {
+			http.Error(w, fmt.Sprintf("Invalid solution format at position %d: %c", i, c), http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Parse clauses from CNF
+	lines := strings.Split(req.CNF, "\n")
+	clauses := [][]int{}
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if len(line) == 0 || line[0] == 'c' || line[0] == 'p' {
+			continue
+		}
+
+		literals := []int{}
+		parts := strings.Fields(line)
+		for _, part := range parts {
+			lit, err := strconv.Atoi(part)
+			if err != nil {
+				continue
+			}
+			if lit == 0 {
+				break
+			}
+			literals = append(literals, lit)
+		}
+
+		if len(literals) > 0 {
+			clauses = append(clauses, literals)
+		}
+	}
+
+	// Count unsatisfied clauses
+	var unsatClauses []int
+	for i, clause := range clauses {
+		clauseSatisfied := false
+		for _, lit := range clause {
+			var (
+				varIndex  = int(math.Abs(float64(lit))) - 1
+				isNegated = lit < 0
+			)
+
+			if varIndex >= len(assignment) {
+				continue // Skip variables not in assignment
+			}
+
+			// Clause is satisfied if:
+			// - literal is positive and variable is true
+			// - literal is negative and variable is false
+			if (isNegated && !assignment[varIndex]) || (!isNegated && assignment[varIndex]) {
+				clauseSatisfied = true
+				break
+			}
+		}
+
+		if !clauseSatisfied {
+			unsatClauses = append(unsatClauses, i+1) // 1-based indexing
+		}
+	}
+
+	satisfiedRatio := 1.0
+	if len(clauses) > 0 {
+		satisfiedRatio = float64(len(clauses)-len(unsatClauses)) / float64(len(clauses))
+	}
+
+	response := ValidateResponse{
+		IsValid:         len(unsatClauses) == 0,
+		NumClauses:      len(clauses),
+		UnsatClauses:    unsatClauses,
+		NumUnsatClauses: len(unsatClauses),
+		SatisfiedRatio:  satisfiedRatio,
+		ClauseStatus:    make(map[string]bool),
+		Message:         fmt.Sprintf("%d out of %d clauses satisfied (%.2f%%)", len(clauses)-len(unsatClauses), len(clauses), satisfiedRatio*100),
+	}
+
+	// Populate the clause status map
+	for i := range clauses {
+		clauseIndex := fmt.Sprintf("%d", i+1) // 1-based indexing
+		clauseSatisfied := true
+
+		// Check if this clause is in the unsatisfied list
+		for _, unsatIdx := range unsatClauses {
+			if unsatIdx == i+1 {
+				clauseSatisfied = false
+				break
+			}
+		}
+
+		response.ClauseStatus[clauseIndex] = clauseSatisfied
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
 func main() {
 	http.HandleFunc("/presets", handleListPresets)
 	http.HandleFunc("/max-tests", handleMaxTests)
 	http.HandleFunc("/daedalus", handleDaedalus)
 	http.HandleFunc("/get-cnf-content", handleGetCNFContent)
 	http.HandleFunc("/cnf-files", handleCNFFiles)
+	http.HandleFunc("/hardware-capabilities", handleHardwareCapabilities)
+	http.HandleFunc("/get-test-cnf", handleGetTestCNF)
+	http.HandleFunc("/validate-solution", handleValidateSolution)
 
 	fmt.Println("API server starting on port 8080...")
 	log.Fatal(http.ListenAndServe(":8080", nil))

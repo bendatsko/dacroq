@@ -1,116 +1,99 @@
 'use client';
 
-import React from 'react';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './Accordion';
-import { cx } from '@/lib/utils';
+import React, { useState } from 'react';
 
 interface JsonExplorerProps {
   data: any;
   className?: string;
-  expandAll?: boolean;
 }
 
-const JsonExplorer: React.FC<JsonExplorerProps> = ({ data, className, expandAll = false }) => {
-  const renderValue = (value: any): React.ReactNode => {
-    if (value === null) return <span className="text-gray-500">null</span>;
-    if (value === undefined) return <span className="text-gray-500">undefined</span>;
-    if (typeof value === 'boolean') return <span className="text-blue-600">{value.toString()}</span>;
-    if (typeof value === 'number') {
-      if (Math.abs(value) < 0.0001 || Math.abs(value) > 10000) {
-        return <span className="text-green-600">{value.toExponential(3)}</span>;
-      }
-      return <span className="text-green-600">{Number(value.toFixed(4))}</span>;
+const computeStats = (value: any): string => {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return 'Empty Array';
+    if (value.every(item => typeof item === 'number')) {
+      const min = Math.min(...value);
+      const max = Math.max(...value);
+      const avg = value.reduce((a, b) => a + b, 0) / value.length;
+      return `min: ${min.toFixed(2)}, max: ${max.toFixed(2)}, avg: ${avg.toFixed(2)}`;
     }
-    if (typeof value === 'string') {
-      const date = new Date(value);
-      if (!isNaN(date.getTime()) && value.includes('T')) {
-        return <span className="text-orange-600">"{date.toLocaleString()}"</span>;
-      }
-      return <span className="text-orange-600">"{value}"</span>;
-    }
-    if (Array.isArray(value)) {
-      if (value.length === 0) return <span className="text-gray-500">[]</span>;
-      if (value.every(v => typeof v === 'number')) {
-        const min = Math.min(...value);
-        const max = Math.max(...value);
-        const avg = value.reduce((a, b) => a + b, 0) / value.length;
-        return (
-          <Accordion type="multiple" defaultValue={expandAll ? ['array'] : []}>
-            <AccordionItem value="array">
-              <AccordionTrigger className="hover:bg-gray-50 rounded-md px-2">
-                <div className="flex items-center gap-2">
-                  <span>Array [{value.length}]</span>
-                  <span className="text-xs text-gray-500">
-                    min: {min.toFixed(2)}, max: {max.toFixed(2)}, avg: {avg.toFixed(2)}
-                  </span>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className="pl-4 border-l-2 border-gray-100">
-                <div className="space-y-1">
-                  {value.map((item, index) => (
-                    <div key={index} className="flex gap-2 hover:bg-gray-50 rounded px-2 py-0.5">
-                      <span className="text-gray-500 w-8">{index}:</span>
-                      {renderValue(item)}
-                    </div>
-                  ))}
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-        );
-      }
-      return (
-        <Accordion type="multiple" defaultValue={expandAll ? ['array'] : []}>
-          <AccordionItem value="array">
-            <AccordionTrigger className="hover:bg-gray-50 rounded-md px-2">
-              Array [{value.length}]
-            </AccordionTrigger>
-            <AccordionContent className="pl-4 border-l-2 border-gray-100">
-              <div className="space-y-1">
-                {value.map((item, index) => (
-                  <div key={index} className="flex gap-2 hover:bg-gray-50 rounded px-2 py-0.5">
-                    <span className="text-gray-500 w-8">{index}:</span>
-                    {renderValue(item)}
-                  </div>
-                ))}
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-      );
-    }
-    if (typeof value === 'object') {
-      const entries = Object.entries(value);
-      if (entries.length === 0) return <span className="text-gray-500">{}</span>;
-      return (
-        <Accordion type="multiple" defaultValue={expandAll ? Object.keys(value) : []}>
-          {entries.map(([key, val]) => (
-            <AccordionItem key={key} value={key}>
-              <AccordionTrigger className="hover:bg-gray-50 rounded-md px-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-violet-600">{key}</span>
-                  {typeof val !== 'object' && <span className="text-gray-400">:</span>}
-                  {typeof val !== 'object' && renderValue(val)}
-                </div>
-              </AccordionTrigger>
-              {typeof val === 'object' && (
-                <AccordionContent className="pl-4 border-l-2 border-gray-100">
-                  {renderValue(val)}
-                </AccordionContent>
-              )}
-            </AccordionItem>
-          ))}
-        </Accordion>
-      );
+    return `Array of length ${value.length}`;
+  }
+  if (typeof value === 'object' && value !== null) {
+    const keys = Object.keys(value);
+    return `Object with ${keys.length} keys`;
+  }
+  return String(value);
+};
+
+const JsonExplorer: React.FC<JsonExplorerProps> = ({ data, className }) => {
+  const [expanded, setExpanded] = useState<{ [key: string]: boolean }>({});
+
+  const toggleExpand = (key: string) => {
+    setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const renderValue = (value: any) => {
+    if (typeof value === 'object' && value !== null) {
+      // Use a preformatted block to display the JSON structure
+      return <pre className="text-sm whitespace-pre-wrap">{JSON.stringify(value, null, 2)}</pre>;
     }
     return <span>{String(value)}</span>;
   };
 
+  const renderRow = (key: string, value: any) => {
+    const type = Array.isArray(value) ? 'Array' : typeof value;
+    const stats = computeStats(value);
+    const isExpandable = typeof value === 'object' && value !== null;
+    return (
+      <React.Fragment key={key}>
+        <tr className="border-b">
+          <td className="p-2">
+            {isExpandable && (
+              <button onClick={() => toggleExpand(key)} className="mr-2 text-blue-600">
+                {expanded[key] ? '-' : '+'}
+              </button>
+            )}
+            {key}
+          </td>
+          <td className="p-2">{type}</td>
+          <td className="p-2">{stats}</td>
+        </tr>
+        {expanded[key] && isExpandable && (
+          <tr>
+            <td colSpan={3} className="p-2 bg-gray-50">
+              {renderValue(value)}
+            </td>
+          </tr>
+        )}
+      </React.Fragment>
+    );
+  };
+
+  if (typeof data !== 'object' || data === null) {
+    return <div className={className}>{renderValue(data)}</div>;
+  }
+
+  // If data is an array, use numeric indices; otherwise use the object's keys.
+  const entries = Array.isArray(data)
+    ? data.map((val, index) => [index.toString(), val])
+    : Object.entries(data);
+
   return (
-    <div className={cx('text-sm font-mono bg-white rounded-lg', className)}>
-      {renderValue(data)}
+    <div className={`overflow-x-auto ${className}`}>
+      <table className="min-w-full border-collapse">
+        <thead>
+          <tr className="bg-gray-200">
+            <th className="p-2 text-left border-b">Key</th>
+            <th className="p-2 text-left border-b">Type</th>
+            <th className="p-2 text-left border-b">Stats / Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map(([key, value]) => renderRow(key, value))}
+        </tbody>
+      </table>
     </div>
   );
 };
 
-export default JsonExplorer; 
+export default JsonExplorer;

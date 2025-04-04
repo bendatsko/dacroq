@@ -172,6 +172,7 @@ const CreateTestWindow: React.FC<CreateTestWindowProps> = ({ isOpen, onClose, on
                 preset: testBatch,
                 start_index: 0,
                 end_index: parseInt(testCount),
+                include_cnf: true // Always include CNF in API response, we'll control it at export time
             };
 
             console.log("Submitting payload to /daedalus:", payload);

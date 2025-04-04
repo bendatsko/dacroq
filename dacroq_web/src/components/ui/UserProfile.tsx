@@ -1,6 +1,5 @@
-"use client"
+"use client";
 
-import { siteConfig } from "@/app/siteConfig"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,141 +8,128 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger
-} from "@/components/DropdownMenu"
-import { cx, focusRing } from "@/lib/utils"
-import { useTheme } from "next-themes"
-import React from "react"
+} from "@/components/DropdownMenu";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "@/lib/firebase";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 
-function DropdownUserProfile() {
-  const [mounted, setMounted] = React.useState(false)
-  const [user, setUser] = React.useState(null)
-  const { theme, setTheme } = useTheme()
-
-  React.useEffect(() => {
-    setMounted(true)
-
-    // Get user data from localStorage
-    const userData = localStorage.getItem("user")
-    if (userData) {
-      try {
-        const parsedUser = JSON.parse(userData)
-        setUser(parsedUser)
-      } catch (error) {
-        console.error("Error parsing user data:", error)
-      }
-    }
-  }, [])
-
-  // Function to get user initials from displayName
-  const getUserInitials = () => {
-    if (!user || !user.displayName) return "U"
-
-    const nameParts = user.displayName.split(" ")
-    if (nameParts.length === 1) return nameParts[0].charAt(0).toUpperCase()
-
-    return (nameParts[0].charAt(0) + nameParts[nameParts.length - 1].charAt(0)).toUpperCase()
-  }
-
-  if (!mounted) {
-    return null
-  }
-
-  return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-label="open settings"
-            className={cx(
-              focusRing,
-              "group rounded-full p-1 hover:bg-gray-100 data-[state=open]:bg-gray-100 hover:dark:bg-gray-400/10 data-[state=open]:dark:bg-gray-400/10",
-            )}
-          >
-            {user && user.photoURL ? (
-              <img
-                src={user.photoURL}
-                alt={user.displayName || "User profile"}
-                className="size-8 rounded-full border border-gray-300 dark:border-gray-800"
-              />
-            ) : (
-              <span
-                className="flex size-8 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-xs font-medium text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300"
-                aria-hidden="true"
-              >
-                {getUserInitials()}
-              </span>
-            )}
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="end"
-          className="!min-w-[calc(var(--radix-dropdown-menu-trigger-width))]"
-        >
-          <DropdownMenuLabel>{user ? user.email : "Not signed in"}</DropdownMenuLabel>
-          {/* <DropdownMenuGroup>
-            <DropdownMenuSubMenu>
-              <DropdownMenuSubMenuTrigger>Theme</DropdownMenuSubMenuTrigger>
-              <DropdownMenuSubMenuContent>
-                <DropdownMenuRadioGroup
-                  value={theme}
-                  onValueChange={(value) => {
-                    setTheme(value)
-                  }}
-                >
-                  <DropdownMenuRadioItem
-                    aria-label="Switch to Light Mode"
-                    value="light"
-                    iconType="check"
-                  >
-                    <RiSunLine className="size-4 shrink-0" aria-hidden="true" />
-                    Light
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem
-                    aria-label="Switch to Dark Mode"
-                    value="dark"
-                    iconType="check"
-                  >
-                    <RiMoonLine
-                      className="size-4 shrink-0"
-                      aria-hidden="true"
-                    />
-                    Dark
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem
-                    aria-label="Switch to System Mode"
-                    value="system"
-                    iconType="check"
-                  >
-                    <RiComputerLine
-                      className="size-4 shrink-0"
-                      aria-hidden="true"
-                    />
-                    System
-                  </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuSubMenuContent>
-            </DropdownMenuSubMenu>
-          </DropdownMenuGroup> */}
-          <DropdownMenuSeparator />
-          <DropdownMenuGroup>
-            <DropdownMenuItem>
-              <a
-                href={siteConfig.baseLinks.login}
-                className="w-full"
-                onClick={(e) => {
-                  e.preventDefault()
-                  localStorage.removeItem("user")
-                  window.location.href = siteConfig.baseLinks.login
-                }}
-              >
-                Sign out
-              </a>
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </>
-  )
+interface User {
+  email: string;
+  displayName?: string;
+  photoURL?: string;
+  uid?: string;
 }
 
-export { DropdownUserProfile }
+function DropdownUserProfile() {
+  const [mounted, setMounted] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  // Track if the avatar image fails to load.
+  const [hasImageError, setHasImageError] = useState(false);
+  const router = useRouter();
+
+  useEffect(() => {
+    setMounted(true);
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        setUser({
+          uid: firebaseUser.uid,
+          email: firebaseUser.email || "",
+          displayName: firebaseUser.displayName || undefined,
+          photoURL: firebaseUser.photoURL || undefined
+        });
+      } else {
+        setUser(null);
+      }
+      setIsLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Reset the error flag whenever the user's photoURL changes.
+  useEffect(() => {
+    setHasImageError(false);
+  }, [user?.photoURL]);
+
+  const getAvatarUrl = (user: User | null) => {
+    if (!user) return null;
+    return user.photoURL || null;
+  };
+
+  const handleSignOut = async () => {
+    try {
+      sessionStorage.setItem("intentionalLogout", "true");
+      localStorage.clear();
+      setUser(null);
+      await auth.signOut();
+      router.push("/login");
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  };
+
+  if (!mounted || isLoading) {
+    return (
+      <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
+    );
+  }
+
+  // Renders the avatar image if available and not in error, otherwise renders a fallback.
+  const renderAvatar = () => {
+    if (getAvatarUrl(user) && !hasImageError) {
+      return (
+        <img
+          src={getAvatarUrl(user) || ""}
+          alt={user?.displayName || "User"}
+          className="w-8 h-8 rounded-full bg-white object-cover"
+          onError={() => setHasImageError(true)}
+        />
+      );
+    } else {
+      const initials =
+        user && user.displayName
+          ? user.displayName
+              .split(" ")
+              .map((part) => part[0])
+              .join("")
+              .toUpperCase()
+              .slice(0, 2)
+          : user?.email?.charAt(0).toUpperCase() || "U";
+
+      return (
+        <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-medium">
+          {initials}
+        </div>
+      );
+    }
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          className="flex items-center gap-2 p-0 hover:bg-transparent"
+        >
+          <div className="relative w-8 h-8">
+            {renderAvatar()}
+          </div>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-56">
+        <DropdownMenuLabel>{user?.displayName || user?.email}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+    
+          <DropdownMenuItem onClick={handleSignOut}>
+            Sign Out
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+export { DropdownUserProfile };

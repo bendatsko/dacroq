@@ -472,31 +472,85 @@ export default function Documentation() {
   const { prev, next } = findAdjacentItems();
 
   return (
-    <main className="flex flex-col lg:flex-row gap-8">
-      {/* Mobile Header */}
-      <div className="block lg:hidden">
-        <div className="flex flex-col gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
-              Documentation
-            </h1>
-            <p className="text-gray-500 sm:text-sm/6 dark:text-gray-500">
-              Comprehensive guides for using the Dacroq platform
-            </p>
+    <main className="container max-w-5xl mx-auto p-4">
+ 
+
+      {/* Main Content */}
+      <div className="flex flex-col lg:flex-row gap-8">
+        {/* Mobile Header */}
+        <div className="block lg:hidden">
+          <div className="flex flex-col gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
+                Documentation
+              </h1>
+              <p className="text-gray-500 sm:text-sm/6 dark:text-gray-500">
+                Comprehensive guides for using the Dacroq platform
+              </p>
+            </div>
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="flex items-center justify-between w-full px-4 py-2 bg-white dark:bg-gray-900 border rounded-lg shadow-sm"
+            >
+              <span>{editTitle}</span>
+              <RiArrowDownSLine className={`transition-transform ${isMobileMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
           </div>
-          <button
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="flex items-center justify-between w-full px-4 py-2 bg-white dark:bg-gray-900 border rounded-lg shadow-sm"
-          >
-            <span>{editTitle}</span>
-            <RiArrowDownSLine className={`transition-transform ${isMobileMenuOpen ? 'rotate-180' : ''}`} />
-          </button>
+
+          {/* Mobile Navigation Dropdown */}
+          {isMobileMenuOpen && (
+            <div className="mt-2 bg-white dark:bg-gray-900 border rounded-lg shadow-lg p-4">
+              <div className="mb-4">
+                <div className="relative">
+                  <RiSearchLine className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
+                  <input
+                    type="text"
+                    placeholder="Search docs..."
+                    className="pl-8 w-full bg-gray-100 dark:bg-gray-800 border-none rounded-md py-2 text-sm"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+              </div>
+              {docsStructure.map((section) => (
+                <div key={section.id} className="mb-4">
+                  <button
+                    onClick={() => toggleSection(section.id)}
+                    className="flex items-center w-full text-left font-medium"
+                  >
+                    <span className="mr-2">{section.icon}</span>
+                    <span>{section.title}</span>
+                    <RiArrowDownSLine
+                      className={`ml-auto transition-transform ${expandedSections.includes(section.id) ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+                  {expandedSections.includes(section.id) && (
+                    <ul className="pl-6 space-y-2">
+                      {section.items.map((item) => (
+                        <li key={item.id}>
+                          <button
+                            onClick={() => {
+                              setActiveSection(item.id);
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`text-sm ${activeSection === item.id ? 'text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-700 dark:text-gray-300'}`}
+                          >
+                            {item.title}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Mobile Navigation Dropdown */}
-        {isMobileMenuOpen && (
-          <div className="mt-2 bg-white dark:bg-gray-900 border rounded-lg shadow-lg p-4">
-            <div className="mb-4">
+        {/* Desktop Sidebar */}
+        <div className="hidden lg:block w-64 flex-shrink-0">
+          <div className="sticky top-0">
+            <div className="mb-6">
               <div className="relative">
                 <RiSearchLine className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
                 <input
@@ -508,212 +562,163 @@ export default function Documentation() {
                 />
               </div>
             </div>
-            {docsStructure.map((section) => (
-              <div key={section.id} className="mb-4">
-                <button
-                  onClick={() => toggleSection(section.id)}
-                  className="flex items-center w-full text-left font-medium"
-                >
-                  <span className="mr-2">{section.icon}</span>
-                  <span>{section.title}</span>
-                  <RiArrowDownSLine
-                    className={`ml-auto transition-transform ${expandedSections.includes(section.id) ? 'rotate-180' : ''}`}
-                  />
-                </button>
-                {expandedSections.includes(section.id) && (
-                  <ul className="pl-6 space-y-2">
-                    {section.items.map((item) => (
-                      <li key={item.id}>
-                        <button
-                          onClick={() => {
-                            setActiveSection(item.id);
-                            setIsMobileMenuOpen(false);
-                          }}
-                          className={`text-sm ${activeSection === item.id ? 'text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-700 dark:text-gray-300'}`}
-                        >
-                          {item.title}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
 
-      {/* Desktop Sidebar */}
-      <div className="hidden lg:block w-64 flex-shrink-0">
-        <div className="sticky top-0">
-          <div className="mb-6">
-            <div className="relative">
-              <RiSearchLine className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
+            <nav className="space-y-6">
+              {docsStructure.map((section) => (
+                <div key={section.id} className="space-y-2">
+                  <button
+                    onClick={() => toggleSection(section.id)}
+                    className="flex items-center w-full text-left font-medium"
+                  >
+                    <span className="mr-2">{section.icon}</span>
+                    <span>{section.title}</span>
+                    <RiArrowDownSLine
+                      className={`ml-auto transition-transform ${expandedSections.includes(section.id) ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+                  {expandedSections.includes(section.id) && (
+                    <ul className="pl-6 space-y-2">
+                      {section.items.map((item) => (
+                        <li key={item.id}>
+                          <button
+                            onClick={() => setActiveSection(item.id)}
+                            className={`text-sm ${activeSection === item.id ? 'text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-700 dark:text-gray-300'}`}
+                          >
+                            {item.title}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </nav>
+
+            <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
+              <h3 className="font-medium text-sm mb-2">Need more help?</h3>
+              <p className="text-gray-600 dark:text-gray-400 text-sm mb-3">
+                If you can't find what you're looking for in our documentation, reach out to our support team.
+              </p>
+              <a
+                href="mailto:help@dacroq.eecs.umich.edu"
+                className="text-blue-600 dark:text-blue-400 text-sm flex items-center"
+              >
+                Contact Support
+                <RiExternalLinkLine className="ml-1 size-4" />
+              </a>
+            </div>
+          </div>
+        </div>
+
+        {/* Main content */}
+        <div className="flex-1">
+          <Divider className="block lg:hidden" />
+
+          {/* Documentation Header */}
+          <div className="flex items-center justify-between mb-6">
+            {isEditing ? (
               <input
                 type="text"
-                placeholder="Search docs..."
-                className="pl-8 w-full bg-gray-100 dark:bg-gray-800 border-none rounded-md py-2 text-sm"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="text-2xl font-semibold w-full bg-transparent border-b border-gray-200 dark:border-gray-800 focus:outline-none focus:border-blue-500"
               />
-            </div>
+            ) : (
+              <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
+                {editTitle}
+              </h2>
+            )}
+
+            {isAdmin && !isEditing && (
+              <Button
+                variant="outline"
+                onClick={handleStartEditing}
+                className="flex items-center gap-2"
+              >
+                <RiEditLine className="size-4" />
+                Edit
+              </Button>
+            )}
           </div>
 
-          <nav className="space-y-6">
-            {docsStructure.map((section) => (
-              <div key={section.id} className="space-y-2">
-                <button
-                  onClick={() => toggleSection(section.id)}
-                  className="flex items-center w-full text-left font-medium"
-                >
-                  <span className="mr-2">{section.icon}</span>
-                  <span>{section.title}</span>
-                  <RiArrowDownSLine
-                    className={`ml-auto transition-transform ${expandedSections.includes(section.id) ? 'rotate-180' : ''}`}
-                  />
-                </button>
-                {expandedSections.includes(section.id) && (
-                  <ul className="pl-6 space-y-2">
-                    {section.items.map((item) => (
-                      <li key={item.id}>
-                        <button
-                          onClick={() => setActiveSection(item.id)}
-                          className={`text-sm ${activeSection === item.id ? 'text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-700 dark:text-gray-300'}`}
-                        >
-                          {item.title}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ))}
-          </nav>
-
-          <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
-            <h3 className="font-medium text-sm mb-2">Need more help?</h3>
-            <p className="text-gray-600 dark:text-gray-400 text-sm mb-3">
-              If you can't find what you're looking for in our documentation, reach out to our support team.
-            </p>
-            <a
-              href="mailto:help@dacroq.eecs.umich.edu"
-              className="text-blue-600 dark:text-blue-400 text-sm flex items-center"
-            >
-              Contact Support
-              <RiExternalLinkLine className="ml-1 size-4" />
-            </a>
-          </div>
-        </div>
-      </div>
-
-      {/* Main content */}
-      <div className="flex-1">
-        <Divider className="block lg:hidden" />
-
-        {/* Documentation Header */}
-        <div className="flex items-center justify-between mb-6">
+          {/* Documentation Content */}
           {isEditing ? (
-            <input
-              type="text"
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              className="text-2xl font-semibold w-full bg-transparent border-b border-gray-200 dark:border-gray-800 focus:outline-none focus:border-blue-500"
-            />
+            <Card className="p-6 shadow-sm">
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <div className="flex items-center justify-between mb-4">
+                  <TabsList>
+                    <TabsTrigger value="edit">Edit</TabsTrigger>
+                    <TabsTrigger value="preview">Preview</TabsTrigger>
+                  </TabsList>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={handleCancel}
+                      className="flex items-center gap-2"
+                    >
+                      <RiCloseLine className="size-4" />
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleSave}
+                      className="flex items-center gap-2"
+                    >
+                      <RiSaveLine className="size-4" />
+                      Save
+                    </Button>
+                  </div>
+                </div>
+
+                <TabsContent value="edit">
+                  <Textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    className="min-h-[500px] font-mono text-sm p-4 bg-gray-50 dark:bg-gray-900"
+                    placeholder="Enter markdown content..."
+                  />
+                </TabsContent>
+
+                <TabsContent value="preview">
+                  <div className="documentation-content">
+                    {renderMarkdown(editContent)}
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </Card>
           ) : (
-            <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
-              {editTitle}
-            </h2>
-          )}
-
-          {isAdmin && !isEditing && (
-            <Button
-              variant="outline"
-              onClick={handleStartEditing}
-              className="flex items-center gap-2"
-            >
-              <RiEditLine className="size-4" />
-              Edit
-            </Button>
-          )}
-        </div>
-
-        {/* Documentation Content */}
-        {isEditing ? (
-          <Card className="p-6 shadow-sm">
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <div className="flex items-center justify-between mb-4">
-                <TabsList>
-                  <TabsTrigger value="edit">Edit</TabsTrigger>
-                  <TabsTrigger value="preview">Preview</TabsTrigger>
-                </TabsList>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={handleCancel}
-                    className="flex items-center gap-2"
-                  >
-                    <RiCloseLine className="size-4" />
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleSave}
-                    className="flex items-center gap-2"
-                  >
-                    <RiSaveLine className="size-4" />
-                    Save
-                  </Button>
-                </div>
+            <Card className="p-6 shadow-sm">
+              <div className="documentation-content">
+                {renderMarkdown(editContent)}
               </div>
+            </Card>
+          )}
 
-              <TabsContent value="edit">
-                <Textarea
-                  value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
-                  className="min-h-[500px] font-mono text-sm p-4 bg-gray-50 dark:bg-gray-900"
-                  placeholder="Enter markdown content..."
-                />
-              </TabsContent>
-
-              <TabsContent value="preview">
-                <div className="documentation-content">
-                  {renderMarkdown(editContent)}
-                </div>
-              </TabsContent>
-            </Tabs>
-          </Card>
-        ) : (
-          <Card className="p-6 shadow-sm">
-            <div className="documentation-content">
-              {renderMarkdown(editContent)}
+          {/* Navigation buttons */}
+          <div className="mt-8 flex flex-wrap justify-between gap-4 pt-6 border-t">
+            <div>
+              {prev && (
+                <button
+                  onClick={() => setActiveSection(prev.id)}
+                  className="flex items-center text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+                >
+                  <RiArrowRightSLine className="mr-1 size-4 rotate-180" />
+                  <span className="text-sm mr-2">Previous</span>
+                  <span className="text-sm font-medium">{prev.title}</span>
+                </button>
+              )}
             </div>
-          </Card>
-        )}
-
-        {/* Navigation buttons */}
-        <div className="mt-8 flex flex-wrap justify-between gap-4 pt-6 border-t">
-          <div>
-            {prev && (
-              <button
-                onClick={() => setActiveSection(prev.id)}
-                className="flex items-center text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
-              >
-                <RiArrowRightSLine className="mr-1 size-4 rotate-180" />
-                <span className="text-sm mr-2">Previous</span>
-                <span className="text-sm font-medium">{prev.title}</span>
-              </button>
-            )}
-          </div>
-          <div>
-            {next && (
-              <button
-                onClick={() => setActiveSection(next.id)}
-                className="flex items-center text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
-              >
-                <span className="text-sm mr-2">Next</span>
-                <span className="text-sm font-medium">{next.title}</span>
-                <RiArrowRightSLine className="ml-1 size-4" />
-              </button>
-            )}
+            <div>
+              {next && (
+                <button
+                  onClick={() => setActiveSection(next.id)}
+                  className="flex items-center text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+                >
+                  <span className="text-sm mr-2">Next</span>
+                  <span className="text-sm font-medium">{next.title}</span>
+                  <RiArrowRightSLine className="ml-1 size-4" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

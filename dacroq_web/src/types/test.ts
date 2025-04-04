@@ -99,27 +99,43 @@ export interface TestRun {
     nUnsatClauses: number[];
     configurations: number[][];
     results?: {
-        solverMetrics: SolverMetrics;
-        hardwareMetrics: HardwareMetrics;
-        performanceMetrics: PerformanceMetrics;
-        resourceUsage: ResourceUsage;
-        powerUsage: PowerUsage;
-        systemInfo: SystemInfo;
-        metrics: CNFMetrics;
-        batchStatistics: BatchStatistics;
-        metadata: {
-            problemId: string;
-            solutionPresent: boolean;
-            isUnsolved: boolean;
-            powerMw: number;
-            etsNj: number;
-            tts: string;
-            ttsCiLower: string;
-            ttsCiUpper: string;
-        };
-        inputFiles: string[];
-        outputFiles: string[];
-        quiccConfig: string;
+        timestamp: string;
+        summary: Record<string, any>;
+        results: Array<{
+            solution_found: boolean;
+            solverMetrics: SolverMetrics;
+            hardwareMetrics: HardwareMetrics;
+            performanceMetrics: PerformanceMetrics;
+            resourceUsage: ResourceUsage;
+            powerUsage: PowerUsage;
+            systemInfo: SystemInfo;
+            metrics: CNFMetrics;
+            batchStatistics: BatchStatistics;
+            metadata: {
+                problemId: string;
+                solutionPresent: boolean;
+                isUnsolved: boolean;
+                powerMw: number;
+                etsNj: number;
+                tts: string;
+                ttsCiLower: string;
+                ttsCiUpper: string;
+            };
+            inputFiles: string[];
+            outputFiles: string[];
+            quiccConfig: string;
+            hardware_time_seconds: string;
+            cpu_time_seconds: string;
+            cpu_energy_joules: string;
+            hardware_energy_joules: string;
+            hardware_calls: string;
+            solver_iterations: string;
+            n_unsat_clauses: string;
+            configurations: string;
+            cnf?: string;
+            original_cnf?: string;
+            solution_string?: string;
+        }>;
     };
     createdBy?: {
         uid: string;
