@@ -9,18 +9,56 @@
 /vendor/
 /go/
 
-# Node.js
+# Node.js - More aggressive patterns
 node_modules/
+**/node_modules/
+**/node_modules/**
+node_modules/**
+.npm
+.yarn/
+.pnp.*
+.npmrc
+yarn.lock
+package-lock.json
+pnpm-lock.yaml
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
-.npm
 .yarn/cache
 .yarn/unplugged
 .yarn/build-state.yml
 .yarn/install-state.gz
-.pnp.*
+.yarn/plugins
+.yarn/sdks
+.yarn/versions
+.yarn/patches
+.yarn/install-state.gz
+.yarn/install-state.json
+.yarn/install-state.yml
+.yarn/install-state.yaml
+.yarn/install-state.toml
+.yarn/install-state.json5
+.yarn/install-state.js
+.yarn/install-state.mjs
+.yarn/install-state.cjs
+.yarn/install-state.ts
+.yarn/install-state.tsx
+.yarn/install-state.jsx
+.yarn/install-state.vue
+.yarn/install-state.svelte
+.yarn/install-state.astro
+.yarn/install-state.mdx
+.yarn/install-state.md
+.yarn/install-state.txt
+.yarn/install-state.html
+.yarn/install-state.css
+.yarn/install-state.scss
+.yarn/install-state.sass
+.yarn/install-state.less
+.yarn/install-state.styl
+.yarn/install-state.stylus
+.yarn/install-state.postcss
 
 # Next.js
 .next/
