@@ -1,6 +1,0 @@
-c Example 3-SAT instance
-p cnf 3 4
-1 2 3 0
-1 -2 -3 0
--1 2 -3 0
--1 -2 3 0
