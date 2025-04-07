@@ -1,0 +1,50 @@
+Processing batch: t_batch_0
+Simulation parameters: correction_coeff=3.0, cycle_us=0.125
+Reading simulation data from sims/t_batch_0.csv...
+
+Debug: First 5 lines of CSV file:
+  Problem,TTS_sim_cycles,TTS_prediced,Solution,,,,,,,,,,,,,,,,,,,,,,
+  CO_formula_0,142,17.75,00000010000100110010010000011000100101100010000100000100010000100100010100101011010001100100101100110000000110000010000011100100000001101100010010000000100100000000101101011100000101000011001110110000,,,,,,,,,,,,,,,,,,,,,,
+  CO_formula_1,44,5.5,10001111000000110100010010000010001100010001010100000000110000010110010000100000010000111101000101000110010000100000000101010001000000000000110000000100000110011000001000000000011000011001100000000101,,,,,,,,,,,,,,,,,,,,,,
+  CO_formula_2,34,4.25,11000000001010000100000000000001000010001010000000000110000010000010011100000000010100011101101000011000000000001100000000011010001000010001110000100010111000110111000000000010010001001000000000101110,,,,,,,,,,,,,,,,,,,,,,
+  CO_formula_3,52,6.5,10100000110001010011001000100010100000001010000000000010000100101000111000000000101011000001010001011000010000011000101000000101011001001001010000000000000110010100110001000000000000100010000000001100,,,,,,,,,,,,,,,,,,,,,,
+Debug: Using delimiter: ',' (tab_count=0, comma_count=25)
+Debug: Detected columns: ['Problem', 'TTS_sim_cycles', 'TTS_prediced', 'Solution', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']
+Parsed 20 problems from CSV
+  Problem 1: CO_formula_0, cycles: 142, solved: Yes, solution length: 200, power: 0 mW, energy: 0 nJ
+  Problem 2: CO_formula_1, cycles: 44, solved: Yes, solution length: 200, power: 0 mW, energy: 0 nJ
+  Problem 3: CO_formula_2, cycles: 34, solved: Yes, solution length: 200, power: 0 mW, energy: 0 nJ
+Found 20 problems with simulation data.
+  - 20 solved problems
+  - 0 unsolved problems
+Found 20 CNF files in problems/t_batch_0
+Created 2 alternative name mappings to handle naming variations
+Found 22 CNF files for batch t_batch_0.
+Generating benchmark data with 10 runs per problem...
+Problem CO_formula_0: Found 200 variables in problems/t_batch_0/C0_formula_9.cnf
+Problem CO_formula_1: Found match with variant C0_formula_1, 200 variables in problems/t_batch_0/C0_formula_1.cnf
+Problem CO_formula_2: Found match with variant C0_formula_2, 200 variables in problems/t_batch_0/C0_formula_2.cnf
+Problem CO_formula_3: Found match with variant C0_formula_3, 200 variables in problems/t_batch_0/C0_formula_3.cnf
+Problem CO_formula_4: Found match with variant C0_formula_4, 200 variables in problems/t_batch_0/C0_formula_4.cnf
+Problem CO_formula_5: Found match with variant C0_formula_5, 200 variables in problems/t_batch_0/C0_formula_5.cnf
+Problem CO_formula_6: Found match with variant C0_formula_6, 200 variables in problems/t_batch_0/C0_formula_6.cnf
+Problem CO_formula_7: Found match with variant C0_formula_7, 200 variables in problems/t_batch_0/C0_formula_7.cnf
+Problem CO_formula_8: Found match with variant C0_formula_8, 200 variables in problems/t_batch_0/C0_formula_8.cnf
+Problem CO_formula_9: Found match with variant C0_formula_9, 200 variables in problems/t_batch_0/C0_formula_9.cnf
+Problem CO_formula_10: Found match with variant C0_formula_10, 200 variables in problems/t_batch_0/C0_formula_10.cnf
+Problem CO_formula_11: Found match with variant C0_formula_11, 200 variables in problems/t_batch_0/C0_formula_11.cnf
+Problem CO_formula_12: Found match with variant C0_formula_12, 200 variables in problems/t_batch_0/C0_formula_12.cnf
+Problem CO_formula_13: Found match with variant C0_formula_13, 200 variables in problems/t_batch_0/C0_formula_13.cnf
+Problem CO_formula_14: Found match with variant C0_formula_14, 200 variables in problems/t_batch_0/C0_formula_14.cnf
+Problem CO_formula_15: Found match with variant C0_formula_15, 200 variables in problems/t_batch_0/C0_formula_15.cnf
+Problem CO_formula_16: Found match with variant C0_formula_16, 200 variables in problems/t_batch_0/C0_formula_16.cnf
+Problem CO_formula_17: Found match with variant C0_formula_17, 200 variables in problems/t_batch_0/C0_formula_17.cnf
+Problem CO_formula_18: Found match with variant C0_formula_18, 200 variables in problems/t_batch_0/C0_formula_18.cnf
+Problem CO_formula_19: Found match with variant C0_formula_19, 200 variables in problems/t_batch_0/C0_formula_19.cnf
+
+Benchmark Summary:
+  Total problems: 20
+  Solved problems: 20 (100.00%)
+  Average TTS for solved problems: 0.000056 seconds
+Successfully created benchmark data for 20 problems.
+Output saved to output/t_batch_0_benchmark.json
