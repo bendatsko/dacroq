@@ -1,0 +1,28 @@
+{
+  "name": "Convert CNF to JSON Test",
+  "method": "POST",
+  "url": "http://localhost:5000/convert-to-json",
+  "headers": {
+    "Content-Type": "multipart/form-data"
+  },
+  "body": {
+    "type": "form-data",
+    "form-data": [
+      {
+        "key": "batch_name",
+        "value": "test_batch",
+        "type": "text"
+      },
+      {
+        "key": "cnf_files",
+        "value": "@test.cnf",
+        "type": "file"
+      },
+      {
+        "key": "csv_file",
+        "value": "@test.csv",
+        "type": "file"
+      }
+    ]
+  }
+} 

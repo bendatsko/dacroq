@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-variant-ligatures: none;
+}
+
+@font-face {
+  font-family: 'JetBrainsMono';
+  font-weight: 100 900;
+  font-display: block;
+  font-style: normal;
+  font-named-instance: 'Regular';
+  src: url('/fonts/JetBrainsMono[wght].woff2') format('woff2');
+}
+
+/* Remove Safari input shadow on mobile */
+input[type='text'],
+input[type='email'] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+@layer utilities {
+  .mask {
+    mask-image: radial-gradient(rgba(0, 0, 0, 1) 0%, transparent 80%);
+  }
+
+  .shadow-tremor {
+    @apply shadow-xl shadow-black/5;
+  }
+}
+
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
