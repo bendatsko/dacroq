@@ -12,6 +12,7 @@ import {
   RiSettings4Line,
   RiDragMove2Line,
   RiRefreshLine,
+  RiCheckLine,
 } from "@remixicon/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo } from "react";
@@ -51,6 +52,8 @@ import {
 } from "firebase/firestore";
 
 // Types
+import { TestRun, SolverMetrics, HardwareMetrics, PerformanceMetrics, ResourceUsage, PowerUsage, SystemInfo, CNFMetrics, BatchStatistics } from "@/types/test";
+
 interface ChipStatus {
   id: string;
   name: string;
@@ -60,30 +63,41 @@ interface ChipStatus {
   avgRuntime?: number;
 }
 
-export interface TestRun {
-  id: string;
-  name: string;
-  chipType: string;
-  status: string;
-  created: any;
-  completed?: any;
-  results?: any;
-  createdBy?: {
-    uid: string;
-    name: string;
-    email: string;
-    role: string;
-    avatar: string;
-    photoURL?: string;
-    displayName?: string;
-  };
-}
-
-// Add interface for test run results
+// Update the TestRunResult interface to match the results structure
 interface TestRunResult {
-  success: boolean;
-  runtime?: number;
-  [key: string]: any;
+  solution_found: boolean;
+  solverMetrics: SolverMetrics;
+  hardwareMetrics: HardwareMetrics;
+  performanceMetrics: PerformanceMetrics;
+  resourceUsage: ResourceUsage;
+  powerUsage: PowerUsage;
+  systemInfo: SystemInfo;
+  metrics: CNFMetrics;
+  batchStatistics: BatchStatistics;
+  metadata: {
+    problemId: string;
+    solutionPresent: boolean;
+    isUnsolved: boolean;
+    powerMw: number;
+    etsNj: number;
+    tts: string;
+    ttsCiLower: string;
+    ttsCiUpper: string;
+  };
+  inputFiles: string[];
+  outputFiles: string[];
+  quiccConfig: string;
+  hardware_time_seconds: string;
+  cpu_time_seconds: string;
+  cpu_energy_joules: string;
+  hardware_energy_joules: string;
+  hardware_calls: string;
+  solver_iterations: string;
+  n_unsat_clauses: string;
+  configurations: string;
+  cnf?: string;
+  original_cnf?: string;
+  solution_string?: string;
 }
 
 // Card configuration interfaces
@@ -248,6 +262,7 @@ export default function HardwareDashboard() {
   });
   const [cardConfigs, setCardConfigs] = useState<CardConfig[]>([]);
   const [isEditingCards, setIsEditingCards] = useState(false);
+  const [isResultsExpanded, setIsResultsExpanded] = useState(false);
 
   // Mock chips
   const mockChips: ChipStatus[] = [
@@ -375,8 +390,8 @@ export default function HardwareDashboard() {
         const testRuns = test.results.results as TestRunResult[];
         testRuns.forEach((run) => {
           totalRuns++;
-          if (run.success) successfulRuns++;
-          if (run.runtime) totalRuntime += run.runtime;
+          if (run.solution_found) successfulRuns++;
+          if (run.hardware_time_seconds) totalRuntime += parseFloat(run.hardware_time_seconds);
         });
       }
     });
@@ -626,12 +641,8 @@ export default function HardwareDashboard() {
       cell: ({ row }: any) => (
         <div className="flex justify-end">
           <Button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleViewResults(row.original);
-            }}
             variant="ghost"
-            size="sm"
+            onClick={() => handleViewResults(row.original)}
             className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
             title="View test details"
           >
@@ -919,190 +930,105 @@ export default function HardwareDashboard() {
   const totalChips = mockChips.length;
 
   return (
-    <main className="p-6">
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
-            Hardware Dashboard
-          </h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-500">
-            Real-time monitoring of hardware solvers with performance metrics
-          </p>
-        </div>
-        <div className="flex gap-4">
-          <Button
-            onClick={() => setIsOpen(true)}
-            className="flex items-center gap-2 text-base sm:text-sm"
-          >
-            New Hardware Benchmark Test
-            <RiAddLine className="h-5 w-5 shrink-0" aria-hidden="true" />
-          </Button>
-        </div>
-      </div>
-      <Divider className="mb-6" />
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-medium text-gray-900 dark:text-gray-50">
-              Statistics
-            </h2>
-          </div>
-          <div className="flex items-center gap-2">
-            {isAdmin && (
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={() => setIsEditingCards(!isEditingCards)}
-                  variant="ghost"
-                  className="text-sm text-gray-600 dark:text-gray-400"
-                  title={isEditingCards ? "Done customizing" : "Customize cards"}
-                >
-                  <RiSettings4Line className="h-4 w-4" />
-                </Button>
-                <Button
-                  onClick={() => setIsCardsExpanded(!isCardsExpanded)}
-                  variant="ghost"
-                  className="text-sm text-gray-600 dark:text-gray-400"
-                  title={isCardsExpanded ? "Collapse stats" : "Expand stats"}
-                >
-                  {isCardsExpanded ? (
-                    <RiArrowUpLine className="h-4 w-4" />
-                  ) : (
-                    <RiArrowDownLine className="h-4 w-4" />
-                  )}
-                </Button>
-                {isEditingCards && (
-                  <Button
-                    onClick={handleResetLayout}
-                    variant="ghost"
-                    className="text-sm text-gray-600 dark:text-gray-400"
-                    title="Reset layout"
-                  >
-                    <RiRefreshLine className="h-4 w-4" />
-                  </Button>
-                )}
+    <main className="container max-w-4xl mx-auto p-4">
+      {/* Header with Instructions */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50 mb-4">
+          Hardware Dashboard
+        </h1>
+        <Card className="p-6">
+          <div className="prose dark:prose-invert max-w-none">
+            <h3 className="text-lg font-medium mb-4">Overview</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg">
+                <div className="text-sm text-gray-500 dark:text-gray-400">Total Tests</div>
+                <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                  {testMetrics.totalTests}
+                </div>
               </div>
-            )}
+              <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg">
+                <div className="text-sm text-gray-500 dark:text-gray-400">Success Rate</div>
+                <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                  {testMetrics.successRate.toFixed(1)}%
+                </div>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg">
+                <div className="text-sm text-gray-500 dark:text-gray-400">Avg Runtime</div>
+                <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                  {testMetrics.avgRuntime.toFixed(0)}ms
+                </div>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg">
+                <div className="text-sm text-gray-500 dark:text-gray-400">Hardware Status</div>
+                <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                  {onlineChips}/{totalChips} Online
+                </div>
+              </div>
+            </div>
+            
+            {/* Hardware Status */}
+            <div className="mt-6 space-y-2">
+              <h4 className="font-medium">Hardware Status:</h4>
+              {mockChips.map((chip) => (
+                <div key={chip.id} className="flex items-center gap-2">
+                  {chip.status === "online" ? (
+                    <RiCheckLine className="h-5 w-5 text-green-500" />
+                  ) : (
+                    <RiCloseLine className="h-5 w-5 text-gray-400" />
+                  )}
+                  <span className="flex-1">{chip.name}</span>
+                  <span className={cn(
+                    "px-2 py-0.5 text-xs rounded-full",
+                    chip.status === "online" 
+                      ? "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300"
+                      : "bg-gray-50 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                  )}>
+                    {chip.status.charAt(0).toUpperCase() + chip.status.slice(1)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Action Button */}
+      <div className="flex justify-end mb-6">
+        <Button onClick={() => setIsOpen(true)} className="flex items-center gap-2">
+          <RiAddLine className="h-5 w-5" />
+          New Hardware Test
+        </Button>
+      </div>
+
+      {/* Test Results Section */}
+      <Card className="mb-4">
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Test Results
+            </h2>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                onClick={handleResetLayout}
+                className="flex items-center gap-2"
+                title="Reset layout"
+              >
+                <RiRefreshLine className="h-4 w-4" />
+                Reset Layout
+              </Button>
+            </div>
           </div>
         </div>
-
-        <div
-          id="dashboard-stats"
-          className={cn(
-            "transition-all duration-300 ease-in-out",
-            isCardsExpanded 
-              ? "max-h-[1000px] opacity-100" 
-              : "max-h-0 overflow-hidden opacity-0 mb-0"
-          )}
-          role="region"
-          aria-label="Dashboard statistics"
-        >
-          <DragDropContext onDragEnd={handleDragEnd}>
-            <Droppable droppableId="cards" direction="horizontal">
-              {(provided) => (
-                <dl
-                  {...provided.droppableProps}
-                  ref={provided.innerRef}
-                  className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-2"
-                >
-                  {cardConfigs.map((config, index) => (
-                    <Draggable
-                      key={config.id}
-                      draggableId={config.id}
-                      index={index}
-                      isDragDisabled={!isEditingCards}
-                    >
-                      {(provided, snapshot) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          className={cn("relative", snapshot.isDragging ? "opacity-50" : "")}
-                        >
-                          {config.visible && (
-                            <Card className="relative rounded-md shadow-sm">
-                              {isEditingCards && (
-                                <>
-                                  <div
-                                    {...provided.dragHandleProps}
-                                    className="absolute top-2 left-2 cursor-move text-gray-400"
-                                  >
-                                    <RiDragMove2Line className="h-4 w-4" />
-                                  </div>
-                                  <CardCustomizer
-                                    config={config}
-                                    onConfigChange={(newConfig) => {
-                                      const newConfigs = cardConfigs.map((c) =>
-                                        c.id === config.id ? newConfig : c
-                                      );
-                                      setCardConfigs(newConfigs);
-                                    }}
-                                    onDelete={() => {
-                                      setCardConfigs((prev) =>
-                                        prev.filter((c) => c.id !== config.id)
-                                      );
-                                    }}
-                                    availableMetrics={availableMetrics}
-                                  />
-                                </>
-                              )}
-                              <CardContent className="p-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                  {config.metrics?.map((metric) => (
-                                    <div
-                                      key={metric}
-                                      className="flex flex-col items-center justify-center rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50"
-                                    >
-                                      <span className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                                        {metric === "totalTests" && testMetrics.totalTests}
-                                        {metric === "lastHourTests" && testMetrics.lastHourTests}
-                                        {metric === "successRate" &&
-                                          `${testMetrics.successRate.toFixed(1)}%`}
-                                        {metric === "avgRuntime" &&
-                                          `${testMetrics.avgRuntime.toFixed(0)}ms`}
-                                        {metric === "onlineChips" &&
-                                          mockChips.filter((c) => c.status === "online").length}
-                                        {metric === "totalChips" && mockChips.length}
-                                      </span>
-                                      <span className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                        {metric === "totalTests" && "Total Tests"}
-                                        {metric === "lastHourTests" && "Last Hour"}
-                                        {metric === "successRate" && "Success Rate"}
-                                        {metric === "avgRuntime" && "Avg Runtime"}
-                                        {metric === "onlineChips" && "Online Chips"}
-                                        {metric === "totalChips" && "Total Chips"}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          )}
-                        </div>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
-                  {isEditingCards && (
-                    <button
-                      onClick={addNewCard}
-                      className="flex items-center justify-center rounded-md border-2 border-dashed border-gray-300 p-6 text-sm text-gray-600 transition-colors hover:border-gray-400 dark:border-gray-700 dark:text-gray-400 dark:hover:border-gray-600"
-                    >
-                      <RiAddLine className="h-4 w-4" />
-                      <span>Add New Card</span>
-                    </button>
-                  )}
-                </dl>
-              )}
-            </Droppable>
-          </DragDropContext>
+        <div className="divide-y divide-gray-200 dark:divide-gray-700">
+          <TestTable
+            tests={tests}
+            columns={columns}
+            handleViewResults={handleViewResults}
+            isAdmin={isAdmin}
+          />
         </div>
-
-        <TestTable
-          tests={tests}
-          columns={columns}
-          handleViewResults={handleViewResults}
-          isAdmin={isAdmin}
-        />
-      </div>
+      </Card>
 
       <CreateTestWindow
         isOpen={isOpen}
@@ -1111,7 +1037,6 @@ export default function HardwareDashboard() {
           const test = tests.find((t) => t.id === testId);
           if (test) setSelectedTest(test);
         }}
-        onCreateTest={handleCreateTest}
       />
     </main>
   );

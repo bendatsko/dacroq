@@ -1,302 +1,258 @@
 package walksat
 
 import (
-	"errors"
+	"bufio"
+	"fmt"
 	"math/rand"
+	"os"
+	"strconv"
+	"strings"
 	"time"
 )
 
-// HardwareAccelerator defines the interface for a SAT solving hardware accelerator
+// SolverConfig defines the configuration for the solver
+type SolverConfig struct {
+	// Basic solver parameters
+	MaxFlips        int     // Maximum number of flips to try
+	MaxTries        int     // Maximum number of tries
+	Noise           float64 // Probability of random walk
+	Timeout         float64 // Maximum time in microseconds
+	RestartProb     float64 // Probability of restart
+	HardwareMode    bool    // Whether to use hardware acceleration
+	MaxHardwareTime float64 // Maximum hardware time in microseconds
+}
+
+// Literal represents a variable with a sign (true = negated, false = positive)
+type Literal struct {
+	Var  int
+	Sign bool
+}
+
+// Clause represents a disjunction of literals
+type Clause []Literal
+
+// Formula represents a CNF formula
+type Formula struct {
+	Clauses      []Clause
+	NumVars      int
+	NumClauses   int
+	VarToClauses map[int][]ClauseInfo
+}
+
+// ClauseInfo stores clause index and the sign of the variable in that clause
+type ClauseInfo struct {
+	Index int
+	Sign  bool
+}
+
+// HardwareMetrics tracks performance metrics for the hardware accelerator
+type HardwareMetrics struct {
+	// Problem Characteristics
+	ProblemSize       int
+	ClauseCount       int
+	ClauseDensity     float64
+	ProblemComplexity string
+
+	// Hardware Performance
+	OscillatorSyncTime  float64
+	CrossbarSetupTime   float64
+	HardwareUtilization float64
+	OscillatorStability float64
+	CrossbarEfficiency  float64
+	TemperatureEffects  float64
+
+	// Power and Energy
+	StaticPower       float64
+	DynamicPower      float64
+	TotalEnergy       float64
+	EnergyPerSolution float64
+	PowerEfficiency   float64
+
+	// Timing
+	HardwareTime    float64
+	SoftwareTime    float64
+	TotalTime       float64
+	TimePerSolution float64
+}
+
+// HardwareAccelerator defines the interface for hardware acceleration
 type HardwareAccelerator interface {
-	// Initialize sets up the hardware with the given CNF formula
 	Initialize(formula *Formula) error
-
-	// Solve attempts to solve the formula using the hardware
-	// Returns the assignment, whether a solution was found, and the time taken in microseconds
 	Solve(timeout float64) ([]bool, bool, float64, error)
-
-	// Offload sends a partial assignment to the hardware for refinement
-	// Returns the improved assignment, whether it's a solution, and the time taken
-	Offload(partialAssignment []bool, unsatClauses []int, timeout float64) ([]bool, bool, float64, error)
-
-	// IsAvailable checks if the hardware is available for computation
-	IsAvailable() bool
-
-	// GetCapabilities returns hardware capabilities including max variables, max clauses
-	GetCapabilities() map[string]interface{}
+	GetMetrics() HardwareMetrics
 }
 
-// HardwareDecision contains the decision data from hardware accelerator
-type HardwareDecision struct {
-	// UseHardware indicates whether the problem should be offloaded to hardware
-	UseHardware bool
-
-	// Reason provides an explanation for the decision
-	Reason string
-
-	// Confidence level in the decision (0-1)
-	Confidence float64
-}
-
-// SimulatedAccelerator provides a simulated hardware accelerator for testing
+// SimulatedAccelerator implements the HardwareAccelerator interface
 type SimulatedAccelerator struct {
-	// Configuration parameters
-	maxVariables     int
-	maxClauses       int
-	speedupFactor    float64 // How much faster than software (e.g., 5.0 = 5x faster)
-	successRate      float64 // Probability of successfully solving (0-1)
-	powerConsumption float64 // Power in watts
-	available        bool
-
-	// Current state
+	metrics HardwareMetrics
 	formula *Formula
+	config  *SolverConfig
 	rng     *rand.Rand
 }
 
 // NewSimulatedAccelerator creates a new simulated hardware accelerator
 func NewSimulatedAccelerator() *SimulatedAccelerator {
 	return &SimulatedAccelerator{
-		maxVariables:     200,   // Can handle problems up to 200 variables
-		maxClauses:       1000,  // Can handle up to 1000 clauses
-		speedupFactor:    10.0,  // 10x faster than software
-		successRate:      0.85,  // 85% success rate
-		powerConsumption: 0.045, // 45mW
-		available:        true,
-		rng:              rand.New(rand.NewSource(time.Now().UnixNano())),
+		metrics: HardwareMetrics{
+			OscillatorSyncTime:  0.1,  // 100µs
+			CrossbarSetupTime:   0.05, // 50µs
+			HardwareUtilization: 0.8,  // 80%
+			OscillatorStability: 0.95, // 95%
+			CrossbarEfficiency:  0.9,  // 90%
+		},
+		rng: rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
-// Initialize prepares the simulated hardware with the formula
-func (h *SimulatedAccelerator) Initialize(formula *Formula) error {
-	if formula.NumVars > h.maxVariables {
-		return errors.New("formula exceeds hardware maximum variable count")
-	}
-
-	if formula.NumClauses > h.maxClauses {
-		return errors.New("formula exceeds hardware maximum clause count")
-	}
-
-	h.formula = formula
+// Initialize prepares the hardware accelerator
+func (s *SimulatedAccelerator) Initialize(formula *Formula) error {
+	s.formula = formula
+	// Simulate hardware initialization
+	time.Sleep(10 * time.Millisecond)
 	return nil
 }
 
-// Solve attempts to solve the formula using simulated hardware
-func (h *SimulatedAccelerator) Solve(timeout float64) ([]bool, bool, float64, error) {
-	if h.formula == nil {
-		return nil, false, 0, errors.New("hardware not initialized with formula")
+// Solve implements the HardwareAccelerator interface
+func (s *SimulatedAccelerator) Solve(timeout float64) ([]bool, bool, float64, error) {
+	startTime := time.Now()
+
+	// Simulate hardware operations
+	time.Sleep(time.Duration(s.rng.Float64() * float64(time.Millisecond)))
+
+	// Generate a solution
+	assignment := make([]bool, s.formula.NumVars)
+	for i := range assignment {
+		assignment[i] = s.rng.Intn(2) == 1
 	}
 
-	if !h.available {
-		return nil, false, 0, errors.New("hardware not available")
-	}
-
-	// Calculate estimated software runtime
-	estimatedSoftwareTime := float64(h.formula.NumVars*h.formula.NumClauses) * 0.01 // microseconds
-
-	// Apply hardware speedup
-	hardwareTime := estimatedSoftwareTime / h.speedupFactor
-
-	// Add some randomness to simulate real hardware behavior
-	hardwareTime = hardwareTime * (0.8 + 0.4*h.rng.Float64())
-
-	// Check if we found a solution (based on success rate)
-	foundSolution := h.rng.Float64() < h.successRate
-
-	// Generate a random assignment
-	assignment := make([]bool, h.formula.NumVars)
-
-	if foundSolution {
-		// If we "found" a solution, create a valid one
-		// Start with random assignment
-		for i := range assignment {
-			assignment[i] = h.rng.Intn(2) == 1
-		}
-
-		// Fix assignment to satisfy all clauses
-		unsatisfied := true
-		maxIterations := 1000
-
-		for i := 0; i < maxIterations && unsatisfied; i++ {
-			unsatisfied = false
-
-			for _, clause := range h.formula.Clauses {
-				if !isSatisfied(clause, assignment) {
-					unsatisfied = true
-					// Pick a random variable from the clause and flip it
-					lit := clause[h.rng.Intn(len(clause))]
-					assignment[lit.Var] = !assignment[lit.Var]
-				}
+	// Check if the solution is valid
+	satisfiable := true
+	for _, clause := range s.formula.Clauses {
+		clauseSatisfied := false
+		for _, lit := range clause {
+			if (lit.Sign && assignment[lit.Var-1]) || (!lit.Sign && !assignment[lit.Var-1]) {
+				clauseSatisfied = true
+				break
 			}
 		}
-
-		// If we still couldn't find a solution, report failure
-		if unsatisfied {
-			foundSolution = false
-		}
-	} else {
-		// Just return a random assignment
-		for i := range assignment {
-			assignment[i] = h.rng.Intn(2) == 1
-		}
-	}
-
-	return assignment, foundSolution, hardwareTime, nil
-}
-
-// Offload sends a partial assignment to hardware for refinement
-func (h *SimulatedAccelerator) Offload(partialAssignment []bool, unsatClauses []int, timeout float64) ([]bool, bool, float64, error) {
-	if h.formula == nil {
-		return nil, false, 0, errors.New("hardware not initialized with formula")
-	}
-
-	if !h.available {
-		return nil, false, 0, errors.New("hardware not available")
-	}
-
-	// Copy the assignment to avoid modifying the original
-	assignment := make([]bool, len(partialAssignment))
-	copy(assignment, partialAssignment)
-
-	// Estimate computation time based on unsatisfied clauses
-	estimatedSoftwareTime := float64(len(unsatClauses) * 10) // microseconds
-	hardwareTime := estimatedSoftwareTime / h.speedupFactor
-
-	// Add some randomness
-	hardwareTime = hardwareTime * (0.8 + 0.4*h.rng.Float64())
-
-	// Probability of improvement depends on how many clauses are unsatisfied
-	// More unsatisfied clauses = harder to improve
-	improvementProbability := 0.9 - (float64(len(unsatClauses)) / float64(h.formula.NumClauses))
-	if improvementProbability < 0.1 {
-		improvementProbability = 0.1
-	}
-
-	improved := h.rng.Float64() < improvementProbability
-
-	if improved {
-		// Simulate improvement by fixing some unsatisfied clauses
-		for _, clauseIdx := range unsatClauses {
-			if h.rng.Float64() < 0.7 { // 70% chance to fix each clause
-				clause := h.formula.Clauses[clauseIdx]
-				// Pick a random variable and set it to satisfy the clause
-				lit := clause[h.rng.Intn(len(clause))]
-				assignment[lit.Var] = !lit.Sign // Set to make literal true
-			}
-		}
-	}
-
-	// Check if we've found a complete solution
-	allSatisfied := true
-	for _, clause := range h.formula.Clauses {
-		if !isSatisfied(clause, assignment) {
-			allSatisfied = false
+		if !clauseSatisfied {
+			satisfiable = false
 			break
 		}
 	}
 
-	return assignment, allSatisfied, hardwareTime, nil
+	hwTime := time.Since(startTime).Seconds() * 1e6 // Convert to microseconds
+	return assignment, satisfiable, hwTime, nil
 }
 
-// IsAvailable checks if hardware is available
-func (h *SimulatedAccelerator) IsAvailable() bool {
-	return h.available
+// GetMetrics returns the current hardware metrics
+func (s *SimulatedAccelerator) GetMetrics() HardwareMetrics {
+	return s.metrics
 }
 
-// GetCapabilities returns hardware capabilities
-func (h *SimulatedAccelerator) GetCapabilities() map[string]interface{} {
-	return map[string]interface{}{
-		"max_variables":     h.maxVariables,
-		"max_clauses":       h.maxClauses,
-		"speedup_factor":    h.speedupFactor,
-		"success_rate":      h.successRate,
-		"power_consumption": h.powerConsumption,
-		"optimized_for":     []string{"3-SAT", "LDPC"},
+// ParseDIMACS reads a DIMACS CNF file and returns a Formula
+func ParseDIMACS(filename string) (*Formula, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
 	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	formula := &Formula{
+		VarToClauses: make(map[int][]ClauseInfo),
+	}
+
+	var cnfContent strings.Builder
+	for scanner.Scan() {
+		line := scanner.Text()
+		cnfContent.WriteString(line)
+		cnfContent.WriteString("\n")
+
+		line = strings.TrimSpace(line)
+		if len(line) == 0 || line[0] == 'c' {
+			continue
+		}
+
+		if line[0] == 'p' {
+			parts := strings.Fields(line)
+			if len(parts) != 4 || parts[1] != "cnf" {
+				return nil, fmt.Errorf("invalid problem line: %s", line)
+			}
+			formula.NumVars, _ = strconv.Atoi(parts[2])
+			formula.NumClauses, _ = strconv.Atoi(parts[3])
+			continue
+		}
+
+		var clause Clause
+		literals := strings.Fields(line)
+		for _, lit := range literals {
+			num, err := strconv.Atoi(lit)
+			if err != nil {
+				continue
+			}
+			if num == 0 {
+				break
+			}
+			var literal Literal
+			if num < 0 {
+				literal = Literal{Var: -num, Sign: true}
+			} else {
+				literal = Literal{Var: num, Sign: false}
+			}
+			clause = append(clause, literal)
+		}
+		if len(clause) > 0 {
+			formula.Clauses = append(formula.Clauses, clause)
+		}
+	}
+
+	return formula, nil
 }
 
-// DecideHardwareOffload makes an intelligent decision about whether to use
-// hardware acceleration based on problem characteristics
-func DecideHardwareOffload(formula *Formula, hardware HardwareAccelerator) HardwareDecision {
-	// If hardware isn't available, return immediately
-	if !hardware.IsAvailable() {
-		return HardwareDecision{
-			UseHardware: false,
-			Reason:      "Hardware accelerator not available",
-			Confidence:  1.0,
-		}
+// SolveCNFFile solves a CNF file and returns the result
+func SolveCNFFile(filename string) (*SolveResult, error) {
+	formula, err := ParseDIMACS(filename)
+	if err != nil {
+		return nil, err
 	}
 
-	capabilities := hardware.GetCapabilities()
-
-	// Check if problem is too large for hardware
-	maxVars, _ := capabilities["max_variables"].(int)
-	maxClauses, _ := capabilities["max_clauses"].(int)
-
-	if formula.NumVars > maxVars {
-		return HardwareDecision{
-			UseHardware: false,
-			Reason:      "Problem exceeds hardware variable capacity",
-			Confidence:  1.0,
-		}
+	// Create a simulated accelerator
+	acc := NewSimulatedAccelerator()
+	if err := acc.Initialize(formula); err != nil {
+		return nil, err
 	}
 
-	if formula.NumClauses > maxClauses {
-		return HardwareDecision{
-			UseHardware: false,
-			Reason:      "Problem exceeds hardware clause capacity",
-			Confidence:  1.0,
-		}
+	assignment, found, hwTime, err := acc.Solve(10000.0) // 10ms timeout
+	if err != nil {
+		return nil, err
 	}
 
-	// Calculate clause-to-variable ratio
-	ratio := float64(formula.NumClauses) / float64(formula.NumVars)
+	// Read the original CNF content
+	content, _ := os.ReadFile(filename)
 
-	// Hardware is generally better for problems near the phase transition
-	// (around 4.26 for 3-SAT)
-	nearPhaseTransition := ratio >= 4.0 && ratio <= 4.5
+	return &SolveResult{
+		SolutionFound:   found,
+		SolutionString:  boolArrayToString(assignment),
+		ComputationTime: hwTime,
+		Metrics: SolveMetrics{
+			Variables: formula.NumVars,
+			Clauses:   formula.NumClauses,
+		},
+		OriginalCNF: string(content),
+		Filename:    filename,
+	}, nil
+}
 
-	// Check average clause size - hardware may be optimized for certain sizes
-	totalLiterals := 0
-	for _, clause := range formula.Clauses {
-		totalLiterals += len(clause)
-	}
-	avgClauseSize := float64(totalLiterals) / float64(formula.NumClauses)
-
-	// Decision logic based on problem characteristics
-	if nearPhaseTransition && avgClauseSize >= 2.8 && avgClauseSize <= 3.2 {
-		// Likely a 3-SAT problem near phase transition - ideal for hardware
-		return HardwareDecision{
-			UseHardware: true,
-			Reason:      "3-SAT problem near phase transition",
-			Confidence:  0.9,
-		}
-	} else if formula.NumVars <= maxVars/2 && formula.NumClauses <= maxClauses/2 {
-		// Small problem, hardware should be efficient
-		return HardwareDecision{
-			UseHardware: true,
-			Reason:      "Small problem suitable for hardware acceleration",
-			Confidence:  0.8,
-		}
-	} else if ratio > 5.0 {
-		// Very constrained problem, may benefit from hardware's parallelism
-		return HardwareDecision{
-			UseHardware: true,
-			Reason:      "Highly constrained problem",
-			Confidence:  0.7,
-		}
-	} else if avgClauseSize > 5.0 {
-		// Large clauses, software might be more efficient
-		return HardwareDecision{
-			UseHardware: false,
-			Reason:      "Large clause size better suited for software",
-			Confidence:  0.6,
+// Helper function to convert boolean array to string
+func boolArrayToString(arr []bool) string {
+	result := make([]byte, len(arr))
+	for i, v := range arr {
+		if v {
+			result[i] = '1'
+		} else {
+			result[i] = '0'
 		}
 	}
-
-	// Default to hardware for problems that fit well within its capacity
-	return HardwareDecision{
-		UseHardware: formula.NumVars <= maxVars/2,
-		Reason:      "General problem evaluation",
-		Confidence:  0.5,
-	}
+	return string(result)
 }
