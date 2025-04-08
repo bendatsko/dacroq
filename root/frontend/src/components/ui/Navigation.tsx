@@ -86,13 +86,13 @@ function Navigation() {
             <Link href="/tools">Tools</Link>
           </TabNavigationLink>
 
-          <TabNavigationLink
+          {/* <TabNavigationLink
               className="inline-flex gap-2"
               asChild
               active={pathname === "/community"}
           >
             <Link href="/community">Discussion</Link>
-          </TabNavigationLink>
+          </TabNavigationLink> */}
 
           <TabNavigationLink
             className="inline-flex gap-2"
