@@ -22,6 +22,9 @@ import {
   RiCloseLine
 } from "@remixicon/react";
 
+// Type for API health status
+type ApiStatus = 'checking' | 'online' | 'degraded' | 'offline' | 'error';
+
 // Documentation content sections
 const DocsContent = {
   introduction: {
@@ -377,6 +380,47 @@ export default function Documentation() {
   const [editTitle, setEditTitle] = useState("");
   const [activeTab, setActiveTab] = useState("preview");
 
+  // State for API health
+  const [apiStatus, setApiStatus] = useState<ApiStatus>('checking');
+  const [apiStatusDetails, setApiStatusDetails] = useState<string | null>(null);
+
+  // Fetch API health status
+  useEffect(() => {
+    const fetchApiHealth = async () => {
+      try {
+        const response = await fetch('https://medusa.bendatsko.com/health');
+        const data = await response.json();
+
+        if (!response.ok) {
+           // Use status from response body if available, otherwise generic error
+          setApiStatus(data.api_status === 'degraded' ? 'degraded' : 'offline');
+          setApiStatusDetails(data.cloudflare_tunnel_status_details || data.weather_data_error_details || `API returned status ${response.status}`);
+        } else {
+          // Check detailed status from the health endpoint
+          if (data.api_status === 'online') {
+             setApiStatus('online');
+             setApiStatusDetails('API operational.');
+          } else if (data.api_status === 'degraded') {
+              setApiStatus('degraded');
+              setApiStatusDetails(data.cloudflare_tunnel_status_details || data.weather_data_error_details || 'API is degraded.');
+          } else {
+             setApiStatus('offline'); // Or some other state based on data
+             setApiStatusDetails('API reported an unexpected status.');
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching API health:', error);
+        setApiStatus('error');
+        setApiStatusDetails('Could not connect to the API health endpoint.');
+      }
+    };
+
+    fetchApiHealth();
+    // Optional: Set an interval to periodically check health
+    // const intervalId = setInterval(fetchApiHealth, 60000); // Check every minute
+    // return () => clearInterval(intervalId);
+  }, []);
+
   // Update edit content when section changes
   useEffect(() => {
     if (DocsContent[activeSection]) {
@@ -471,6 +515,18 @@ export default function Documentation() {
 
   const { prev, next } = findAdjacentItems();
 
+  // Helper to get status indicator color
+  const getStatusColor = (status: ApiStatus) => {
+    switch (status) {
+      case 'online': return 'bg-green-500';
+      case 'degraded': return 'bg-yellow-500';
+      case 'offline': return 'bg-red-500';
+      case 'error': return 'bg-red-500';
+      case 'checking':
+      default: return 'bg-gray-400';
+    }
+  };
+
   return (
     <main className="container max-w-5xl mx-auto p-4">
  
@@ -520,6 +576,13 @@ export default function Documentation() {
                   >
                     <span className="mr-2">{section.icon}</span>
                     <span>{section.title}</span>
+                    {/* Add status indicator for System Architecture */}
+                    {section.id === 'architecture' && (
+                      <span 
+                        title={`API Status: ${apiStatus}${apiStatusDetails ? ' - ' + apiStatusDetails : ''}`}
+                        className={`ml-2 h-2.5 w-2.5 rounded-full ${getStatusColor(apiStatus)}`}
+                      />
+                    )}
                     <RiArrowDownSLine
                       className={`ml-auto transition-transform ${expandedSections.includes(section.id) ? 'rotate-180' : ''}`}
                     />
@@ -572,6 +635,13 @@ export default function Documentation() {
                   >
                     <span className="mr-2">{section.icon}</span>
                     <span>{section.title}</span>
+                    {/* Add status indicator for System Architecture */}
+                    {section.id === 'architecture' && (
+                       <span 
+                        title={`API Status: ${apiStatus}${apiStatusDetails ? ' - ' + apiStatusDetails : ''}`}
+                        className={`ml-2 h-2.5 w-2.5 rounded-full ${getStatusColor(apiStatus)}`}
+                      />
+                    )}
                     <RiArrowDownSLine
                       className={`ml-auto transition-transform ${expandedSections.includes(section.id) ? 'rotate-180' : ''}`}
                     />

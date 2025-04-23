@@ -1,13 +1,17 @@
 "use client";
 
+// React and Next.js imports
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+
+// UI components and icons
 import { RiGoogleFill } from "@remixicon/react";
 import { Button } from "@/components/Button";
-import { signInWithGoogle, auth } from "@/lib/firebase";
-import { doc, setDoc, serverTimestamp, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-import { useState, useEffect } from "react";
+
+// Firebase imports
+import { auth, db, signInWithGoogle } from "@/lib/firebase";
 import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
+import { doc, setDoc, serverTimestamp, getDoc } from "firebase/firestore";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,73 +20,76 @@ export default function LoginPage() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
-    console.log("LoginPage mounted");
+    // Enable client-side features after hydration
     setIsMounted(true);
 
-    // Check for intentional logout first
+    // Handle intentional logout scenario
     const wasIntentionalLogout = sessionStorage.getItem("intentionalLogout") === "true";
     if (wasIntentionalLogout) {
-      console.log("Detected intentional logout, clearing auth state");
-      // Clear any lingering auth state
+      // Clear the flag to prevent repeated signouts
+      sessionStorage.removeItem("intentionalLogout");
       auth.signOut();
       return;
     }
 
-    // Only set up auth listener if not an intentional logout
+    // Set up Firebase auth state listener
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      console.log("Auth state changed:", user ? "User logged in" : "No user");
-
-      // Recheck logout flag in case it was set after initial check
-      const currentLogoutState = sessionStorage.getItem("intentionalLogout") === "true";
-      if (currentLogoutState) {
-        console.log("Logout flag detected, preventing auto-login");
+      // Double-check logout flag in case it was set after initial check
+      if (sessionStorage.getItem("intentionalLogout") === "true") {
         return;
       }
 
+      // Process auto-login if user exists and we're not already processing
       if (user && !isProcessing) {
         await handleSuccessfulLogin(user);
       }
     });
 
+    // Clean up listener on component unmount
     return () => unsubscribe();
-  }, [router, isMounted]);
+  }, []);
 
-  // Function to handle successful login
+  /**
+   * Process user authentication and verify account status
+   * Updates Firestore user document and stores minimal user info locally
+   */
   const handleSuccessfulLogin = async (user: FirebaseUser) => {
-    if (isProcessing) return; // Prevent duplicate processing
+    if (isProcessing) return;
     setIsProcessing(true);
 
     try {
-      console.log("Processing login for user:", user.email);
-
-      // User is signed in. Proceed with Firestore user document update.
+      // Fetch current user data from Firestore
       const userRef = doc(db, "users", user.uid);
       const userDoc = await getDoc(userRef);
       const userData = userDoc.exists() ? userDoc.data() : null;
 
-      console.log("User data:", userData);
-
-      // Check maintenance mode.
-      const maintenanceRef = doc(db, "system", "maintenance");
-      const maintenanceDoc = await getDoc(maintenanceRef);
-      const maintenanceMode = maintenanceDoc.exists() && maintenanceDoc.data()?.enabled;
-      if (maintenanceMode) {
-        const whitelistedEmails = maintenanceDoc.data()?.whitelistedEmails || [];
-        if (userData?.role !== "admin" && !whitelistedEmails.includes(user.email)) {
-          setError("System is currently under maintenance. Only administrators and whitelisted users may access at this time.");
-          setIsProcessing(false);
-          return;
+      // Check system maintenance status
+      try {
+        const maintenanceRef = doc(db, "system", "maintenance");
+        const maintenanceDoc = await getDoc(maintenanceRef);
+        const maintenanceMode = maintenanceDoc.exists() && maintenanceDoc.data()?.enabled;
+        
+        if (maintenanceMode) {
+          const whitelistedEmails = maintenanceDoc.data()?.whitelistedEmails || [];
+          if (userData?.role !== "admin" && !whitelistedEmails.includes(user.email)) {
+            setError("System is currently under maintenance. Only administrators and whitelisted users may access at this time.");
+            setIsProcessing(false);
+            return;
+          }
         }
+      } catch (err) {
+        // Fail open if maintenance check fails - allow login to proceed
+        console.warn("Could not verify maintenance status:", err);
       }
 
-      // Check for a disabled account.
+      // Check for account restrictions
       if (userData?.accountState === "disabled") {
         setError("Access denied. Please contact support if you believe this is an error.");
         setIsProcessing(false);
         return;
       }
 
-      // Create or update the user document.
+      // Update user document with latest info
       await setDoc(
         userRef,
         {
@@ -99,7 +106,7 @@ export default function LoginPage() {
         { merge: true }
       );
 
-      // Store minimal user info in localStorage.
+      // Store minimal user profile for client-side access
       if (isMounted) {
         localStorage.setItem(
           "user",
@@ -108,34 +115,33 @@ export default function LoginPage() {
             email: user.email,
             displayName: user.displayName,
             photoURL: user.photoURL,
-            role: userData?.role || "user"  // Also store role for easier access
+            role: userData?.role || "user"
           })
         );
       }
 
-      console.log("Redirecting to dashboard...");
+      // Redirect to dashboard
       router.push("/");
-
     } catch (err) {
       console.error("Error handling login:", err);
       setError("An error occurred while processing your login. Please try again.");
+    } finally {
       setIsProcessing(false);
     }
   };
 
+  /**
+   * Initiate Google Sign-In flow
+   */
   const handleGoogleSignIn = async () => {
     try {
-      console.log("Starting Google sign-in process...");
       setError(null);
       setIsProcessing(true);
-
+      
       const result = await signInWithGoogle();
-      console.log("Sign-in successful, user:", result.user.email);
-
-      // Process the login with the returned user
       await handleSuccessfulLogin(result.user);
     } catch (error) {
-      console.error("Error during sign-in", error);
+      console.error("Error during sign-in:", error);
       setError("An error occurred during sign in. Please try again.");
       setIsProcessing(false);
     }
@@ -147,6 +153,7 @@ export default function LoginPage() {
       suppressHydrationWarning
     >
       <div className="relative sm:mx-auto sm:w-full sm:max-w-sm">
+        {/* Logo section */}
         <div className="relative mx-auto w-fit">
           <span className="sr-only">Dacroq</span>
           <div className="relative">
@@ -155,12 +162,14 @@ export default function LoginPage() {
           </div>
         </div>
 
+        {/* Error display */}
         {error && (
           <div className="mt-4 rounded-md bg-red-50 p-4 text-sm text-red-800 dark:bg-red-900/10 dark:text-red-500">
             {error}
           </div>
         )}
 
+        {/* Sign-in button */}
         <div className="mt-4">
           <Button
             type="button"
@@ -176,6 +185,7 @@ export default function LoginPage() {
           </Button>
         </div>
 
+        {/* Terms of service */}
         <p className="mt-4 text-xs text-gray-500 dark:text-gray-500">
           By signing in, you agree to our{" "}
           <a
