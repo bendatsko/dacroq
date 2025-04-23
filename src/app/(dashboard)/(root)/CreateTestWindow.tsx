@@ -42,11 +42,8 @@ const CreateTestWindow: React.FC<CreateTestWindowProps> = ({ isOpen, onClose, on
   const [files, setFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [apiResponse, setApiResponse] = useState<any>(null);
-  const [isApiConnected, setIsApiConnected] = useState(false);
   const [testStatus, setTestStatus] = useState<'idle' | 'running' | 'completed' | 'error'>('idle');
   const [progress, setProgress] = useState(0);
-  const [currentStep, setCurrentStep] = useState('');
   const [uploadedTypes, setUploadedTypes] = useState<UploadedFileTypes>({ cnf: false });
   
   // New: chip selection and test mode state.
@@ -93,14 +90,11 @@ const CreateTestWindow: React.FC<CreateTestWindowProps> = ({ isOpen, onClose, on
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
       const response = await fetch(`${apiUrl}/api/health`);
       if (response.ok) {
-        setIsApiConnected(true);
         return true;
       }
-      setIsApiConnected(false);
       return false;
     } catch (error) {
       console.error("API connection error:", error);
-      setIsApiConnected(false);
       return false;
     }
   };
@@ -323,7 +317,7 @@ const CreateTestWindow: React.FC<CreateTestWindowProps> = ({ isOpen, onClose, on
                 <div className="space-y-2">
                   <ProgressBar value={progress} />
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {currentStep || 'Running solver...'}
+                    Running solver...
                   </p>
                 </div>
               )}

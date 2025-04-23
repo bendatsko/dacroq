@@ -295,7 +295,7 @@ const docsStructure = [
 // Helper function to render markdown content
 const renderMarkdown = (content) => {
   const lines = content.split('\n');
-  let elements = [];
+  const elements = [];
   let listItems = [];
   let key = 0;
 
@@ -631,7 +631,7 @@ export default function Documentation() {
 
             {isAdmin && !isEditing && (
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={handleStartEditing}
                 className="flex items-center gap-2"
               >
@@ -652,7 +652,7 @@ export default function Documentation() {
                   </TabsList>
                   <div className="flex items-center gap-2">
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       onClick={handleCancel}
                       className="flex items-center gap-2"
                     >

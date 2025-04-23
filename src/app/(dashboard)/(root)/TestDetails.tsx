@@ -3,7 +3,6 @@
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { CategoryBar } from "@/components/CategoryBar";
-import { Divider } from "@/components/Divider";
 import { LineChart } from "@/components/LineChart";
 import JsonExplorer from "@/components/JsonExplorer";
 import {
@@ -15,7 +14,6 @@ import {
   RiDeleteBinLine,
   RiArrowDownLine,
 } from "@remixicon/react";
-import { format } from "date-fns";
 import { useState, useEffect } from "react";
 import FileSaver from "file-saver";
 import {
@@ -32,18 +30,9 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@/components/Select";
-import { TestRun, SolverMetrics } from "@/types/test";
+import { TestRun } from "@/types/test";
 
 // ---------------------- Types ----------------------
-interface TestResults {
-  solverMetrics: any;
-  hardwareMetrics: any;
-  performanceMetrics: any;
-  resourceUsage: any;
-  hardwareTimeSeconds: number[];
-  [key: string]: any;
-}
-
 interface PlotConfig {
   id: string;
   type: "line" | "scatter" | "bar" | "box";
@@ -113,27 +102,6 @@ const formatWithUnits = (value: number, metric: string): string => {
     default:
       return value.toPrecision(3);
   }
-};
-
-/**
- * Format x-axis values concisely and append a unit if appropriate.
- * If the value is nearly an integer we assume it's an index ("Run X"),
- * otherwise we format it as a time value in seconds.
- */
-const formatXAxisValueWithUnit = (value: number): string => {
-  if (Math.abs(value - Math.round(value)) < 0.001) {
-    return `Run ${Math.round(value)}`;
-  }
-  return `${value.toFixed(2)} s`;
-};
-
-const formatRuntime = (ms: number) => {
-  if (ms < 1000) return `${ms}ms`;
-  const seconds = Math.floor(ms / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return `${minutes}m ${remainingSeconds}s`;
 };
 
 // CNF parsing and validation utilities
@@ -430,17 +398,6 @@ const PDFReport = ({ test }: { test: TestRun }) => {
 };
 
 // ---------------------- Chart Helpers ----------------------
-const getChartDomain = (data: any[], key: string) => {
-  if (!data || data.length === 0) return [0, 100];
-  const values = data.map((item) => item[key]).filter((val) => val != null);
-  if (values.length === 0) return [0, 100];
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  if (min === max) return [Math.max(0, min - 10), max + 10];
-  const padding = (max - min) * 0.1;
-  return [Math.max(0, min - padding), max + padding];
-};
-
 function getValueFromPath(obj: any, path: string): number | null {
   try {
     return path.split(".").reduce((o, i) => o[i], obj);
@@ -688,7 +645,7 @@ export default function TestDetails({ test, onBack }: TestDetailsProps) {
       solution_found_type: typeof result.solution_found,
       solutionFoundBoolean,
       solutionFoundString,
-      solverMetrics_solutionFound: result.solverMetrics?.solutionFound,
+      solverMetrics_solution_found: result.solverMetrics?.solutionFound,
       otherSolutionIndicators,
       solutionClaimed,
       solution_string: result.solution_string,
@@ -815,7 +772,6 @@ export default function TestDetails({ test, onBack }: TestDetailsProps) {
 
   const hwCpuTimeRatio = avgCpuTime > 0 ? avgHwTime / avgCpuTime : 0;
   const hwCpuEnergyRatio = avgCpuEnergy > 0 ? avgHwEnergy / avgCpuEnergy : 0;
-  const hwEfficiency = avgSolverIterations > 0 ? avgHwCalls / avgSolverIterations : 0;
 
   // Calculate performance metrics from test results
   const performanceMetrics = {
@@ -828,24 +784,6 @@ export default function TestDetails({ test, onBack }: TestDetailsProps) {
 
   // Get resource usage from first test result
   const resourceUsage = testResults[0]?.resourceUsage;
-
-  // Format time in seconds to a readable string
-  const formatTimeSecondsReadable = (seconds: number) => {
-    const microseconds = seconds * 1_000_000;
-    return `${microseconds.toFixed(2)} µs`;
-  };
-
-  // Format energy in joules to a readable string
-  const formatEnergyJoules = (joules: number) => {
-    if (joules < 1e-6) {
-      return `${(joules * 1e9).toFixed(2)} nJ`;
-    } else if (joules < 1e-3) {
-      return `${(joules * 1e6).toFixed(2)} µJ`;
-    } else if (joules < 1) {
-      return `${(joules * 1e3).toFixed(2)} mJ`;
-    }
-    return `${joules.toFixed(2)} J`;
-  };
 
   // Export handlers
   const convertToCSV = (data: any[]): string => {
@@ -866,50 +804,27 @@ export default function TestDetails({ test, onBack }: TestDetailsProps) {
   };
 
   const handleExport = async (format: "json" | "csv" | "pdf") => {
-    const exportData = {
-      testInfo: {
-        id: test.id,
-        name: test.name,
-        created: formatDate(test.created),
-        completed: formatDate(test.completed),
-        status: test.status,
-        hardwareType: test.chipType,
-      },
-      results: test.results,
-    };
+    if (!test.results) return;
 
-    // Remove CNF content if not needed
-    if (!includeCNF && exportData.results?.results) {
-      exportData.results.results = exportData.results.results.map(result => {
-        const { cnf, original_cnf, ...rest } = result;
-        return rest;
-      });
-    }
+    const { results } = test.results;
 
-    try {
-      switch (format) {
-        case "json": {
-          const jsonBlob = new Blob([JSON.stringify(exportData, null, 2)], {
-            type: "application/json",
-          });
-          FileSaver.saveAs(jsonBlob, `${test.name}_results.json`);
-          break;
-        }
-        case "csv": {
-          const csvData = [exportData.testInfo, exportData.results];
-          const csvBlob = new Blob([convertToCSV(csvData)], {
-            type: "text/csv",
-          });
-          FileSaver.saveAs(csvBlob, `${test.name}_results.csv`);
-          break;
-        }
-        case "pdf":
-          // Handled via PDFDownloadLink
-          break;
-      }
-    } catch (error) {
-      console.error("Error exporting data:", error);
-      alert("Failed to export data");
+    switch (format) {
+      case "json":
+        const jsonBlob = new Blob([JSON.stringify(results, null, 2)], {
+          type: "application/json",
+        });
+        FileSaver.saveAs(jsonBlob, `test-results-${test.id}.json`);
+        break;
+
+      case "csv":
+        const csvContent = convertToCSV(results);
+        const csvBlob = new Blob([csvContent], { type: "text/csv" });
+        FileSaver.saveAs(csvBlob, `test-results-${test.id}.csv`);
+        break;
+
+      case "pdf":
+        // PDF export is handled by the PDFDownloadLink component
+        break;
     }
   };
 
@@ -917,27 +832,39 @@ export default function TestDetails({ test, onBack }: TestDetailsProps) {
   const filterJsonData = (data: any, query: string): any => {
     if (!query) return data;
     const lowerQuery = query.toLowerCase();
-    const filterObject = (obj: any): any | null => {
+
+    function filterObject(obj: any): any | null {
       if (typeof obj !== "object" || obj === null) {
-        return String(obj).toLowerCase().includes(lowerQuery) ? obj : null;
+        return obj;
       }
+
       if (Array.isArray(obj)) {
-        const filtered = obj.map((item) => filterObject(item)).filter(Boolean);
+        const filtered = obj
+          .map((item) => filterObject(item))
+          .filter((item) => item !== null);
         return filtered.length > 0 ? filtered : null;
       }
-      const filtered = Object.entries(obj).reduce((acc, [key, value]) => {
+
+      const result: any = {};
+      let hasMatch = false;
+
+      for (const [key, value] of Object.entries(obj)) {
         if (key.toLowerCase().includes(lowerQuery)) {
-          acc[key] = value;
-          return acc;
+          result[key] = value;
+          hasMatch = true;
+          continue;
         }
+
         const filteredValue = filterObject(value);
         if (filteredValue !== null) {
-          acc[key] = filteredValue;
+          result[key] = filteredValue;
+          hasMatch = true;
         }
-        return acc;
-      }, {} as any);
-      return Object.keys(filtered).length > 0 ? filtered : null;
-    };
+      }
+
+      return hasMatch ? result : null;
+    }
+
     return filterObject(data) || data;
   };
 
@@ -972,25 +899,24 @@ export default function TestDetails({ test, onBack }: TestDetailsProps) {
 
   // Recursively extract numeric variables
   const extractVariables = (data: any, prefix = ""): string[] => {
-    const vars: string[] = [];
-    const traverse = (obj: any, path: string) => {
-      if (!obj) return;
-      if (Array.isArray(obj)) {
-        if (obj.every((item) => typeof item === "number")) {
-          vars.push(path);
-        } else {
-          obj.forEach((item, idx) => traverse(item, `${path}[${idx}]`));
-        }
-      } else if (typeof obj === "object") {
-        Object.entries(obj).forEach(([k, v]) => {
-          traverse(v, path ? `${path}.${k}` : k);
-        });
-      } else if (typeof obj === "number") {
-        vars.push(path);
+    const variables: string[] = [];
+
+    function traverse(obj: any, path: string) {
+      if (typeof obj === "number") {
+        variables.push(path);
+        return;
       }
-    };
+
+      if (typeof obj === "object" && obj !== null) {
+        for (const [key, value] of Object.entries(obj)) {
+          const newPath = path ? `${path}.${key}` : key;
+          traverse(value, newPath);
+        }
+      }
+    }
+
     traverse(data, prefix);
-    return vars;
+    return variables;
   };
 
   // At the beginning of the TestDetails component
@@ -1047,7 +973,10 @@ export default function TestDetails({ test, onBack }: TestDetailsProps) {
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={onBack}>
+          <Button
+            variant="ghost"
+            onClick={onBack}
+          >
             <RiArrowLeftLine className="size-5" />
           </Button>
           <div>
@@ -1156,11 +1085,11 @@ export default function TestDetails({ test, onBack }: TestDetailsProps) {
             </div>
             <div className="p-4 bg-gray-50 rounded-lg">
               <p className="text-xs text-gray-500">Hardware Energy</p>
-              <p className="text-lg font-semibold">{formatEnergyJoules(avgHwEnergy)}</p>
+              <p className="text-lg font-semibold">{formatEnergyNanojoules(avgHwEnergy)}</p>
             </div>
             <div className="p-4 bg-gray-50 rounded-lg">
               <p className="text-xs text-gray-500">CPU Energy</p>
-              <p className="text-lg font-semibold">{formatEnergyJoules(avgCpuEnergy)}</p>
+              <p className="text-lg font-semibold">{formatEnergyNanojoules(avgCpuEnergy)}</p>
             </div>
             <div className="p-4 bg-gray-50 rounded-lg">
               <p className="text-xs text-gray-500">Time Ratio (HW/CPU)</p>

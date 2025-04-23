@@ -78,16 +78,6 @@ function Navigation() {
             <Link href="/">Dashboard</Link>
           </TabNavigationLink>
 
-
-          <TabNavigationLink
-              className="inline-flex gap-2"
-              asChild
-              active={pathname === "/sat"}
-          >
-            <Link href="/sat">SAT Solver</Link>
-          </TabNavigationLink>
-
-
           <TabNavigationLink
               className="inline-flex gap-2"
               asChild
