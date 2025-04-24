@@ -22,245 +22,23 @@ import {
   RiCloseLine
 } from "@remixicon/react";
 
+// API base URL
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+
 // Type for API health status
 type ApiStatus = 'checking' | 'online' | 'degraded' | 'offline' | 'error';
 
-// Documentation content sections
-const DocsContent = {
-  introduction: {
-    title: "Introduction",
-    content: `
-    ## What is Dacroq?
-    Dacroq stands for Digitally Assisted CMOS Relaxation Oscillator-based Quantum-inspired computing. Specifically, the Dacroq Test Framework system integrates a Next.js web interface with a Go-based API server, enabling hardware-accelerated optimization problem-solving. 
-    
-    ## Current Capabilities
-    - 3-SAT solving using our primary hardware accelerator (Daedalus)
-    - Support for multiple input formats, including DIMACS CNF and batch processing via ZIP files
-    - Comprehensive performance benchmarking and metrics analysis
-    - Specialized problem libraries and preset loading for test cases
-    
-    ## Platform Architecture
-    The Dacroq platform comprises:
-    - A Next.js web frontend for user interaction
-    - A Go-based API server for backend processing
-    - Custom hardware solvers for 3-SAT, K-SAT, and LDPC problems
-    `
-  },
-
-  "quick-start": {
-    title: "Quick Start Guide",
-    content: `# Getting Started with Dacroq
-
-Follow these steps to run your first test on the Dacroq platform:
-
-## Running Your First 3-SAT Test
-1. **Prepare Your Input**
-   - Single .cnf file in DIMACS format
-   - .zip archive with multiple .cnf files
-   - Select a pre-loaded problem from our presets (available in /api/presets)
-   - Direct plaintext input with CNF formatting
-
-2. **Configure and Submit**
-   - Navigate to the solver interface
-   - Upload or select your problem input
-   - Configure any optional solver parameters
-   - Click "Run" to start processing
-
-3. **Monitor and Review**
-   - Watch real-time updates in the dashboard
-   - Wait for the test status to update from "Processing" to "Completed"
-   - Click on a completed test to view detailed results and performance metrics
-
-## Test Management
-- All test runs are displayed in the dashboard for collaborative review
-- Downloadable results and benchmarks for offline analysis
-- Options to delete tests that are no longer needed`
-  },
-
-  installation: {
-    title: "Installation & Setup",
-    content: `# Accessing and Setting Up the Dacroq Platform
-
-## User Access
-1. **Request Access**
-   - Email help@dacroq.eecs.umich.edu with your institutional and research details.
-2. **Account Setup**
-   - Receive login credentials via email.
-   - Sign in at [dacroq.eecs.umich.edu](https://dacroq.eecs.umich.edu).
-   - Update your password and complete your user profile on first login.
-
-## Developer Setup
-For local development and API integration:
-1. **Clone the Repository**
-   \`\`\`bash
-   git clone https://github.com/username/dacroq.git
-   cd dacroq
-   \`\`\`
-2. **Web Client Setup**
-   \`\`\`bash
-   cd dacroq_web
-   npm install
-   npm run dev
-   \`\`\`
-3. **API Server Setup**
-   \`\`\`bash
-   cd api
-   go build -o dacroq
-   ./dacroq
-   \`\`\`
-4. **Docker Deployment**
-   \`\`\`bash
-   docker-compose up -d
-   \`\`\`
-
-## System Requirements
-- Modern web browser (Chrome, Firefox, Safari)
-- Node.js 14+ for the web client
-- Go 1.16+ for the API server
-- Docker for containerized deployments`
-  },
-
-  "hardware-architecture": {
-    title: "Hardware Architecture",
-    content: `# Dacroq Hardware Architecture
-
-## Overview
-The Dacroq platform leverages custom hardware accelerators to solve complex Boolean satisfiability problems efficiently. Our system includes three specialized hardware modules:
-
-- **Daedalus (3-SAT Solver):** Equipped with 50 relaxation oscillators, an analog crossbar network, and SPI-based configuration.
-- **Amorgos (LDPC Decoder):** Designed for high-performance error correction.
-- **Medusa (K-SAT Solver):** Under development for handling variable clause lengths.
-
-## Hardware Components
-### Daedalus (3-SAT Solver)
-- 50 relaxation oscillators for mapping Boolean variables
-- Analog crossbar network for clause evaluation
-- SPI-controlled scan chains for rapid configuration
-- Real-time error monitoring and automatic problem decomposition
-
-### Communication & Control
-- Teensy 4.1 microcontroller bridges for hardware interfacing
-- High-speed serial communication (2M baud) with error-correcting protocols
-- Integration with the Go-based API server for hardware management
-
-## Problem Decomposition
-For problems exceeding hardware capacity:
-- Spectral partitioning and variable clustering techniques
-- Generation of optimized subproblems
-- Hierarchical solution recombination for accurate results`
-  },
-
-  "software-architecture": {
-    title: "Software Architecture",
-    content: `# Dacroq Software Architecture
-
-## Web Interface
-Built with Next.js, our frontend offers:
-- Server-side rendering and dynamic client-side updates
-- Intuitive problem submission and monitoring interfaces
-- Real-time visualization of solver performance metrics
-- Integration with custom React components and Tailwind CSS styling
-
-## Backend API
-Our Go-based API server is responsible for:
-- Validating and preprocessing submitted problems
-- Managing communication with hardware solvers
-- Capturing and analyzing performance metrics
-- Handling solution verification and result formatting
-
-## Data Flow & Deployment
-1. **Problem Submission:** Users submit problems via the web interface, which are sent to the API server.
-2. **Solver Execution:** The API server processes and routes problems to the appropriate hardware accelerator.
-3. **Result Delivery:** Solutions and performance data are collected, verified, and relayed back to the frontend.
-4. **Deployment Options:** 
-   - Full-stack deployment using Docker Compose
-   - Independent deployment of the web client and API server for scalability`
-  },
-
-  "3-sat-solver": {
-    title: "3-SAT Solver",
-    content: `# 3-SAT Solver
-
-## Overview
-The 3-SAT solver is the flagship component of Dacroq, engineered to solve Boolean satisfiability problems where each clause contains exactly three literals.
-
-## Technical Details
-- Utilizes hardware acceleration with relaxation oscillators
-- Supports problems up to 50 variables and 228 clauses in hardware
-- Employs problem decomposition for larger instances
-- Optional WalkSAT refinement for challenging cases
-- Provides real-time convergence monitoring and performance analysis
-
-## Usage Instructions
-1. Format your problem in DIMACS CNF format.
-2. Submit your problem via the web interface.
-3. Monitor the test status and review detailed results upon completion
-
-## Performance Metrics
-- Success rate
-- Total runtime and phase-specific timings
-- Iteration count and convergence data
-- Energy efficiency and resource utilization`
-  },
-
-  "k-sat-solver": {
-    title: "K-SAT Solver",
-    content: `# K-SAT Solver
-
-## Overview
-The K-SAT solver extends our 3-SAT capabilities to handle problems with clauses of variable lengths. It is designed to provide enhanced flexibility and performance for more complex satisfiability problems.
-
-## Current Status
-🚧 **Under Development**
-
-Core functionalities are being implemented in the /api/medusa directory.
-
-## Planned Features
-- Support for clauses of varying lengths within the same problem
-- Advanced problem decomposition tailored for K-SAT challenges
-- Optimized hardware mapping and resource allocation
-- Comparative performance analysis against the 3-SAT solver
-
-## Roadmap
-- **Alpha Testing:** Q3 2023
-- **Beta Release:** Q4 2023
-- **General Availability:** Q1 2024
-
-We welcome early feedback and collaboration from interested partners.`
-  },
-
-  "ldpc-solver": {
-    title: "LDPC Solver",
-    content: `# LDPC Solver
-
-## Overview
-The LDPC (Low-Density Parity-Check) solver is engineered for error-correcting applications, leveraging our hardware accelerators to deliver high-performance decoding.
-
-## Current Status
-🚧 **Under Development**
-
-Development is actively underway in the /api/amorgos directory.
-
-## Technical Foundations
-- Maps LDPC decoding tasks to custom hardware accelerators
-- Implements iterative decoding algorithms (min-sum, sum-product)
-- Optimizes for various LDPC matrix formats and structures
-- Designed for high-throughput and low-latency operation
-
-## Planned Capabilities
-- Support for multiple LDPC matrix representations
-- Comparative benchmarking against traditional software decoders
-- Enhanced performance visualization and analysis tools
-- Batch processing for decoding multiple code words simultaneously
-
-## Application Areas
-- Wireless communications (5G, WiFi)
-- Data storage systems
-- Deep space and optical communications
-- Quantum error correction`
-  }
-};
-
+// Type for documentation section
+interface DocSection {
+  id: string;
+  section_id: string;
+  title: string;
+  content: string;
+  created: string;
+  updated: string;
+  created_by?: string;
+  updated_by?: string;
+}
 
 // Define category structure with nesting
 const docsStructure = [
@@ -351,6 +129,14 @@ const renderMarkdown = (content) => {
         </div>
       );
     }
+    else if (trimmedLine.startsWith('# ')) {
+      finishList();
+      elements.push(
+        <h1 key={`h1-${key++}`} className="text-2xl font-bold mt-6 mb-3 text-gray-900 dark:text-gray-50">
+          {trimmedLine.substring(2)}
+        </h1>
+      );
+    }
     else {
       finishList();
       elements.push(
@@ -366,8 +152,10 @@ const renderMarkdown = (content) => {
 };
 
 export default function Documentation() {
-  // Simulated admin status - replace with actual auth logic
-  const isAdmin = true; // TODO: Replace with actual auth check
+  // State for documentation content
+  const [docSections, setDocSections] = useState<DocSection[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [activeSection, setActiveSection] = useState("introduction");
   const [expandedSections, setExpandedSections] = useState(docsStructure.map(section => section.id));
@@ -379,16 +167,53 @@ export default function Documentation() {
   const [editContent, setEditContent] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [activeTab, setActiveTab] = useState("preview");
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // State for API health
   const [apiStatus, setApiStatus] = useState<ApiStatus>('checking');
   const [apiStatusDetails, setApiStatusDetails] = useState<string | null>(null);
 
+  // Fetch all documentation sections
+  useEffect(() => {
+    const fetchDocs = async () => {
+      try {
+        setLoading(true);
+        
+        // First check if we already have this section in our state
+        const existingSection = docSections.find(doc => doc.section_id === activeSection);
+        
+        if (existingSection) {
+          setEditTitle(existingSection.title);
+          setEditContent(existingSection.content);
+          setLoading(false);
+          return;
+        }
+        
+        // If not, fetch it from the API
+        const response = await fetch(`${API_BASE}/api/docs`);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch documentation: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        setDocSections(data);
+      } catch (err) {
+        console.error('Error fetching documentation:', err);
+        setError('Failed to load documentation. Please try again later.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchDocs();
+  }, []);
+
   // Fetch API health status
   useEffect(() => {
     const fetchApiHealth = async () => {
       try {
-        const response = await fetch('https://medusa.bendatsko.com/health');
+        const response = await fetch(`${API_BASE}/api/health`);
         const data = await response.json();
 
         if (!response.ok) {
@@ -397,7 +222,7 @@ export default function Documentation() {
           setApiStatusDetails(data.cloudflare_tunnel_status_details || data.weather_data_error_details || `API returned status ${response.status}`);
         } else {
           // Check detailed status from the health endpoint
-          if (data.api_status === 'online') {
+          if (data.api_status === 'ok') {
              setApiStatus('online');
              setApiStatusDetails('API operational.');
           } else if (data.api_status === 'degraded') {
@@ -421,13 +246,86 @@ export default function Documentation() {
     // return () => clearInterval(intervalId);
   }, []);
 
-  // Update edit content when section changes
+  // Check admin status
   useEffect(() => {
-    if (DocsContent[activeSection]) {
-      setEditContent(DocsContent[activeSection].content);
-      setEditTitle(DocsContent[activeSection].title);
-    }
-  }, [activeSection]);
+    const checkAdminStatus = async () => {
+      try {
+        // For now, we'll just set all users as admin for testing purposes
+        // In production, you'd want to fetch this from your auth system
+        setIsAdmin(true);
+        
+        // Uncomment this code when you have user authentication set up
+        /*
+        const userEmail = "current_user@example.com"; // Replace with actual user email from auth
+        const response = await fetch(`${API_BASE}/api/users/check-admin?email=${encodeURIComponent(userEmail)}`);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to check admin status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        setIsAdmin(data.isAdmin);
+        */
+      } catch (err) {
+        console.error('Error checking admin status:', err);
+        setIsAdmin(false);
+      }
+    };
+    
+    checkAdminStatus();
+  }, []);
+
+  // Fetch content for the active section
+  useEffect(() => {
+    const fetchDocSection = async () => {
+      if (!activeSection) return;
+      
+      try {
+        setLoading(true);
+        
+        // First check if we already have this section in our state
+        const existingSection = docSections.find(doc => doc.section_id === activeSection);
+        
+        if (existingSection) {
+          setEditTitle(existingSection.title);
+          setEditContent(existingSection.content);
+          setLoading(false);
+          return;
+        }
+        
+        // If not, fetch it from the API
+        const response = await fetch(`${API_BASE}/api/docs/${activeSection}`);
+        
+        if (response.status === 404) {
+          // If the section doesn't exist yet, create an empty one for editing
+          const categoryItem = docsStructure
+            .flatMap(category => category.items)
+            .find(item => item.id === activeSection);
+            
+          if (categoryItem) {
+            setEditTitle(categoryItem.title);
+            setEditContent('');
+          } else {
+            setEditTitle('New Section');
+            setEditContent('');
+          }
+        } else if (!response.ok) {
+          throw new Error(`Failed to fetch section: ${response.status}`);
+        } else {
+          const data = await response.json();
+          setEditTitle(data.title);
+          setEditContent(data.content);
+        }
+      } catch (err) {
+        console.error(`Error fetching section ${activeSection}:`, err);
+        setError(`Failed to load section "${activeSection}". Please try again later.`);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchDocSection();
+  }, [activeSection, docSections]);
 
   // Reset editing state when section changes
   useEffect(() => {
@@ -437,41 +335,63 @@ export default function Documentation() {
 
   const handleStartEditing = () => {
     setIsEditing(true);
-    setEditContent(DocsContent[activeSection].content);
-    setEditTitle(DocsContent[activeSection].title);
     setActiveTab("edit");
   };
 
   const handleSave = async () => {
     try {
-      // Here you would make an API call to save the content
-      // For now we'll just simulate it
-      console.log("Saving content for section:", activeSection);
-      console.log("New title:", editTitle);
-      console.log("New content:", editContent);
-
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Update local state
-      DocsContent[activeSection] = {
-        ...DocsContent[activeSection],
-        title: editTitle,
-        content: editContent
-      };
-
+      setLoading(true);
+      
+      const response = await fetch(`${API_BASE}/api/docs/${activeSection}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: editTitle,
+          content: editContent,
+          updated_by: 'current_user' // Replace with actual user info when auth is set up
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to save content: ${response.status}`);
+      }
+      
+      // Update our local state with the saved document
+      const savedDoc = await response.json();
+      
+      setDocSections(prev => {
+        const existing = prev.findIndex(doc => doc.section_id === activeSection);
+        if (existing >= 0) {
+          const updated = [...prev];
+          updated[existing] = savedDoc;
+          return updated;
+        } else {
+          return [...prev, savedDoc];
+        }
+      });
+      
       setIsEditing(false);
       setActiveTab("preview");
-    } catch (error) {
-      console.error("Error saving content:", error);
-      // Show error message to user
+    } catch (err) {
+      console.error('Error saving content:', err);
+      setError('Failed to save content. Please try again later.');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleCancel = () => {
     setIsEditing(false);
-    setEditContent(DocsContent[activeSection].content);
-    setEditTitle(DocsContent[activeSection].title);
+    
+    // Reset to the original content from our state
+    const section = docSections.find(doc => doc.section_id === activeSection);
+    if (section) {
+      setEditTitle(section.title);
+      setEditContent(section.content);
+    }
+    
     setActiveTab("preview");
   };
 
@@ -529,8 +449,6 @@ export default function Documentation() {
 
   return (
     <main className="container max-w-5xl mx-auto p-4">
- 
-
       {/* Main Content */}
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Mobile Header */}
@@ -711,85 +629,121 @@ export default function Documentation() {
             )}
           </div>
 
-          {/* Documentation Content */}
-          {isEditing ? (
-            <Card className="p-6 shadow-sm">
-              <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <div className="flex items-center justify-between mb-4">
-                  <TabsList>
-                    <TabsTrigger value="edit">Edit</TabsTrigger>
-                    <TabsTrigger value="preview">Preview</TabsTrigger>
-                  </TabsList>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="secondary"
-                      onClick={handleCancel}
-                      className="flex items-center gap-2"
+          {/* Loading State */}
+          {loading && (
+            <div className="flex justify-center items-center h-64">
+              <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+            </div>
+          )}
+
+          {/* Error State */}
+          {error && !loading && (
+            <Card className="p-6 shadow-sm bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800">
+              <div className="flex items-start">
+                <div className="flex-shrink-0 text-red-500">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="size-5">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 00-2 0v4a1 1 0 002 0V6zm-1 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error Loading Documentation</h3>
+                  <div className="mt-2 text-sm text-red-700 dark:text-red-300">{error}</div>
+                  <div className="mt-4">
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="inline-flex items-center rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-200"
                     >
-                      <RiCloseLine className="size-4" />
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleSave}
-                      className="flex items-center gap-2"
-                    >
-                      <RiSaveLine className="size-4" />
-                      Save
-                    </Button>
+                      Refresh Page
+                    </button>
                   </div>
                 </div>
-
-                <TabsContent value="edit">
-                  <Textarea
-                    value={editContent}
-                    onChange={(e) => setEditContent(e.target.value)}
-                    className="min-h-[500px] font-mono text-sm p-4 bg-gray-50 dark:bg-gray-900"
-                    placeholder="Enter markdown content..."
-                  />
-                </TabsContent>
-
-                <TabsContent value="preview">
-                  <div className="documentation-content">
-                    {renderMarkdown(editContent)}
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </Card>
-          ) : (
-            <Card className="p-6 shadow-sm">
-              <div className="documentation-content">
-                {renderMarkdown(editContent)}
               </div>
             </Card>
           )}
 
-          {/* Navigation buttons */}
-          <div className="mt-8 flex flex-wrap justify-between gap-4 pt-6 border-t">
-            <div>
-              {prev && (
-                <button
-                  onClick={() => setActiveSection(prev.id)}
-                  className="flex items-center text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
-                >
-                  <RiArrowRightSLine className="mr-1 size-4 rotate-180" />
-                  <span className="text-sm mr-2">Previous</span>
-                  <span className="text-sm font-medium">{prev.title}</span>
-                </button>
+          {/* Documentation Content */}
+          {!loading && !error && (
+            <>
+              {isEditing ? (
+                <Card className="p-6 shadow-sm">
+                  <Tabs value={activeTab} onValueChange={setActiveTab}>
+                    <div className="flex items-center justify-between mb-4">
+                      <TabsList>
+                        <TabsTrigger value="edit">Edit</TabsTrigger>
+                        <TabsTrigger value="preview">Preview</TabsTrigger>
+                      </TabsList>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="secondary"
+                          onClick={handleCancel}
+                          className="flex items-center gap-2"
+                        >
+                          <RiCloseLine className="size-4" />
+                          Cancel
+                        </Button>
+                        <Button
+                          onClick={handleSave}
+                          className="flex items-center gap-2"
+                        >
+                          <RiSaveLine className="size-4" />
+                          Save
+                        </Button>
+                      </div>
+                    </div>
+
+                    <TabsContent value="edit">
+                      <Textarea
+                        value={editContent}
+                        onChange={(e) => setEditContent(e.target.value)}
+                        className="min-h-[500px] font-mono text-sm p-4 bg-gray-50 dark:bg-gray-900"
+                        placeholder="Enter markdown content..."
+                      />
+                    </TabsContent>
+
+                    <TabsContent value="preview">
+                      <div className="documentation-content">
+                        {renderMarkdown(editContent)}
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                </Card>
+              ) : (
+                <Card className="p-6 shadow-sm">
+                  <div className="documentation-content">
+                    {renderMarkdown(editContent)}
+                  </div>
+                </Card>
               )}
-            </div>
-            <div>
-              {next && (
-                <button
-                  onClick={() => setActiveSection(next.id)}
-                  className="flex items-center text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
-                >
-                  <span className="text-sm mr-2">Next</span>
-                  <span className="text-sm font-medium">{next.title}</span>
-                  <RiArrowRightSLine className="ml-1 size-4" />
-                </button>
-              )}
-            </div>
-          </div>
+
+              {/* Navigation buttons */}
+              <div className="mt-8 flex flex-wrap justify-between gap-4 pt-6 border-t">
+                <div>
+                  {prev && (
+                    <button
+                      onClick={() => setActiveSection(prev.id)}
+                      className="flex items-center text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+                    >
+                      <RiArrowRightSLine className="mr-1 size-4 rotate-180" />
+                      <span className="text-sm mr-2">Previous</span>
+                      <span className="text-sm font-medium">{prev.title}</span>
+                    </button>
+                  )}
+                </div>
+                <div>
+                  {next && (
+                    <button
+                      onClick={() => setActiveSection(next.id)}
+                      className="flex items-center text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+                    >
+                      <span className="text-sm mr-2">Next</span>
+                      <span className="text-sm font-medium">{next.title}</span>
+                      <RiArrowRightSLine className="ml-1 size-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </main>

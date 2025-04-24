@@ -5,21 +5,40 @@ import { useState } from "react";
 import { RiCloseLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
-import { addDoc, collection } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+
+// Firestore logic removed; using parent callback to create tests
 
 interface CreateTestWindowProps {
   isOpen: boolean;
   onClose: () => void;
-  onTestComplete?: (testId: string) => void;
+  onTestComplete?: (testName: string, chipType: ChipType) => void;
 }
 
 type ChipType = "3sat" | "ldpc" | "hardware";
-type TestMode = "hardware-only" | "hardware-refinement";
+type TestMode = "hardware-only" | "hardware-refinement" | "hardware-in-the-loop";
+
+interface TestConfig {
+  iterations?: number;
+  timeout?: number;
+  hardware?: {
+    frequency: number;
+    voltage: number;
+    temperature: number;
+  };
+}
 
 export default function CreateTestWindow({ isOpen, onClose, onTestComplete }: CreateTestWindowProps) {
   const [selectedChip, setSelectedChip] = useState<ChipType>("3sat");
   const [testMode, setTestMode] = useState<TestMode>("hardware-only");
+  const [testConfig, setTestConfig] = useState<TestConfig>({
+    iterations: 1000,
+    timeout: 300,
+    hardware: {
+      frequency: 100,
+      voltage: 1.2,
+      temperature: 25
+    }
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,7 +57,8 @@ export default function CreateTestWindow({ isOpen, onClose, onTestComplete }: Cr
       const newTest = {
         name: `${selectedChip.toUpperCase()} Test`,
         chipType: selectedChip,
-        testMode: selectedChip === "3sat" ? testMode : null,
+        testMode,
+        config: testConfig,
         status: "queued",
         created: new Date().toISOString(),
         createdBy: {
@@ -50,9 +70,8 @@ export default function CreateTestWindow({ isOpen, onClose, onTestComplete }: Cr
         },
       };
 
-      const docRef = await addDoc(collection(db, "tests"), newTest);
       if (onTestComplete) {
-        onTestComplete(docRef.id);
+        onTestComplete(newTest.name, newTest.chipType);
       }
       onClose();
     } catch (err) {
@@ -95,23 +114,112 @@ export default function CreateTestWindow({ isOpen, onClose, onTestComplete }: Cr
             </Select>
           </div>
 
-          {selectedChip === "3sat" && (
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Test Mode
-              </label>
-              <Select
-                value={testMode}
-                onValueChange={(value) => setTestMode(value as TestMode)}
-              >
-                <SelectTrigger>
-                  {testMode === "hardware-only" ? "Hardware Only" : "Hardware with Refinement"}
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="hardware-only">Hardware Only</SelectItem>
-                  <SelectItem value="hardware-refinement">Hardware with Refinement</SelectItem>
-                </SelectContent>
-              </Select>
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Test Mode
+            </label>
+            <Select
+              value={testMode}
+              onValueChange={(value) => setTestMode(value as TestMode)}
+            >
+              <SelectTrigger>
+                {testMode === "hardware-only" ? "Hardware Only" : 
+                 testMode === "hardware-refinement" ? "Hardware with Refinement" :
+                 "Hardware in the Loop"}
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="hardware-only">Hardware Only</SelectItem>
+                <SelectItem value="hardware-refinement">Hardware with Refinement</SelectItem>
+                <SelectItem value="hardware-in-the-loop">Hardware in the Loop</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {testMode === "hardware-in-the-loop" && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Test Iterations
+                </label>
+                <input
+                  type="number"
+                  value={testConfig.iterations}
+                  onChange={(e) => setTestConfig(prev => ({
+                    ...prev,
+                    iterations: parseInt(e.target.value)
+                  }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Timeout (seconds)
+                </label>
+                <input
+                  type="number"
+                  value={testConfig.timeout}
+                  onChange={(e) => setTestConfig(prev => ({
+                    ...prev,
+                    timeout: parseInt(e.target.value)
+                  }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Hardware Settings
+                </label>
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-xs text-gray-500">Frequency (MHz)</label>
+                    <input
+                      type="number"
+                      value={testConfig.hardware?.frequency}
+                      onChange={(e) => setTestConfig(prev => ({
+                        ...prev,
+                        hardware: {
+                          ...prev.hardware!,
+                          frequency: parseFloat(e.target.value)
+                        }
+                      }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Voltage (V)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={testConfig.hardware?.voltage}
+                      onChange={(e) => setTestConfig(prev => ({
+                        ...prev,
+                        hardware: {
+                          ...prev.hardware!,
+                          voltage: parseFloat(e.target.value)
+                        }
+                      }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">Temperature (°C)</label>
+                    <input
+                      type="number"
+                      value={testConfig.hardware?.temperature}
+                      onChange={(e) => setTestConfig(prev => ({
+                        ...prev,
+                        hardware: {
+                          ...prev.hardware!,
+                          temperature: parseFloat(e.target.value)
+                        }
+                      }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 

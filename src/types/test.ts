@@ -85,65 +85,35 @@ export interface TestRun {
     chipType: string;
     status: string;
     created: any;
-    completed?: any;
+    environment?: string;
+    testMode?: string;
     runtime?: number;
-    solver: string;
-    solverParameters: Record<string, any>;
-    hardware: string[];
-    set: string;
-    instanceIdx: number;
-    cutoffType: string;
-    cutoff: string;
-    runsAttempted: number;
-    runsSolved: number;
-    nUnsatClauses: number[];
-    configurations: number[][];
-    results?: {
-        timestamp: string;
-        summary: Record<string, any>;
-        results: Array<{
-            solution_found: boolean;
-            solverMetrics: SolverMetrics;
-            hardwareMetrics: HardwareMetrics;
-            performanceMetrics: PerformanceMetrics;
-            resourceUsage: ResourceUsage;
-            powerUsage: PowerUsage;
-            systemInfo: SystemInfo;
-            metrics: CNFMetrics;
-            batchStatistics: BatchStatistics;
-            metadata: {
-                problemId: string;
-                solutionPresent: boolean;
-                isUnsolved: boolean;
-                powerMw: number;
-                etsNj: number;
-                tts: string;
-                ttsCiLower: string;
-                ttsCiUpper: string;
-            };
-            inputFiles: string[];
-            outputFiles: string[];
-            quiccConfig: string;
-            hardware_time_seconds: string;
-            cpu_time_seconds: string;
-            cpu_energy_joules: string;
-            hardware_energy_joules: string;
-            hardware_calls: string;
-            solver_iterations: string;
-            n_unsat_clauses: string;
-            configurations: string;
-            cnf?: string;
-            original_cnf?: string;
-            solution_string?: string;
-        }>;
+    runsSolved?: number;
+    runsAttempted?: number;
+    metadata?: {
+        createdBy?: {
+            name: string;
+            photoURL?: string;
+        };
+        [key: string]: any;
     };
-    createdBy?: {
-        uid: string;
-        name: string;
-        email: string;
-        role: string;
-        avatar: string;
-        photoURL?: string;
-        displayName?: string;
-    };
-} 
+    results?: any;
+    error?: string;
+    files?: Array<{
+        id: string;
+        filename: string;
+        file_size: number;
+        created: string;
+    }>;
+}
+
+export interface Metadata {
+    problemId: string;
+    solutionPresent: boolean;
+    isUnsolved: boolean;
+    powerMw: number;
+    etsNj: number;
+    tts: string;
+    ttsCiLower: string;
+    ttsCiUpper: string;
+}
