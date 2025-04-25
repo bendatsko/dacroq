@@ -1,22 +1,21 @@
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
-
 import { cn } from "@/lib/utils"
 
 const alertVariants = cva(
-  "relative w-full rounded-lg border px-4 py-3 text-sm [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground [&>svg~*]:pl-7",
+  "relative w-full rounded-lg border p-4 [&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground",
   {
     variants: {
       variant: {
         default: "bg-background text-foreground",
         destructive:
-          "border-destructive/50 text-red-50 dark:text-red-50 bg-red-600 dark:bg-red-900/90 [&>svg]:text-red-50",
+          "border-red-500/50 text-red-50 dark:text-red-50 bg-red-600 dark:bg-red-900 [&>svg]:text-red-50",
         success: 
-          "border-green-500/50 text-green-50 dark:text-green-50 bg-green-600 dark:bg-green-900/90 [&>svg]:text-green-50",
+          "border-green-500/50 text-green-50 dark:text-green-50 bg-green-600 dark:bg-green-900 [&>svg]:text-green-50",
         warning:
-          "border-yellow-500/50 text-yellow-50 dark:text-yellow-50 bg-yellow-600 dark:bg-yellow-800/90 [&>svg]:text-yellow-50",
+          "border-yellow-500/50 text-yellow-50 dark:text-yellow-50 bg-yellow-600 dark:bg-yellow-800 [&>svg]:text-yellow-50",
         info:
-          "border-blue-500/50 text-blue-50 dark:text-blue-50 bg-blue-600 dark:bg-blue-900/90 [&>svg]:text-blue-50",
+          "border-blue-500/50 text-blue-50 dark:text-blue-50 bg-blue-600 dark:bg-blue-900 [&>svg]:text-blue-50",
       },
     },
     defaultVariants: {

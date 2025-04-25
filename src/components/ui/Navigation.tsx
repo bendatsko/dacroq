@@ -33,7 +33,7 @@ function Navigation() {
                     <ellipse 
                       cx="12" 
                       cy="12" 
-                      rx="6" 
+                      rx="5" 
                       ry="10" 
                       fill="none" 
                       stroke="currentColor" 
@@ -52,7 +52,7 @@ function Navigation() {
                     />
                   </svg>
                 </div>
-                <span className="ml-2 text-lg font-semibold tracking-tight text-gray-900 dark:text-white">
+                <span className=" text-lg font-semibold tracking-tight text-gray-900 dark:text-white">
                   Dacroq
                 </span>
               </Link>
