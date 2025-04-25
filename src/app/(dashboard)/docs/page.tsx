@@ -23,7 +23,7 @@ import {
 } from "@remixicon/react";
 
 // API base URL
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+const API_BASE =  "https://medusa.bendatsko.com";
 
 // Type for API health status
 type ApiStatus = 'checking' | 'online' | 'degraded' | 'offline' | 'error';
@@ -40,38 +40,6 @@ interface DocSection {
   updated_by?: string;
 }
 
-// Define category structure with nesting
-const docsStructure = [
-  {
-    id: "getting-started",
-    title: "Getting Started",
-    icon: <RiBookOpenLine className="size-4" />,
-    items: [
-      { id: "introduction", title: "Introduction" },
-      { id: "quick-start", title: "Quick Start Guide" },
-      { id: "installation", title: "Installation" }
-    ]
-  },
-  {
-    id: "architecture",
-    title: "System Architecture",
-    icon: <RiCpuLine className="size-4" />,
-    items: [
-      { id: "hardware-architecture", title: "Hardware Architecture" },
-      { id: "software-architecture", title: "Software Architecture" }
-    ]
-  },
-  {
-    id: "solvers",
-    title: "Solvers",
-    icon: <RiLightbulbLine className="size-4" />,
-    items: [
-      { id: "3-sat-solver", title: "3-SAT Solver" },
-      { id: "k-sat-solver", title: "K-SAT Solver" },
-      { id: "ldpc-solver", title: "LDPC Solver" }
-    ]
-  }
-];
 
 // Helper function to render markdown content
 const renderMarkdown = (content) => {
@@ -151,16 +119,30 @@ const renderMarkdown = (content) => {
   return elements;
 };
 
+const initialDocsStructure = [];
+
 export default function Documentation() {
   // State for documentation content
   const [docSections, setDocSections] = useState<DocSection[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-
+  
+  // Add the docs structure state inside the component
+  const [docsStructure, setDocsStructure] = useState([]);
+  
   const [activeSection, setActiveSection] = useState("introduction");
-  const [expandedSections, setExpandedSections] = useState(docsStructure.map(section => section.id));
+  // Fix this to handle empty initial state
+  const [expandedSections, setExpandedSections] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+
+  useEffect(() => {
+    if (docsStructure.length > 0) {
+      setExpandedSections(docsStructure.map(section => section.id));
+    }
+  }, [docsStructure]);
+
 
   // New states for editing
   const [isEditing, setIsEditing] = useState(false);
@@ -174,22 +156,13 @@ export default function Documentation() {
   const [apiStatusDetails, setApiStatusDetails] = useState<string | null>(null);
 
   // Fetch all documentation sections
+  // Fetch all documentation sections
   useEffect(() => {
     const fetchDocs = async () => {
       try {
         setLoading(true);
         
-        // First check if we already have this section in our state
-        const existingSection = docSections.find(doc => doc.section_id === activeSection);
-        
-        if (existingSection) {
-          setEditTitle(existingSection.title);
-          setEditContent(existingSection.content);
-          setLoading(false);
-          return;
-        }
-        
-        // If not, fetch it from the API
+        // Fetch from the API
         const response = await fetch(`${API_BASE}/api/docs`);
         
         if (!response.ok) {
@@ -198,6 +171,78 @@ export default function Documentation() {
         
         const data = await response.json();
         setDocSections(data);
+        
+        // Build structure from section IDs
+        const structureMap = {};
+        
+        // Organize docs into sections based on naming patterns
+        data.forEach(doc => {
+          // Check if section_id follows a pattern like "category-name"
+          const parts = doc.section_id.split('-');
+          
+          if (parts.length > 1) {
+            // This is a subsection
+            const categoryId = parts[0];
+            
+            // Create category if it doesn't exist
+            if (!structureMap[categoryId]) {
+              // Assign icon based on category
+              let icon = <RiFileTextLine className="size-4" />;
+              let title = categoryId.charAt(0).toUpperCase() + categoryId.slice(1);
+              
+              if (categoryId === 'getting' || categoryId === 'quickstart') {
+                icon = <RiBookOpenLine className="size-4" />;
+                title = 'Getting Started';
+              } else if (categoryId === 'architecture' || categoryId === 'system') {
+                icon = <RiCpuLine className="size-4" />;
+                title = 'System Architecture';
+              }
+              
+              structureMap[categoryId] = {
+                id: categoryId,
+                title: title,
+                icon: icon,
+                items: []
+              };
+            }
+            
+            // Add to category
+            structureMap[categoryId].items.push({
+              id: doc.section_id,
+              title: doc.title
+            });
+          } else {
+            // This is a standalone document, not in any category
+            // Create a general section if it doesn't exist
+            if (!structureMap['general']) {
+              structureMap['general'] = {
+                id: 'general',
+                title: 'General',
+                icon: <RiFileTextLine className="size-4" />,
+                items: []
+              };
+            }
+            
+            structureMap['general'].items.push({
+              id: doc.section_id,
+              title: doc.title
+            });
+          }
+        });
+        
+        // Convert to array and sort
+        const structure = Object.values(structureMap);
+        setDocsStructure(structure);
+        
+        // Set expanded sections when structure is loaded
+        if (structure.length > 0) {
+          setExpandedSections(structure.map(section => section.id));
+        }
+        
+        // If no active section is set yet, use the first doc
+        if (!activeSection && data.length > 0) {
+          setActiveSection(data[0].section_id);
+        }
       } catch (err) {
         console.error('Error fetching documentation:', err);
         setError('Failed to load documentation. Please try again later.');

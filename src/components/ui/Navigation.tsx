@@ -58,7 +58,7 @@ function Navigation() {
               </Link>
 
               {/* Main navigation links */}
-              <nav className="hidden md:flex">
+              {/* <nav className="hidden md:flex">
                 <div className="flex h-16 space-x-4">
                   <Link 
                     href="/" 
@@ -82,7 +82,7 @@ function Navigation() {
                     Docs
                   </Link>
                 </div>
-              </nav>
+              </nav> */}
             </div>
 
             {/* Right side - utility links and user controls */}
@@ -105,7 +105,7 @@ function Navigation() {
       </div>
 
       {/* Mobile navigation - only shown on smaller screens */}
-      <div className="md:hidden bg-white border-b border-gray-200 dark:border-gray-800 dark:bg-gray-900">
+      {/* <div className="md:hidden bg-white border-b border-gray-200 dark:border-gray-800 dark:bg-gray-900">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <TabNavigation className="border-t-0 pb-1">
             <TabNavigationLink
@@ -133,7 +133,7 @@ function Navigation() {
             </TabNavigationLink>
           </TabNavigation>
         </div>
-      </div>
+      </div> */}
     </>
   )
 }

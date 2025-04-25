@@ -819,27 +819,7 @@ export default function Dashboard() {
                                 Retry Connection
                             </Button>
 
-                            <div className="text-sm text-gray-500 dark:text-gray-400">
-                                <p>You can still access:</p>
-                                <div className="flex justify-center gap-4 mt-2">
-                                    <Button
-                                        onClick={() => router.push('/docs')}
-                                        variant="outline"
-                                        size="sm"
-                                        className="text-xs"
-                                    >
-                                        Documentation
-                                    </Button>
-                                    <Button
-                                        onClick={() => router.push('/settings')}
-                                        variant="outline"
-                                        size="sm"
-                                        className="text-xs"
-                                    >
-                                        Settings
-                                    </Button>
-                                </div>
-                            </div>
+                            
                         </div>
                     </div>
                 ) : filteredTests.length > 0 ? (

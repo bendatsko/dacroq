@@ -111,6 +111,8 @@ export function TestCreatePanel({
     const [satIterations, setSatIterations] = useState(1000);
     const [ldpcCodeRate, setLdpcCodeRate] = useState(0.5);
     const [hardwareParallelization, setHardwareParallelization] = useState(4);
+    const [cnfFiles, setCnfFiles] = useState<FileList | null>(null);
+    const [useHardwareAccel, setUseHardwareAccel] = useState(false);
 
     const validateForm = () => {
         return testName.trim().length > 0;
@@ -122,6 +124,9 @@ export function TestCreatePanel({
         const testData = {
             name: testName,
             chipType,
+            testMode: testType,
+            hardwareAccel: useHardwareAccel,
+            files: cnfFiles,
             processorType,
             testType,
             description,
@@ -254,6 +259,29 @@ export function TestCreatePanel({
                                     onChange={(e) => setDescription(e.target.value)}
                                 />
                             </div>
+                            {testType === "SAT" && (
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="cnfFiles">Upload .cnf Files</Label>
+                                    <input
+                                        id="cnfFiles"
+                                        type="file"
+                                        accept=".cnf"
+                                        multiple
+                                        onChange={e => setCnfFiles(e.target.files)}
+                                        className="block w-full text-sm text-gray-900 file:mr-4 file:py-2 file:px-4 file:border file:rounded file:border-gray-300 file:text-sm file:font-semibold file:bg-gray-50 file:text-gray-700 hover:file:bg-gray-100 dark:file:bg-gray-700 dark:file:border-gray-600 dark:file:text-white dark:hover:file:bg-gray-600"
+                                    />
+                                </div>
+                            )}
+                            {testType === "SAT" && (
+                                <div className="flex items-center space-x-2">
+                                    <Switch
+                                        checked={useHardwareAccel}
+                                        onCheckedChange={setUseHardwareAccel}
+                                        id="hardwareAccel"
+                                    />
+                                    <Label htmlFor="hardwareAccel">Use Hardware Acceleration</Label>
+                                </div>
+                            )}
                         </TabsContent>
 
                         <TabsContent value="hardware" className="px-6 py-2 space-y-5 mt-0">
