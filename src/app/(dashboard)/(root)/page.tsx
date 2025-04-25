@@ -70,7 +70,7 @@ import { Checkbox } from "@/components/Checkbox";
 import { TestRun } from "@/types/test";
 
 // Base URL for the backend API; configure NEXT_PUBLIC_API_BASE_URL in .env.local
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+const API_BASE = "https://medusa.bendatsko.com";
 
 // Expanded types for API responses to match hardware test requirements
 interface ApiHealth {

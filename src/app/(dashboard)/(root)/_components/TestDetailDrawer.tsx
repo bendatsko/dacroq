@@ -38,7 +38,7 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 
 // Base URL for the backend API
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+const API_BASE = "https://medusa.bendatsko.com";
 
 export interface TestDetailDrawerProps {
   open: boolean;
