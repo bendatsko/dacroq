@@ -18,6 +18,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
     // Enable client-side features after hydration
@@ -34,14 +35,15 @@ export default function LoginPage() {
 
     // Set up Firebase auth state listener
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      // Double-check logout flag in case it was set after initial check
+      // If logged out intentionally, do not auto-login
       if (sessionStorage.getItem("intentionalLogout") === "true") {
         return;
       }
 
-      // Process auto-login if user exists and we're not already processing
-      if (user && !isProcessing) {
-        await handleSuccessfulLogin(user);
+      // Check if user is authenticated
+      if (user) {
+        // Instead of auto-login, just set the logged in state
+        setIsLoggedIn(true);
       }
     });
 
@@ -138,6 +140,12 @@ export default function LoginPage() {
       setError(null);
       setIsProcessing(true);
       
+      // For existing authenticated sessions, skip sign-in
+      if (isLoggedIn && auth.currentUser) {
+        await handleSuccessfulLogin(auth.currentUser);
+        return;
+      }
+      
       const result = await signInWithGoogle();
       await handleSuccessfulLogin(result.user);
     } catch (error) {
@@ -149,55 +157,96 @@ export default function LoginPage() {
 
   return (
     <div
-      className="flex min-h-screen flex-col items-center justify-center px-4 py-28 lg:px-6"
+      className="flex min-h-screen flex-col items-center justify-center px-4 py-20 lg:px-6 bg-gray-50 dark:bg-gray-900"
       suppressHydrationWarning
     >
       <div className="relative sm:mx-auto sm:w-full sm:max-w-sm">
         {/* Logo section */}
-        <div className="relative mx-auto w-fit">
+        <div className="relative mx-auto w-fit mb-6">
           <span className="sr-only">Dacroq</span>
           <div className="relative">
-            <img src="/Logo.svg" alt="Logo" className="block dark:hidden h-12" />
-            <img src="/Logo_White.svg" alt="Logo" className="hidden dark:block h-12" />
+            <div className="flex items-center justify-center flex-col">
+              <div className="relative h-16 w-16 flex items-center justify-center mb-2">
+                <svg 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  viewBox="0 0 24 24" 
+                  className="h-16 w-16 text-blue-600 dark:text-blue-400"
+                >
+                  {/* Inner orbit (angled) */}
+                  <ellipse 
+                    cx="12" 
+                    cy="12" 
+                    rx="5" 
+                    ry="10" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    strokeWidth="1.5" 
+                    className="opacity-70"
+                    transform="rotate(45, 12, 12)"
+                  />
+                  
+                  {/* Core (qubit) */}
+                  <circle 
+                    cx="12" 
+                    cy="12" 
+                    r="3" 
+                    fill="currentColor" 
+                    className="opacity-90"
+                  />
+                </svg>
+              </div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dacroq</h1>
+            </div>
           </div>
         </div>
+        
+        <div className="bg-white dark:bg-gray-800 p-6 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6 text-center">Sign In</h2>
+          
+          {/* Error display */}
+          {error && (
+            <div className="mt-4 rounded-md bg-red-50 p-4 text-sm text-red-800 dark:bg-red-900/10 dark:text-red-500">
+              {error}
+            </div>
+          )}
 
-        {/* Error display */}
-        {error && (
-          <div className="mt-4 rounded-md bg-red-50 p-4 text-sm text-red-800 dark:bg-red-900/10 dark:text-red-500">
-            {error}
+          {/* Sign-in button */}
+          <div className="mt-4">
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full flex items-center justify-center"
+              onClick={handleGoogleSignIn}
+              disabled={isProcessing}
+            >
+              <span className="inline-flex items-center gap-2">
+                <RiGoogleFill className="size-5" aria-hidden={true} />
+                {isProcessing ? "Signing in..." : "Continue with Google"}
+              </span>
+            </Button>
           </div>
-        )}
 
-        {/* Sign-in button */}
-        <div className="mt-4">
-          <Button
-            type="button"
-            variant="secondary"
-            className="w-full"
-            onClick={handleGoogleSignIn}
-            disabled={isProcessing}
-          >
-            <span className="inline-flex items-center gap-2">
-              <RiGoogleFill className="size-5" aria-hidden={true} />
-              {isProcessing ? "Logging you in..." : "Continue with Google"}
-            </span>
-          </Button>
+          {/* Status message when logged in but not auto-redirected */}
+          {isLoggedIn && !isProcessing && (
+            <div className="mt-4 rounded-md bg-blue-50 p-4 text-sm text-blue-800 dark:bg-blue-900/10 dark:text-blue-500">
+              You are signed in. Click the button above to continue to dashboard.
+            </div>
+          )}
         </div>
 
         {/* Terms of service */}
-        <p className="mt-4 text-xs text-gray-500 dark:text-gray-500">
+        <p className="mt-4 text-xs text-center text-gray-500 dark:text-gray-400">
           By signing in, you agree to our{" "}
           <a
             href="https://its.umich.edu/computing/ai/terms-of-service"
-            className="underline underline-offset-2"
+            className="underline underline-offset-2 text-blue-600 dark:text-blue-400"
           >
             terms of service
           </a>{" "}
           and{" "}
           <a
             href="https://spg.umich.edu/policy/601.07"
-            className="underline underline-offset-2"
+            className="underline underline-offset-2 text-blue-600 dark:text-blue-400"
           >
             privacy policy
           </a>

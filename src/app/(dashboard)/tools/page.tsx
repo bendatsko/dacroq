@@ -5,7 +5,6 @@ import { useDropzone } from "react-dropzone";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Divider } from "@/components/Divider";
-import { Textarea } from "@/components/ui/textarea";
 import {
   RiUploadLine,
   RiFileLine,
@@ -262,7 +261,7 @@ export default function ToolsPage() {
   };
 
   return (
-    <main className="container max-w-4xl mx-auto p-4">
+    <main className="max-w-4xl mx-auto p-4">
       {/* Header with Instructions */}
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50 mb-4">
@@ -290,7 +289,7 @@ export default function ToolsPage() {
                 ) : (
                   <RiCloseLine className="h-5 w-5 text-gray-400" />
                 )}
-                <span>Emulation CSV files</span>
+                <span className="text-gray-700 dark:text-gray-300">Emulation CSV files</span>
               </div>
               <div className="flex items-center gap-2">
                 {uploadedTypes.cnfFiles ? (
@@ -298,7 +297,7 @@ export default function ToolsPage() {
                 ) : (
                   <RiCloseLine className="h-5 w-5 text-gray-400" />
                 )}
-                <span>CNF problem files (direct or in ZIP)</span>
+                <span className="text-gray-700 dark:text-gray-300">CNF problem files (direct or in ZIP)</span>
               </div>
             </div>
           </div>
@@ -366,7 +365,7 @@ export default function ToolsPage() {
           <div className="p-4 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                Conversion Files
+                Conversion Results
               </h2>
               <Button onClick={downloadAllAsZip} className="flex items-center gap-2">
                 <RiDownloadLine className="size-4" />
@@ -410,7 +409,7 @@ export default function ToolsPage() {
                     </div>
                   </div>
                   {item.isExpanded && (
-                    <div className="mt-4 pl-10">
+                    <div className="mt-4 pl-8">
                       <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
                         {renderOverview(item)}
                         <div className="mt-4">
@@ -429,9 +428,11 @@ export default function ToolsPage() {
                           {item.isJsonExpanded && (
                             <>
                               <Divider className="my-3" />
-                              <pre className="text-xs font-mono whitespace-pre-wrap text-gray-800 dark:text-gray-200">
-                                {JSON.stringify(item.benchmarks || item, null, 2)}
-                              </pre>
+                              <div className="max-h-96 overflow-y-auto">
+                                <pre className="text-xs font-mono whitespace-pre-wrap text-gray-800 dark:text-gray-200 p-4 bg-gray-100 dark:bg-gray-800 rounded-md">
+                                  {JSON.stringify(item.benchmarks || item, null, 2)}
+                                </pre>
+                              </div>
                             </>
                           )}
                         </div>

@@ -170,12 +170,13 @@ export default function SitemapPage() {
     return nodes.map(node => (
       <div key={node.id} className="mb-1">
         <div 
-          className={`flex items-center py-1.5 px-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 ${level > 0 ? 'ml-' + (level * 4) : ''}`}
+          className={`flex items-center py-1.5 px-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 ${level > 0 ? 'ml-' + (level * 4) : ''}`}
         >
           {node.type === 'folder' && node.children && (
             <button 
               onClick={() => toggleNode(node.id)}
               className="mr-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+              aria-label={node.expanded ? "Collapse" : "Expand"}
             >
               {node.expanded ? 
                 <RiArrowDownSLine className="h-4 w-4" /> : 
@@ -192,7 +193,7 @@ export default function SitemapPage() {
           
           <a 
             href={node.path} 
-            className="text-sm hover:text-blue-600 dark:hover:text-blue-400"
+            className="text-sm hover:text-blue-600 dark:hover:text-blue-400 text-gray-900 dark:text-gray-200"
           >
             {node.name}
           </a>
@@ -208,9 +209,9 @@ export default function SitemapPage() {
   }
 
   return (
-    <div className="max-w-screen-xl mx-auto px-4 sm:px-6 py-8">
+    <div className="max-w-screen-xl mx-auto px-4 sm:px-6 py-6">
       {/* Page Header */}
-      <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0 mb-8">
+      <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0 mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Sitemap</h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -262,7 +263,7 @@ export default function SitemapPage() {
           </div>
         ) : (
           <>
-            <div className="mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
               <div className="flex justify-between items-center">
                 <div className="text-sm text-gray-500 dark:text-gray-400">
                   {lastUpdated && (

@@ -7,21 +7,11 @@ import {
     RiAddLine,
     RiSearchLine,
     RiArrowDownSLine,
-    RiCalendarLine,
     RiFilterLine,
     RiMoreLine,
-    RiCheckLine,
-    RiArrowRightSLine,
-    RiArrowDownSFill,
-    RiFileDownloadLine,
-    RiCodeLine,
-    RiSettings4Line,
-    RiFileListLine,
-    RiAttachmentLine,
-    RiErrorWarningLine,
-    RiDeleteBin5Line,
     RiPlayLine,
     RiDownload2Line,
+    RiDeleteBin5Line,
 } from "@remixicon/react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -72,48 +62,6 @@ import { TestRun } from "@/types/test";
 // Base URL for the backend API; configure NEXT_PUBLIC_API_BASE_URL in .env.local
 const API_BASE = "https://medusa.bendatsko.com";
 
-// Expanded types for API responses to match hardware test requirements
-interface ApiHealth {
-    api_status: string;
-    db_status: string;
-    timestamp: string;
-}
-
-interface TestResponse {
-    id: string;
-    name: string;
-    chipType: string;
-    processorType: string;
-    testType: string;
-    environment: string;
-    created: string;
-    status: string;
-    voltage?: {
-        v1?: number;
-        v2?: number;
-        v3?: number;
-    };
-    results?: {
-        success: boolean;
-        errorRate?: number;
-        throughput?: number;
-        latency?: number;
-    };
-    files?: Array<{
-        id: string;
-        filename: string;
-        file_size: number;
-        created: string;
-    }>;
-    metadata?: {
-        createdBy?: {
-            name: string;
-            photoURL?: string;
-        };
-        [key: string]: any;
-    };
-}
-
 // Hardware configuration options
 const CHIP_TYPES = ["3SAT", "LDPC", "HARDWARE", "RISC-V"];
 const PROCESSOR_TYPES = ["ARM (Teensy 4.1)", "RISC-V", "Embedded"];
@@ -133,10 +81,9 @@ export default function Dashboard() {
     const [isAdmin, setIsAdmin] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [timeRange, setTimeRange] = useState("Last 12 hours");
-    const [apiHealth, setApiHealth] = useState<ApiHealth | null>(null);
+    const [apiHealth, setApiHealth] = useState<any | null>(null);
     const [selectedCategory, setSelectedCategory] = useState("all");
     const [selectedTests, setSelectedTests] = useState<string[]>([]);
-    const [testName, setTestName] = useState("");
     const [chipType, setChipType] = useState("3SAT");
     const [processorType, setProcessorType] = useState("ARM (Teensy 4.1)");
     const [testType, setTestType] = useState("Hardware-in-Loop");
@@ -347,6 +294,82 @@ export default function Dashboard() {
         setIsDrawerOpen(true);
     };
 
+    // Function to fetch tests from API
+    const fetchTests = async () => {
+        setIsLoading(true);
+        try {
+            const storedUser = localStorage.getItem("user");
+            if (!storedUser) {
+                router.push("/login");
+                return;
+            }
+
+            const user = JSON.parse(storedUser);
+            setIsAdmin(user.role === "admin");
+
+            let ms = 12 * 60 * 60 * 1000;
+            if (timeRange === "Last 24 hours") ms = 24 * 60 * 60 * 1000;
+            else if (timeRange === "Last 7 days") ms = 7 * 24 * 60 * 60 * 1000;
+
+            const res = await fetch(
+                `${API_BASE}/api/tests?timeRange=${ms}`,
+                {
+                    method: "GET",
+                    headers: { Accept: "application/json" },
+                }
+            );
+
+            if (!res.ok) {
+                const text = await res.text().catch(() => res.statusText);
+                console.error("API error:", text);
+
+                // Only set the error message for non-connectivity issues
+                if (res.status !== 0 && res.status < 500) {
+                    setError(`Failed to load tests (${res.status})`);
+                } else {
+                    // For connectivity issues, just update the API connection status
+                    setApiConnected(false);
+                    // Don't show the error toast for API connectivity issues
+                    setError(null);
+                }
+            } else {
+                setApiConnected(true);
+                const data = await res.json();
+                if (Array.isArray(data)) {
+                    const mapped: TestRun[] = data.map((t: any) => ({
+                        id: t.id,
+                        name: t.name,
+                        chipType: t.chipType || "3SAT", // Default values for backwards compatibility
+                        processorType: t.processorType || "ARM (Teensy 4.1)",
+                        testType: t.testType || "Hardware-in-Loop",
+                        environment: t.environment,
+                        created: t.created,
+                        status: t.status,
+                        voltage: t.voltage,
+                        results: t.results,
+                        ...((t.metadata && typeof t.metadata === "object")
+                            ? t.metadata
+                            : {}),
+                    }));
+                    // Sort by creation date (most recent first)
+                    mapped.sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime());
+                    setTests(mapped);
+                } else {
+                    console.warn("Unexpected API response:", data);
+                    setTests([]);
+                }
+            }
+        } catch (e) {
+            console.error("Fetch tests failed:", e);
+            // Don't show the error toast for API connectivity issues
+            setApiConnected(false);
+            // Clear any existing error so it doesn't show the error toast
+            setError(null);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     // Load tests from backend API
     useEffect(() => {
         const storedUser = localStorage.getItem("user");
@@ -354,75 +377,6 @@ export default function Dashboard() {
             router.push("/login");
             return;
         }
-
-        const fetchTests = async () => {
-            setIsLoading(true);
-            try {
-                const user = JSON.parse(storedUser);
-                setIsAdmin(user.role === "admin");
-
-                let ms = 12 * 60 * 60 * 1000;
-                if (timeRange === "Last 24 hours") ms = 24 * 60 * 60 * 1000;
-                else if (timeRange === "Last 7 days") ms = 7 * 24 * 60 * 60 * 1000;
-
-                const res = await fetch(
-                    `${API_BASE}/api/tests?timeRange=${ms}`,
-                    {
-                        method: "GET",
-                        headers: { Accept: "application/json" },
-                    }
-                );
-
-                if (!res.ok) {
-                    const text = await res.text().catch(() => res.statusText);
-                    console.error("API error:", text);
-
-                    // Only set the error message for non-connectivity issues
-                    if (res.status !== 0 && res.status < 500) {
-                        setError(`Failed to load tests (${res.status})`);
-                    } else {
-                        // For connectivity issues, just update the API connection status
-                        setApiConnected(false);
-                        // Don't show the error toast for API connectivity issues
-                        setError(null);
-                    }
-                } else {
-                    setApiConnected(true);
-                    const data = await res.json();
-                    if (Array.isArray(data)) {
-                        const mapped: TestRun[] = data.map((t: any) => ({
-                            id: t.id,
-                            name: t.name,
-                            chipType: t.chipType || "3SAT", // Default values for backwards compatibility
-                            processorType: t.processorType || "ARM (Teensy 4.1)",
-                            testType: t.testType || "Hardware-in-Loop",
-                            environment: t.environment,
-                            created: t.created,
-                            status: t.status,
-                            voltage: t.voltage,
-                            results: t.results,
-                            ...((t.metadata && typeof t.metadata === "object")
-                                ? t.metadata
-                                : {}),
-                        }));
-                        // Sort by creation date (most recent first)
-                        mapped.sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime());
-                        setTests(mapped);
-                    } else {
-                        console.warn("Unexpected API response:", data);
-                        setTests([]);
-                    }
-                }
-            } catch (e) {
-                console.error("Fetch tests failed:", e);
-                // Don't show the error toast for API connectivity issues
-                setApiConnected(false);
-                // Clear any existing error so it doesn't show the error toast
-                setError(null);
-            } finally {
-                setIsLoading(false);
-            }
-        };
 
         fetchTests();
     }, [router, timeRange]);
@@ -435,7 +389,7 @@ export default function Dashboard() {
                     method: "GET",
                     headers: { Accept: "application/json" },
                 });
-                const data: ApiHealth = await res.json();
+                const data = await res.json();
                 setApiHealth(data);
                 setApiConnected(true);
                 // Clear error message if connection is restored
@@ -476,7 +430,7 @@ export default function Dashboard() {
 
                 setTests(prev => {
                     const newTests = [...prev];
-                    results.forEach((result: TestResponse) => {
+                    results.forEach((result: any) => {
                         const idx = newTests.findIndex(t => t.id === result.id);
                         if (idx !== -1 && newTests[idx].status !== result.status) {
                             newTests[idx] = { ...newTests[idx], ...result };
@@ -582,9 +536,9 @@ export default function Dashboard() {
 
     // Main dashboard
     return (
-        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-8">
+        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6">
             {/* Page Header */}
-            <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0 mb-8">
+            <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0 mb-6">
                 <div>
                     <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Tests Dashboard</h1>
                     <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -692,19 +646,19 @@ export default function Dashboard() {
             </div>
 
             {/* Filters & Controls */}
-            <div className="flex flex-col lg:flex-row gap-4 mb-6">
+            <div className="flex flex-col lg:flex-row gap-4 mb-4">
                 <div className="flex-grow lg:max-w-md">
                     <div className="relative">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <RiSearchLine className="h-5 w-5 text-gray-400" />
+                            <RiSearchLine className="h-4 w-4 text-gray-400" />
                         </div>
                         <input
                             type="text"
-                            className="block w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-lg
-                bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white
-                placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500
-                text-sm shadow-sm transition duration-200 ease-in-out
-                hover:border-gray-300 dark:hover:border-gray-600"
+                            className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg
+                            bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white
+                            placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500
+                            text-sm shadow-sm transition duration-200 ease-in-out
+                            hover:border-gray-300 dark:hover:border-gray-600"
                             placeholder="Search tests by name, type, or status..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
@@ -717,7 +671,7 @@ export default function Dashboard() {
                         value={selectedCategory}
                         onValueChange={setSelectedCategory}
                     >
-                        <SelectTrigger className="w-[140px] bg-white border border-gray-200 rounded-lg text-sm h-10 shadow-sm hover:border-gray-300 transition duration-200 dark:bg-gray-800 dark:border-gray-700">
+                        <SelectTrigger className="w-[140px] bg-white border border-gray-200 rounded-lg text-sm h-9 shadow-sm hover:border-gray-300 transition duration-200 dark:bg-gray-800 dark:border-gray-700">
                             <SelectValue placeholder="All Tests" />
                         </SelectTrigger>
                         <SelectContent>
@@ -736,7 +690,7 @@ export default function Dashboard() {
                         value={timeRange}
                         onValueChange={setTimeRange}
                     >
-                        <SelectTrigger className="w-[140px] bg-white border border-gray-200 rounded-lg text-sm h-10 shadow-sm hover:border-gray-300 transition duration-200 dark:bg-gray-800 dark:border-gray-700">
+                        <SelectTrigger className="w-[140px] bg-white border border-gray-200 rounded-lg text-sm h-9 shadow-sm hover:border-gray-300 transition duration-200 dark:bg-gray-800 dark:border-gray-700">
                             <SelectValue placeholder="Time Range" />
                         </SelectTrigger>
                         <SelectContent>
@@ -760,7 +714,7 @@ export default function Dashboard() {
                                     onClick={() => handleBulkAction('delete')}
                                 >
                                     <RiDeleteBin5Line className="h-4 w-4 text-red-500" />
-                                    <span>Delete ({selectedTests.length})</span>
+                                    <span>Delete</span>
                                 </Button>
 
                                 <Button
@@ -770,7 +724,7 @@ export default function Dashboard() {
                                     onClick={() => handleBulkAction('rerun')}
                                 >
                                     <RiPlayLine className="h-4 w-4 text-blue-500" />
-                                    <span>Rerun ({selectedTests.length})</span>
+                                    <span>Rerun</span>
                                 </Button>
 
                                 <Button
@@ -780,7 +734,7 @@ export default function Dashboard() {
                                     onClick={() => handleBulkAction('download')}
                                 >
                                     <RiDownload2Line className="h-4 w-4 text-green-500" />
-                                    <span>Download ({selectedTests.length})</span>
+                                    <span>Download</span>
                                 </Button>
 
                                 <Button
@@ -818,8 +772,6 @@ export default function Dashboard() {
                                 <RiRefreshLine className="h-4 w-4 mr-1.5" />
                                 Retry Connection
                             </Button>
-
-                            
                         </div>
                     </div>
                 ) : filteredTests.length > 0 ? (
@@ -966,7 +918,7 @@ export default function Dashboard() {
                                         )}
                                     </TableCell>
                                     <TableCell className="px-4 py-4 text-sm text-right">
-                                        <div className="flex items-center gap-1.5">
+                                        <div className="flex items-center gap-1.5 justify-end">
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
@@ -974,8 +926,7 @@ export default function Dashboard() {
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     handleRowClick(test);
-                                                }}
-                                            >
+                                                }}>
                                                 View
                                             </Button>
 
@@ -1000,7 +951,7 @@ export default function Dashboard() {
                                                     <DropdownMenuItem onClick={(e) => {
                                                         e.stopPropagation();
                                                         // Implement download functionality
-                                                        handleBulkDownload([test.id]);
+                                                        handleBulkAction('download');
                                                     }}>
                                                         <RiDownload2Line className="h-4 w-4 mr-2 text-green-500" />
                                                         Download Results

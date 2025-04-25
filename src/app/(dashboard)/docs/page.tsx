@@ -23,7 +23,7 @@ import {
 } from "@remixicon/react";
 
 // API base URL
-const API_BASE =  "https://medusa.bendatsko.com";
+const API_BASE = "https://medusa.bendatsko.com";
 
 // Type for API health status
 type ApiStatus = 'checking' | 'online' | 'degraded' | 'offline' | 'error';
@@ -39,7 +39,6 @@ interface DocSection {
   created_by?: string;
   updated_by?: string;
 }
-
 
 // Helper function to render markdown content
 const renderMarkdown = (content) => {
@@ -69,7 +68,7 @@ const renderMarkdown = (content) => {
     else if (trimmedLine.startsWith('## ')) {
       finishList();
       elements.push(
-        <h2 key={`h2-${key++}`} className="text-xl font-semibold mt-6 mb-2 text-gray-900 dark:text-gray-50">
+        <h2 key={`h2-${key++}`} className="text-xl font-semibold mt-5 mb-2 text-gray-900 dark:text-gray-50">
           {trimmedLine.substring(3)}
         </h2>
       );
@@ -131,7 +130,6 @@ export default function Documentation() {
   const [docsStructure, setDocsStructure] = useState([]);
   
   const [activeSection, setActiveSection] = useState("introduction");
-  // Fix this to handle empty initial state
   const [expandedSections, setExpandedSections] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -155,7 +153,6 @@ export default function Documentation() {
   const [apiStatus, setApiStatus] = useState<ApiStatus>('checking');
   const [apiStatusDetails, setApiStatusDetails] = useState<string | null>(null);
 
-  // Fetch all documentation sections
   // Fetch all documentation sections
   useEffect(() => {
     const fetchDocs = async () => {
@@ -493,12 +490,12 @@ export default function Documentation() {
   };
 
   return (
-    <main className="container max-w-5xl mx-auto p-4">
+    <main className="container max-w-5xl mx-auto px-4 py-6">
       {/* Main Content */}
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Mobile Header */}
         <div className="block lg:hidden">
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 mb-4">
             <div>
               <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
                 Documentation
@@ -518,7 +515,7 @@ export default function Documentation() {
 
           {/* Mobile Navigation Dropdown */}
           {isMobileMenuOpen && (
-            <div className="mt-2 bg-white dark:bg-gray-900 border rounded-lg shadow-lg p-4">
+            <div className="mt-2 bg-white dark:bg-gray-900 border rounded-lg shadow-lg p-4 mb-4">
               <div className="mb-4">
                 <div className="relative">
                   <RiSearchLine className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
@@ -551,7 +548,7 @@ export default function Documentation() {
                     />
                   </button>
                   {expandedSections.includes(section.id) && (
-                    <ul className="pl-6 space-y-2">
+                    <ul className="pl-6 space-y-2 mt-2">
                       {section.items.map((item) => (
                         <li key={item.id}>
                           <button
@@ -575,7 +572,7 @@ export default function Documentation() {
 
         {/* Desktop Sidebar */}
         <div className="hidden lg:block w-64 flex-shrink-0">
-          <div className="sticky top-0">
+          <div className="sticky top-0 pt-4">
             <div className="mb-6">
               <div className="relative">
                 <RiSearchLine className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
@@ -589,12 +586,12 @@ export default function Documentation() {
               </div>
             </div>
 
-            <nav className="space-y-6">
+            <nav className="space-y-5">
               {docsStructure.map((section) => (
                 <div key={section.id} className="space-y-2">
                   <button
                     onClick={() => toggleSection(section.id)}
-                    className="flex items-center w-full text-left font-medium"
+                    className="flex items-center w-full text-left font-medium text-gray-800 dark:text-gray-200"
                   >
                     <span className="mr-2">{section.icon}</span>
                     <span>{section.title}</span>
@@ -627,7 +624,7 @@ export default function Documentation() {
               ))}
             </nav>
 
-            <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
+            <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
               <h3 className="font-medium text-sm mb-2">Need more help?</h3>
               <p className="text-gray-600 dark:text-gray-400 text-sm mb-3">
                 If you can't find what you're looking for in our documentation, reach out to our support team.
@@ -645,16 +642,14 @@ export default function Documentation() {
 
         {/* Main content */}
         <div className="flex-1">
-          <Divider className="block lg:hidden" />
-
           {/* Documentation Header */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4">
             {isEditing ? (
               <input
                 type="text"
                 value={editTitle}
                 onChange={(e) => setEditTitle(e.target.value)}
-                className="text-2xl font-semibold w-full bg-transparent border-b border-gray-200 dark:border-gray-800 focus:outline-none focus:border-blue-500"
+                className="text-2xl font-semibold w-full bg-transparent border-b border-gray-200 dark:border-gray-800 focus:outline-none focus:border-blue-500 text-gray-900 dark:text-gray-50"
               />
             ) : (
               <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
@@ -686,7 +681,7 @@ export default function Documentation() {
             <Card className="p-6 shadow-sm bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800">
               <div className="flex items-start">
                 <div className="flex-shrink-0 text-red-500">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="size-5">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="size-5">
                     <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 00-2 0v4a1 1 0 002 0V6zm-1 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
                   </svg>
                 </div>
@@ -710,25 +705,27 @@ export default function Documentation() {
           {!loading && !error && (
             <>
               {isEditing ? (
-                <Card className="p-6 shadow-sm">
+                <Card className="p-6 shadow-sm border border-gray-200 dark:border-gray-700">
                   <Tabs value={activeTab} onValueChange={setActiveTab}>
                     <div className="flex items-center justify-between mb-4">
-                      <TabsList>
-                        <TabsTrigger value="edit">Edit</TabsTrigger>
-                        <TabsTrigger value="preview">Preview</TabsTrigger>
+                      <TabsList className="bg-gray-100 dark:bg-gray-800">
+                        <TabsTrigger value="edit" className="text-sm">Edit</TabsTrigger>
+                        <TabsTrigger value="preview" className="text-sm">Preview</TabsTrigger>
                       </TabsList>
                       <div className="flex items-center gap-2">
                         <Button
                           variant="secondary"
                           onClick={handleCancel}
                           className="flex items-center gap-2"
+                          size="sm"
                         >
                           <RiCloseLine className="size-4" />
                           Cancel
                         </Button>
                         <Button
                           onClick={handleSave}
-                          className="flex items-center gap-2"
+                          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                          size="sm"
                         >
                           <RiSaveLine className="size-4" />
                           Save
@@ -740,20 +737,20 @@ export default function Documentation() {
                       <Textarea
                         value={editContent}
                         onChange={(e) => setEditContent(e.target.value)}
-                        className="min-h-[500px] font-mono text-sm p-4 bg-gray-50 dark:bg-gray-900"
+                        className="min-h-[500px] font-mono text-sm p-4 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md"
                         placeholder="Enter markdown content..."
                       />
                     </TabsContent>
 
                     <TabsContent value="preview">
-                      <div className="documentation-content">
+                      <div className="documentation-content border border-gray-200 dark:border-gray-700 rounded-md p-6 bg-white dark:bg-gray-900 min-h-[500px]">
                         {renderMarkdown(editContent)}
                       </div>
                     </TabsContent>
                   </Tabs>
                 </Card>
               ) : (
-                <Card className="p-6 shadow-sm">
+                <Card className="p-6 shadow-sm border border-gray-200 dark:border-gray-700">
                   <div className="documentation-content">
                     {renderMarkdown(editContent)}
                   </div>
@@ -761,7 +758,7 @@ export default function Documentation() {
               )}
 
               {/* Navigation buttons */}
-              <div className="mt-8 flex flex-wrap justify-between gap-4 pt-6 border-t">
+              <div className="mt-6 flex flex-wrap justify-between gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <div>
                   {prev && (
                     <button
@@ -769,7 +766,7 @@ export default function Documentation() {
                       className="flex items-center text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
                     >
                       <RiArrowRightSLine className="mr-1 size-4 rotate-180" />
-                      <span className="text-sm mr-2">Previous</span>
+                      <span className="text-sm mr-2">Previous:</span>
                       <span className="text-sm font-medium">{prev.title}</span>
                     </button>
                   )}
@@ -780,7 +777,7 @@ export default function Documentation() {
                       onClick={() => setActiveSection(next.id)}
                       className="flex items-center text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
                     >
-                      <span className="text-sm mr-2">Next</span>
+                      <span className="text-sm mr-2">Next:</span>
                       <span className="text-sm font-medium">{next.title}</span>
                       <RiArrowRightSLine className="ml-1 size-4" />
                     </button>
