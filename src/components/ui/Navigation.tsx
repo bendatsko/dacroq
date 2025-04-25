@@ -2,9 +2,16 @@
 
 import { TabNavigation, TabNavigationLink } from "@/components/TabNavigation"
 import Link from "next/link"
-import { Notifications } from "./Notifications"
 import { usePathname } from "next/navigation"
 import { DropdownUserProfile } from "./UserProfile"
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuSeparator, 
+  DropdownMenuTrigger 
+} from "@/components/DropdownMenu"
+import { RiMenuLine, RiLogoutBoxLine } from "@remixicon/react"
 
 function Navigation() {
   const pathname = usePathname()
@@ -26,9 +33,6 @@ function Navigation() {
                     viewBox="0 0 24 24" 
                     className="h-8 w-8 text-blue-600 dark:text-blue-400"
                   >
-                    {/* Circular orbit */}
-               
-                    
                     {/* Inner orbit (angled) */}
                     <ellipse 
                       cx="12" 
@@ -52,13 +56,13 @@ function Navigation() {
                     />
                   </svg>
                 </div>
-                <span className=" text-lg font-semibold tracking-tight text-gray-900 dark:text-white">
+                <span className="text-lg font-semibold tracking-tight text-gray-900 dark:text-white">
                   Dacroq
                 </span>
               </Link>
 
-              {/* Main navigation links */}
-              {/* <nav className="hidden md:flex">
+              {/* Desktop Navigation Links */}
+              <nav className="hidden md:flex">
                 <div className="flex h-16 space-x-4">
                   <Link 
                     href="/" 
@@ -71,6 +75,31 @@ function Navigation() {
                     Dashboard
                   </Link>
 
+
+               
+                  <Link 
+                    href="/monitor"
+                    className={`inline-flex items-center px-3 h-full border-b-2 text-sm font-medium transition-colors 
+                      ${pathname.startsWith("/monitor") 
+                        ? "border-blue-500 text-gray-900 dark:text-white" 
+                        : "border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white dark:hover:border-gray-700"
+                      }`}
+                  >
+                    Monitor
+                  </Link>
+               
+                  <Link 
+                    href="/tools"
+                    className={`inline-flex items-center px-3 h-full border-b-2 text-sm font-medium transition-colors 
+                      ${pathname.startsWith("/tools") 
+                        ? "border-blue-500 text-gray-900 dark:text-white" 
+                        : "border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white dark:hover:border-gray-700"
+                      }`}
+                  >
+                    Tools
+                  </Link>
+
+
                   <Link 
                     href="/docs"
                     className={`inline-flex items-center px-3 h-full border-b-2 text-sm font-medium transition-colors 
@@ -81,59 +110,105 @@ function Navigation() {
                   >
                     Docs
                   </Link>
+
+
+                  <Link 
+                    href="/feedback"
+                    className={`inline-flex items-center px-3 h-full border-b-2 text-sm font-medium transition-colors 
+                      ${pathname.startsWith("/docs") 
+                        ? "border-blue-500 text-gray-900 dark:text-white" 
+                        : "border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white dark:hover:border-gray-700"
+                      }`}
+                  >
+                    Feedback
+                  </Link>
+
+                  <Link 
+                    href="/sitemap"
+                    className={`inline-flex items-center px-3 h-full border-b-2 text-sm font-medium transition-colors 
+                      ${pathname.startsWith("/docs") 
+                        ? "border-blue-500 text-gray-900 dark:text-white" 
+                        : "border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white dark:hover:border-gray-700"
+                      }`}
+                  >
+                    Sitemap
+                  </Link>
+                  
+
+                 
+
+
                 </div>
-              </nav> */}
+              </nav>
             </div>
 
-            {/* Right side - utility links and user controls */}
-            <div className="flex items-center space-x-4">
-              <div className="hidden md:flex items-center">
+            {/* Menu Dropdown Button (Mobile) */}
+            <div className="flex items-center">
+              <DropdownMenu>
+                <DropdownMenuTrigger className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500">
+                  <span className="sr-only">Open menu</span>
+                  <RiMenuLine className="h-6 w-6" aria-hidden="true" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem>
+                    <Link href="/" className="flex w-full">
+                      Dashboard
+                    </Link>
+                  </DropdownMenuItem>
+                  
+                  <DropdownMenuItem>
+                    <Link href="/monitor" className="flex w-full">
+                      Monitor
+                    </Link>
+                  </DropdownMenuItem>
+                 
+                  <DropdownMenuItem>
+                    <Link href="/tools" className="flex w-full">
+                      Tools
+                    </Link>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem>
+                    <Link href="/docs" className="flex w-full">
+                      Docs
+                    </Link>
+                  </DropdownMenuItem>
+
+
+                  <DropdownMenuItem>
+                    <Link href="/feedback" className="flex w-full">
+                      Feedback
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem>
+                    <Link href="/sitemap" className="flex w-full">
+                      Sitemap
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="text-red-600 hover:text-red-700 dark:text-red-500 dark:hover:text-red-400">
+                    <Link href="/login" className="flex w-full items-center">
+                      <RiLogoutBoxLine className="mr-2 h-4 w-4" />
+                      Sign Out
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Desktop Sign Out Button */}
+              <div className="hidden md:flex items-center ml-4">
                 <Link 
-                  href="/feedback"
-                  className="px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 transition-colors"
+                  href="/login"
+                  className="px-3 py-2 rounded-md text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors flex items-center"
                 >
-                  Feedback
+                  <RiLogoutBoxLine className="mr-2 h-4 w-4" />
+                  Sign Out
                 </Link>
-              </div>
-              <div className="flex items-center space-x-3">
-                <div className="h-5 w-px bg-gray-200 dark:bg-gray-700"></div>
-                <DropdownUserProfile />
               </div>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Mobile navigation - only shown on smaller screens */}
-      {/* <div className="md:hidden bg-white border-b border-gray-200 dark:border-gray-800 dark:bg-gray-900">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <TabNavigation className="border-t-0 pb-1">
-            <TabNavigationLink
-              className="inline-flex gap-1 text-sm py-3"
-              asChild
-              active={pathname === "/"}
-            >
-              <Link href="/">Dashboard</Link>
-            </TabNavigationLink>
-
-            <TabNavigationLink
-              className="inline-flex gap-1 text-sm py-3"
-              asChild
-              active={pathname.startsWith("/docs")}
-            >
-              <Link href="/docs">Docs</Link>
-            </TabNavigationLink>
-
-            <TabNavigationLink
-              className="inline-flex gap-1 text-sm py-3"
-              asChild
-              active={pathname === "/feedback"}
-            >
-              <Link href="/feedback">Feedback</Link>
-            </TabNavigationLink>
-          </TabNavigation>
-        </div>
-      </div> */}
     </>
   )
 }
