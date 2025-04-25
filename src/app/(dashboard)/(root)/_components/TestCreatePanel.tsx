@@ -67,6 +67,31 @@ export function TestCreatePanel({
     const [testType, setTestType] = useState(testTypes[0]);
     const [description, setDescription] = useState("");
 
+    // Define presets for 3SAT tests
+    const PRESETS = {
+        "Standard": {
+            satIterations: 1000,
+            clockFrequency: 100,
+            testDuration: 60,
+            errorThreshold: 0.01,
+            voltageSettings: { v1: 3.3, v2: 1.8, v3: 1.2 }
+        },
+        "High-Performance": {
+            satIterations: 5000,
+            clockFrequency: 150,
+            testDuration: 120,
+            errorThreshold: 0.005,
+            voltageSettings: { v1: 3.6, v2: 1.8, v3: 1.2 }
+        },
+        "Low-Power": {
+            satIterations: 500,
+            clockFrequency: 50,
+            testDuration: 30,
+            errorThreshold: 0.02,
+            voltageSettings: { v1: 2.8, v2: 1.5, v3: 1.0 }
+        }
+    } as const;
+
     // Hardware configuration
     const [voltageV1, setVoltageV1] = useState(3.3);
     const [voltageV2, setVoltageV2] = useState(1.8);
@@ -355,6 +380,36 @@ export function TestCreatePanel({
                                         />
                                         <p className="text-xs text-gray-500">
                                             Number of 3SAT problems to solve during the test
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Preset Configuration</Label>
+                                        <Select value="Custom" onValueChange={(value) => {
+                                            if (value !== "Custom" && value in PRESETS) {
+                                                const preset = PRESETS[value as keyof typeof PRESETS];
+                                                setSatIterations(preset.satIterations);
+                                                setClockFrequency(preset.clockFrequency);
+                                                setTestDuration(preset.testDuration);
+                                                setErrorThreshold(preset.errorThreshold);
+                                                setVoltageV1(preset.voltageSettings.v1);
+                                                setVoltageV2(preset.voltageSettings.v2);
+                                                setVoltageV3(preset.voltageSettings.v3);
+                                                setEnableVoltageTesting(true);
+                                            }
+                                        }}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select preset" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="Custom">Custom</SelectItem>
+                                                {Object.keys(PRESETS).map(preset => (
+                                                    <SelectItem key={preset} value={preset}>{preset}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <p className="text-xs text-gray-500">
+                                            Select a predefined configuration for the 3SAT solver
                                         </p>
                                     </div>
                                 </div>
