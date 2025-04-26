@@ -82,7 +82,7 @@ function Navigation() {
                       : "border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white dark:hover:border-gray-700"
                     }`}
                 >
-                  Tests
+                  Test History
                 </Link>
                 <Link 
                   href="/monitor"
@@ -92,29 +92,10 @@ function Navigation() {
                       : "border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white dark:hover:border-gray-700"
                     }`}
                 >
-                  Stats
-                </Link>
-                <Link 
-                  href="/tools"
-                  className={`inline-flex items-center px-3 h-full border-b-2 text-sm font-medium transition-colors 
-                    ${pathname.startsWith("/tools") 
-                      ? "border-blue-500 text-gray-900 dark:text-white" 
-                      : "border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white dark:hover:border-gray-700"
-                    }`}
-                >
-                  Tools
-                </Link>
-                <Link 
-                  href="/docs"
-                  className={`inline-flex items-center px-3 h-full border-b-2 text-sm font-medium transition-colors 
-                    ${pathname.startsWith("/docs") 
-                      ? "border-blue-500 text-gray-900 dark:text-white" 
-                      : "border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white dark:hover:border-gray-700"
-                    }`}
-                >
-                  Docs
+                 System Monitor
                 </Link>
           
+              
           
               </div>
             </nav>
@@ -130,24 +111,16 @@ function Navigation() {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuItem>
                   <Link href="/" className="flex w-full">
-                    Tests
+                    Test History
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem>
                   <Link href="/monitor" className="flex w-full">
-                    Stats
+                    System Monitor
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Link href="/tools" className="flex w-full">
-                    Tools
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Link href="/docs" className="flex w-full">
-                    Docs
-                  </Link>
-                </DropdownMenuItem>
+      
+              
            
             
                 <DropdownMenuSeparator />
