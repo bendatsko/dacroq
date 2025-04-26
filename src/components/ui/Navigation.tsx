@@ -82,7 +82,7 @@ function Navigation() {
                       : "border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white dark:hover:border-gray-700"
                     }`}
                 >
-                  Dashboard
+                  Tests
                 </Link>
                 <Link 
                   href="/monitor"
@@ -92,7 +92,7 @@ function Navigation() {
                       : "border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white dark:hover:border-gray-700"
                     }`}
                 >
-                  Monitor
+                  Stats
                 </Link>
                 <Link 
                   href="/tools"
@@ -114,26 +114,8 @@ function Navigation() {
                 >
                   Docs
                 </Link>
-                <Link 
-                  href="/feedback"
-                  className={`inline-flex items-center px-3 h-full border-b-2 text-sm font-medium transition-colors 
-                    ${pathname.startsWith("/feedback") 
-                      ? "border-blue-500 text-gray-900 dark:text-white" 
-                      : "border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white dark:hover:border-gray-700"
-                    }`}
-                >
-                  Feedback
-                </Link>
-                <Link 
-                  href="/sitemap"
-                  className={`inline-flex items-center px-3 h-full border-b-2 text-sm font-medium transition-colors 
-                    ${pathname.startsWith("/sitemap") 
-                      ? "border-blue-500 text-gray-900 dark:text-white" 
-                      : "border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white dark:hover:border-gray-700"
-                    }`}
-                >
-                  Sitemap
-                </Link>
+          
+          
               </div>
             </nav>
           </div>
@@ -148,12 +130,12 @@ function Navigation() {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuItem>
                   <Link href="/" className="flex w-full">
-                    Dashboard
+                    Tests
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem>
                   <Link href="/monitor" className="flex w-full">
-                    Monitor
+                    Stats
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem>
@@ -166,16 +148,8 @@ function Navigation() {
                     Docs
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Link href="/feedback" className="flex w-full">
-                    Feedback
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Link href="/sitemap" className="flex w-full">
-                    Sitemap
-                  </Link>
-                </DropdownMenuItem>
+           
+            
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-red-600 hover:text-red-700 dark:text-red-500 dark:hover:text-red-400">
                   <button onClick={handleSignOut} className="flex w-full items-center">
@@ -190,9 +164,9 @@ function Navigation() {
             <div className="hidden md:flex items-center ml-4">
               <button 
                 onClick={handleSignOut}
-                className="px-3 py-1.5 rounded-md text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors flex items-center"
+                className="px-3 py-1.5 rounded-md text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors flex items-center"
               >
-                <RiLogoutBoxLine className="mr-2 h-4 w-4" />
+                <RiLogoutBoxLine className="mr-1.5 h-3.5 w-3.5" />
                 Sign Out
               </button>
             </div>

@@ -540,7 +540,7 @@ export default function Dashboard() {
             {/* Page Header */}
             <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0 mb-6">
                 <div>
-                    <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Tests Dashboard</h1>
+                    <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Test History</h1>
                     <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                         Manage and monitor your hardware test runs across all platforms
                     </p>

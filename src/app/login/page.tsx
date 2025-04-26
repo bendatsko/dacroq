@@ -161,7 +161,10 @@ export default function LoginPage() {
       suppressHydrationWarning
     >
       <div className="relative sm:mx-auto sm:w-full sm:max-w-sm">
-        {/* Logo section */}
+        
+        
+        <div className="bg-white dark:bg-gray-800 p-6 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
+          {/* Logo section */}
         <div className="relative mx-auto w-fit mb-6">
           <span className="sr-only">Dacroq</span>
           <div className="relative">
@@ -199,9 +202,6 @@ export default function LoginPage() {
             </div>
           </div>
         </div>
-        
-        <div className="bg-white dark:bg-gray-800 p-6 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6 text-center">Sign In</h2>
           
           {/* Error display */}
           {error && (
