@@ -1,0 +1,502 @@
+{
+  "000": {
+    "original_file": "000.cnf",
+    "is_split": false,
+    "problem_number": 0
+  },
+  "001": {
+    "original_file": "001.cnf",
+    "is_split": false,
+    "problem_number": 1
+  },
+  "002": {
+    "original_file": "002.cnf",
+    "is_split": false,
+    "problem_number": 2
+  },
+  "003": {
+    "original_file": "003.cnf",
+    "is_split": false,
+    "problem_number": 3
+  },
+  "004": {
+    "original_file": "004.cnf",
+    "is_split": false,
+    "problem_number": 4
+  },
+  "005": {
+    "original_file": "005.cnf",
+    "is_split": false,
+    "problem_number": 5
+  },
+  "006": {
+    "original_file": "006.cnf",
+    "is_split": false,
+    "problem_number": 6
+  },
+  "007": {
+    "original_file": "007.cnf",
+    "is_split": false,
+    "problem_number": 7
+  },
+  "008": {
+    "original_file": "008.cnf",
+    "is_split": false,
+    "problem_number": 8
+  },
+  "009": {
+    "original_file": "009.cnf",
+    "is_split": false,
+    "problem_number": 9
+  },
+  "010": {
+    "original_file": "010.cnf",
+    "is_split": false,
+    "problem_number": 10
+  },
+  "011": {
+    "original_file": "011.cnf",
+    "is_split": false,
+    "problem_number": 11
+  },
+  "012": {
+    "original_file": "012.cnf",
+    "is_split": false,
+    "problem_number": 12
+  },
+  "013": {
+    "original_file": "013.cnf",
+    "is_split": false,
+    "problem_number": 13
+  },
+  "014": {
+    "original_file": "014.cnf",
+    "is_split": false,
+    "problem_number": 14
+  },
+  "015": {
+    "original_file": "015.cnf",
+    "is_split": false,
+    "problem_number": 15
+  },
+  "016": {
+    "original_file": "016.cnf",
+    "is_split": false,
+    "problem_number": 16
+  },
+  "017": {
+    "original_file": "017.cnf",
+    "is_split": false,
+    "problem_number": 17
+  },
+  "018": {
+    "original_file": "018.cnf",
+    "is_split": false,
+    "problem_number": 18
+  },
+  "019": {
+    "original_file": "019.cnf",
+    "is_split": false,
+    "problem_number": 19
+  },
+  "020": {
+    "original_file": "020.cnf",
+    "is_split": false,
+    "problem_number": 20
+  },
+  "021": {
+    "original_file": "021.cnf",
+    "is_split": false,
+    "problem_number": 21
+  },
+  "022": {
+    "original_file": "022.cnf",
+    "is_split": false,
+    "problem_number": 22
+  },
+  "023": {
+    "original_file": "023.cnf",
+    "is_split": false,
+    "problem_number": 23
+  },
+  "024": {
+    "original_file": "024.cnf",
+    "is_split": false,
+    "problem_number": 24
+  },
+  "025": {
+    "original_file": "025.cnf",
+    "is_split": false,
+    "problem_number": 25
+  },
+  "026": {
+    "original_file": "026.cnf",
+    "is_split": false,
+    "problem_number": 26
+  },
+  "027": {
+    "original_file": "027.cnf",
+    "is_split": false,
+    "problem_number": 27
+  },
+  "028": {
+    "original_file": "028.cnf",
+    "is_split": false,
+    "problem_number": 28
+  },
+  "029": {
+    "original_file": "029.cnf",
+    "is_split": false,
+    "problem_number": 29
+  },
+  "030": {
+    "original_file": "030.cnf",
+    "is_split": false,
+    "problem_number": 30
+  },
+  "031": {
+    "original_file": "031.cnf",
+    "is_split": false,
+    "problem_number": 31
+  },
+  "032": {
+    "original_file": "032.cnf",
+    "is_split": false,
+    "problem_number": 32
+  },
+  "033": {
+    "original_file": "033.cnf",
+    "is_split": false,
+    "problem_number": 33
+  },
+  "034": {
+    "original_file": "034.cnf",
+    "is_split": false,
+    "problem_number": 34
+  },
+  "035": {
+    "original_file": "035.cnf",
+    "is_split": false,
+    "problem_number": 35
+  },
+  "036": {
+    "original_file": "036.cnf",
+    "is_split": false,
+    "problem_number": 36
+  },
+  "037": {
+    "original_file": "037.cnf",
+    "is_split": false,
+    "problem_number": 37
+  },
+  "038": {
+    "original_file": "038.cnf",
+    "is_split": false,
+    "problem_number": 38
+  },
+  "039": {
+    "original_file": "039.cnf",
+    "is_split": false,
+    "problem_number": 39
+  },
+  "040": {
+    "original_file": "040.cnf",
+    "is_split": false,
+    "problem_number": 40
+  },
+  "041": {
+    "original_file": "041.cnf",
+    "is_split": false,
+    "problem_number": 41
+  },
+  "042": {
+    "original_file": "042.cnf",
+    "is_split": false,
+    "problem_number": 42
+  },
+  "043": {
+    "original_file": "043.cnf",
+    "is_split": false,
+    "problem_number": 43
+  },
+  "044": {
+    "original_file": "044.cnf",
+    "is_split": false,
+    "problem_number": 44
+  },
+  "045": {
+    "original_file": "045.cnf",
+    "is_split": false,
+    "problem_number": 45
+  },
+  "046": {
+    "original_file": "046.cnf",
+    "is_split": false,
+    "problem_number": 46
+  },
+  "047": {
+    "original_file": "047.cnf",
+    "is_split": false,
+    "problem_number": 47
+  },
+  "048": {
+    "original_file": "048.cnf",
+    "is_split": false,
+    "problem_number": 48
+  },
+  "049": {
+    "original_file": "049.cnf",
+    "is_split": false,
+    "problem_number": 49
+  },
+  "050": {
+    "original_file": "050.cnf",
+    "is_split": false,
+    "problem_number": 50
+  },
+  "051": {
+    "original_file": "051.cnf",
+    "is_split": false,
+    "problem_number": 51
+  },
+  "052": {
+    "original_file": "052.cnf",
+    "is_split": false,
+    "problem_number": 52
+  },
+  "053": {
+    "original_file": "053.cnf",
+    "is_split": false,
+    "problem_number": 53
+  },
+  "054": {
+    "original_file": "054.cnf",
+    "is_split": false,
+    "problem_number": 54
+  },
+  "055": {
+    "original_file": "055.cnf",
+    "is_split": false,
+    "problem_number": 55
+  },
+  "056": {
+    "original_file": "056.cnf",
+    "is_split": false,
+    "problem_number": 56
+  },
+  "057": {
+    "original_file": "057.cnf",
+    "is_split": false,
+    "problem_number": 57
+  },
+  "058": {
+    "original_file": "058.cnf",
+    "is_split": false,
+    "problem_number": 58
+  },
+  "059": {
+    "original_file": "059.cnf",
+    "is_split": false,
+    "problem_number": 59
+  },
+  "060": {
+    "original_file": "060.cnf",
+    "is_split": false,
+    "problem_number": 60
+  },
+  "061": {
+    "original_file": "061.cnf",
+    "is_split": false,
+    "problem_number": 61
+  },
+  "062": {
+    "original_file": "062.cnf",
+    "is_split": false,
+    "problem_number": 62
+  },
+  "063": {
+    "original_file": "063.cnf",
+    "is_split": false,
+    "problem_number": 63
+  },
+  "064": {
+    "original_file": "064.cnf",
+    "is_split": false,
+    "problem_number": 64
+  },
+  "065": {
+    "original_file": "065.cnf",
+    "is_split": false,
+    "problem_number": 65
+  },
+  "066": {
+    "original_file": "066.cnf",
+    "is_split": false,
+    "problem_number": 66
+  },
+  "067": {
+    "original_file": "067.cnf",
+    "is_split": false,
+    "problem_number": 67
+  },
+  "068": {
+    "original_file": "068.cnf",
+    "is_split": false,
+    "problem_number": 68
+  },
+  "069": {
+    "original_file": "069.cnf",
+    "is_split": false,
+    "problem_number": 69
+  },
+  "070": {
+    "original_file": "070.cnf",
+    "is_split": false,
+    "problem_number": 70
+  },
+  "071": {
+    "original_file": "071.cnf",
+    "is_split": false,
+    "problem_number": 71
+  },
+  "072": {
+    "original_file": "072.cnf",
+    "is_split": false,
+    "problem_number": 72
+  },
+  "073": {
+    "original_file": "073.cnf",
+    "is_split": false,
+    "problem_number": 73
+  },
+  "074": {
+    "original_file": "074.cnf",
+    "is_split": false,
+    "problem_number": 74
+  },
+  "075": {
+    "original_file": "075.cnf",
+    "is_split": false,
+    "problem_number": 75
+  },
+  "076": {
+    "original_file": "076.cnf",
+    "is_split": false,
+    "problem_number": 76
+  },
+  "077": {
+    "original_file": "077.cnf",
+    "is_split": false,
+    "problem_number": 77
+  },
+  "078": {
+    "original_file": "078.cnf",
+    "is_split": false,
+    "problem_number": 78
+  },
+  "079": {
+    "original_file": "079.cnf",
+    "is_split": false,
+    "problem_number": 79
+  },
+  "080": {
+    "original_file": "080.cnf",
+    "is_split": false,
+    "problem_number": 80
+  },
+  "081": {
+    "original_file": "081.cnf",
+    "is_split": false,
+    "problem_number": 81
+  },
+  "082": {
+    "original_file": "082.cnf",
+    "is_split": false,
+    "problem_number": 82
+  },
+  "083": {
+    "original_file": "083.cnf",
+    "is_split": false,
+    "problem_number": 83
+  },
+  "084": {
+    "original_file": "084.cnf",
+    "is_split": false,
+    "problem_number": 84
+  },
+  "085": {
+    "original_file": "085.cnf",
+    "is_split": false,
+    "problem_number": 85
+  },
+  "086": {
+    "original_file": "086.cnf",
+    "is_split": false,
+    "problem_number": 86
+  },
+  "087": {
+    "original_file": "087.cnf",
+    "is_split": false,
+    "problem_number": 87
+  },
+  "088": {
+    "original_file": "088.cnf",
+    "is_split": false,
+    "problem_number": 88
+  },
+  "089": {
+    "original_file": "089.cnf",
+    "is_split": false,
+    "problem_number": 89
+  },
+  "090": {
+    "original_file": "090.cnf",
+    "is_split": false,
+    "problem_number": 90
+  },
+  "091": {
+    "original_file": "091.cnf",
+    "is_split": false,
+    "problem_number": 91
+  },
+  "092": {
+    "original_file": "092.cnf",
+    "is_split": false,
+    "problem_number": 92
+  },
+  "093": {
+    "original_file": "093.cnf",
+    "is_split": false,
+    "problem_number": 93
+  },
+  "094": {
+    "original_file": "094.cnf",
+    "is_split": false,
+    "problem_number": 94
+  },
+  "095": {
+    "original_file": "095.cnf",
+    "is_split": false,
+    "problem_number": 95
+  },
+  "096": {
+    "original_file": "096.cnf",
+    "is_split": false,
+    "problem_number": 96
+  },
+  "097": {
+    "original_file": "097.cnf",
+    "is_split": false,
+    "problem_number": 97
+  },
+  "098": {
+    "original_file": "098.cnf",
+    "is_split": false,
+    "problem_number": 98
+  },
+  "099": {
+    "original_file": "099.cnf",
+    "is_split": false,
+    "problem_number": 99
+  }
+}

@@ -1,0 +1,9 @@
+
+
+WalkSAT Refinement Summary:
+--------------------------------------------------------------------------------
+Total decomposed problems: 0
+Total standard problems: 100
+--------------------------------------------------------------------------------
+Note: WalkSAT refinement was only applied to decomposed problems.
+Energy model: M1 single-core active power estimated at 2.5W for WalkSAT
