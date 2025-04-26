@@ -1,0 +1,2 @@
+/Library/Developer/CommandLineTools/usr/bin/ar qc libwalk-sat.a "CMakeFiles/walk-sat.dir/walk-sat.cpp.o"
+/Library/Developer/CommandLineTools/usr/bin/ranlib libwalk-sat.a

@@ -1,0 +1,24 @@
+/Applications/CLion.app/Contents/bin/cmake/mac/aarch64/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=/Applications/CLion.app/Contents/bin/ninja/mac/aarch64/ninja --profiling-format=google-trace --profiling-output=CMakeFiles/clion-event-trace.json -G Ninja -S "/Users/bdatsko/Downloads/PySA-pysa-walksat 2" -B "/Users/bdatsko/Downloads/PySA-pysa-walksat 2/cmake-build-debug-event-trace"
+-- The CXX compiler identification is AppleClang 16.0.0.16000026
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /Library/Developer/CommandLineTools/usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Checking for module 'mpi-cxx'
+--   Package 'mpi-cxx' not found
+-- Could NOT find MPI_CXX (missing: MPI_CXX_LIB_NAMES MPI_CXX_HEADER_DIR MPI_CXX_WORKS) 
+-- Could NOT find MPI (missing: MPI_CXX_FOUND) 
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- Found Git: /usr/bin/git (found version "2.39.5 (Apple Git-154)")
+fatal: not a git repository (or any of the parent directories): .git
+CMake Error at CMakeLists.txt:57 (execute_process):
+  execute_process failed command indexes:
+
+    1: "Child return code: 128"
+
+
+
+-- Configuring incomplete, errors occurred!
