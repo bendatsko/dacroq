@@ -17,10 +17,6 @@
         // Include custom libraries
         #include "../SPI/SPI.h"         // Include local SPI library
         #include "Teensy_Extensions.h"  // Include Teensy extensions library
-        
-        // Debug options for PULPino
-        #define PULPINO_DEBUG           // Enable basic PULPino debug output
-        #define PULPINO_DEBUG_VERBOSE   // Enable verbose PULPino debugging
 
     // MEDUSA clock parameters when using Teensy
         #define MEDUSA_EXT_CLK     false   // Configure use of external clock
@@ -158,8 +154,8 @@
         void setupFileSystem();
 
         // SD card read/write functions
-        void readCNF(String filename, int16_t (&data)[CNF_MAX_CLS][CNF_MAX_K+1], uint8_t &numVar, uint16_t &numCls);  // Read uint32 binary file
-        void writeResults(char filename[], uint32_t *data, uint32_t datalen);    // Write uint32 binary file
+        void readCNF(String filename, int16_t (&data)[CNF_MAX_CLS][CNF_MAX_K+1], uint8_t &numVar, uint16_t &numCls);     
+        void writeResults(char filename[], uint32_t *data, uint32_t datalen);
     #endif
 
     // MEDUSA class initialization
@@ -174,49 +170,11 @@
 
             // Initialization functions when using Teensy
             #ifdef ARDUINO_PLATFORM
-                void setClock();      // Configure system clock
-                void reset();         // Reset the MEDUSA system
-                void writeConfigReg(uint8_t cmd, uint8_t data);   // Write to SPI config register
-                
-                // PULPino SPI and Memory functions
-                void pulpinoSpiBegin();
-                void pulpinoSpiBeginMode(bool clockPolarity, bool clockPhase);
-                void pulpinoSpiEnd();
-                uint8_t pulpinoSpiReceiveByte();
-                void pulpinoSpiSendByte(uint8_t data);
-                
-                // Added SPI mode selection method
-                bool updateSpiModeTo(uint8_t mode);
-                
-                // Helper functions for bit-banged SPI with configurable mode
-                void spiTransferByte(uint8_t data, bool clockPolarity, bool clockPhase);
-                uint8_t spiReceiveByte(bool clockPolarity, bool clockPhase);
-                
-                // New advanced SPI diagnostics
-                bool testPulpinoSpiModes();
-                bool testSpiLoopback();
-                
-                // Memory/command operations
-                bool readPulpinoMemory(uint32_t address, uint32_t* value);
-                bool debugReadPulpinoMemory(uint32_t address, uint32_t* value);
-                bool writePulpinoMemory(uint32_t address, uint32_t value);
-                bool sendPulpinoCommand(uint32_t command, uint32_t data, uint32_t* result, uint32_t timeoutMs = 1000);
-                void monitorPulpinoExecution(uint32_t timeout_ms = 0);
-                
-                // PULPino verification
-                bool verifyPulpino(const char* originalFilename, uint32_t address, uint32_t length);
-                
-                // PULPino register operations
-                bool readPulpinoRegister(uint32_t address, uint32_t* value);
-                bool writePulpinoRegister(uint32_t address, uint32_t value);
-                
-                // PULPino chip helper functions
-                bool initPulpino();
-                void resetPulpino();
-                void testPULPinoReset();  // Test function for reset sequence
-                
-                // PULPino SPI flash programming
-                void flashPulpino(const char* filename);
+                void setClock();    // Set clock
+                void reset();       // Reset MEDUSA
+
+                void writeConfigReg(uint8_t address, uint8_t data); // Write configuration register
+                uint32_t readConfigReg(uint8_t address);            // Read configuration register
             #endif
 
             // HAL memory functions
@@ -238,7 +196,6 @@
             // Solver functions
             void runSolverSingle(bool tile, String filepath, uint32_t numRuns); // Run solver on single tile (508 clauses or less)
             void runSolverCoupled(String filepath, uint32_t numRuns);           // Run solver on both tiles (1016 clauses or less)
-
 
             // Peripheral functions
             void setVDD(float voltage);    // Set VDD
@@ -267,24 +224,12 @@
             uint8_t MEDUSA_SPI_DIV = 0;
             SPISettings MEDUSA_SPI_Settings = SPISettings(MEDUSA_SPI_CLK, MSBFIRST, SPI_MODE0, MEDUSA_SPI_DIV); 
 
-            // DAC instances
-            DAC80508 DAC;    // Initialize in constructor
-            
-            // Digital potentiometers
-            MAX5497 digipot0;  // Initialize in constructor
-            MAX5497 digipot1;  // Initialize in constructor
-            MAX5497 digipot2;  // Initialize in constructor
-
-            // SPI mode settings
-            bool _spiClockPolarity = false;  // CPOL, default Mode 0
-            bool _spiClockPhase = false;     // CPHA, default Mode 0
-
             // Peripheral objects
-            // DAC80508 DAC = DAC80508(DAC_CS);    // Initialize DAC80508
+            DAC80508 DAC = DAC80508(DAC_CS);    // Initialize DAC80508
 
-            // MAX5497 digPot0 = MAX5497(DP0_CS);  // Initialize digital potentiometer 1
-            // MAX5497 digPot1 = MAX5497(DP1_CS);  // Initialize digital potentiometer 2
-            // MAX5497 digPot2 = MAX5497(DP2_CS);  // Initialize digital potentiometer 3
+            MAX5497 digPot0 = MAX5497(DP0_CS);  // Initialize digital potentiometer 1
+            MAX5497 digPot1 = MAX5497(DP1_CS);  // Initialize digital potentiometer 2
+            MAX5497 digPot2 = MAX5497(DP2_CS);  // Initialize digital potentiometer 3
 
             // Default system parameters
             float VDD = 0.9;   // Set VDD

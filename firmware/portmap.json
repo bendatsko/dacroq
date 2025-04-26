@@ -1,0 +1,31 @@
+{
+  "solvers": [
+    {
+      "name": "ldpc",
+      "port": "/dev/cu.usbmodem158960201",
+      "baudRate": 2000000,
+      "cpuFrequencyMHz": 816,
+      "cpuTemperatureC": 48.3
+    },
+    {
+      "name": "3sat",
+      "port": "/dev/cu.usbmodem138999501",
+      "baudRate": 2000000,
+      "cpuFrequencyMHz": 816,
+      "cpuTemperatureC": 48.3
+    },
+    {
+      "name": "ksat",
+      "port": "/dev/cu.usbmodem138999801",
+      "baudRate": 2000000,
+      "cpuFrequencyMHz": 816,
+      "cpuTemperatureC": 48.3
+    }
+  ],
+  "monitoringTools": {
+    "platformio": {
+      "monitor": "platformio device monitor",
+      "upload": "platformio device monitor"
+    }
+  }
+}
