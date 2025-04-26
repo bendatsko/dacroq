@@ -1,6 +1,7 @@
 import { GeistSans } from "geist/font/sans"
 import type { Metadata } from "next"
 import "./globals.css"
+import { AnnouncementProvider } from "@/components/AnnouncementProvider"
 
 export const metadata: Metadata = {
   title: "Dacroq",
@@ -23,7 +24,9 @@ export default function RootLayout({
         className={`${GeistSans.className} min-h-full bg-white antialiased`}
         suppressHydrationWarning
       >
-        {children}
+        <AnnouncementProvider>
+          {children}
+        </AnnouncementProvider>
       </body>
     </html>
   )

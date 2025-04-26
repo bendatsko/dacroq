@@ -19,9 +19,21 @@ import {
   CartesianGrid,
   ResponsiveContainer
 } from "recharts";
+import { Terminal } from "@/components/Terminal";
 
 // API endpoint
 const API_BASE = "https://medusa.bendatsko.com";
+
+// Constants
+const MACHINE_TYPES = ['machine-1', 'machine-2', 'machine-3'] as const;
+type MachineType = typeof MACHINE_TYPES[number];
+
+// Initial states
+const initialHardwareStatus = {
+  'machine-1': { cpu: null, memory: null, disk: null },
+  'machine-2': { cpu: null, memory: null, disk: null },
+  'machine-3': { cpu: null, memory: null, disk: null }
+};
 
 // Types
 interface ApiHealth {
@@ -31,8 +43,8 @@ interface ApiHealth {
 }
 
 interface TestMetric {
-  count: number;
   status: string;
+  count: number;
 }
 
 interface ApiMetrics {
@@ -62,6 +74,35 @@ interface SysBucket {
   mem_avail_mb: number;
 }
 
+interface TestMetadata {
+  createdBy?: {
+    name: string;
+  };
+}
+
+interface TestData {
+  status: string;
+  data_size?: number;
+  response_time?: number;
+  project?: string;
+  metadata?: TestMetadata;
+}
+
+interface MachineStatus {
+  cpu: number | null;
+  memory: number | null;
+  disk: null;
+}
+
+interface TerminalHistoryItem {
+  timestamp: string;
+  content: string;
+  isCommand?: boolean;
+  isError?: boolean;
+}
+
+type HardwareStatus = Record<MachineType, MachineStatus>;
+
 export default function MonitoringPage() {
   // State variables
   const [queryTimeRange, setQueryTimeRange] = useState("Last 24 hours");
@@ -74,12 +115,16 @@ export default function MonitoringPage() {
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [isClient, setIsClient] = useState(false);
+  const [isRestarting, setIsRestarting] = useState(false);
 
   // Sliding-window data
   const [seriesReq, setSeriesReq] = useState<TimeBucket[]>([]);
   const [seriesData, setSeriesData] = useState<TimeBucket[]>([]);
   const [seriesResp, setSeriesResp] = useState<TimeBucket[]>([]);
   const [sysSeries, setSysSeries] = useState<SysBucket[]>([]);
+
+  // Hardware status
+  const [hardwareStatus, setHardwareStatus] = useState<HardwareStatus>(initialHardwareStatus);
 
   // Hydration guard
   useEffect(() => {
@@ -103,8 +148,90 @@ export default function MonitoringPage() {
   };
 
   // Manual refresh trigger
-  const handleRefresh = () => {
-    setRefreshKey((k) => k + 1);
+  const handleRefresh = async (): Promise<void> => {
+    try {
+      // Fetch hardware status
+      const responses: Response[] = await Promise.all(
+        MACHINE_TYPES.map(machine => 
+          fetch(`${API_BASE}/api/hardware/${machine}`, {
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            },
+            credentials: 'include'
+          })
+        )
+      );
+
+      const newStatus = { ...initialHardwareStatus };
+
+      for (let i = 0; i < responses.length; i++) {
+        const machine = MACHINE_TYPES[i];
+        if (responses[i].ok) {
+          const machineData = await responses[i].json() as MachineStatus;
+          newStatus[machine] = machineData;
+        }
+      }
+
+      setHardwareStatus(newStatus);
+    } catch (error) {
+      console.error('Error refreshing hardware status:', error);
+    }
+  };
+
+  // Update hardware status handling
+  const updateHardwareStatus = (machine: MachineType, status: MachineStatus) => {
+    setHardwareStatus(prev => ({
+      ...prev,
+      [machine]: status
+    }));
+  };
+
+  // Update project data processing
+  const processTestResults = (tests: TestData[]): { metrics: ApiMetrics; projects: Project[] } => {
+    // Process status counts
+    const statusCounts: Record<string, number> = tests.reduce((acc: Record<string, number>, t: TestData) => {
+      acc[t.status] = (acc[t.status] || 0) + 1;
+      return acc;
+    }, {});
+
+    const testMetrics: TestMetric[] = Object.entries(statusCounts).map(
+      ([status, count]) => ({ status, count })
+    );
+
+    // Process metrics
+    const metrics: ApiMetrics = {
+      tests_run: testMetrics,
+      api_requests: tests.length * 3 + 50,
+      data_transferred: Math.round(tests.length * 5.2),
+      average_response_time: 120 + Math.random() * 100,
+      errors: Math.floor(tests.length * 0.03),
+    };
+
+    // Process projects with proper typing
+    const validTests = tests.filter((t): t is TestData & { metadata: { createdBy: { name: string } } } => 
+      typeof t.metadata?.createdBy?.name === 'string'
+    );
+
+    const uniqueNames = Array.from(new Set(validTests.map(t => t.metadata.createdBy.name)));
+    const colors = ["blue-500", "emerald-500", "violet-500", "amber-500", "rose-500"];
+    
+    let projects: Project[] = uniqueNames.map((name, i): Project => ({
+      name,
+      requests: validTests.filter(t => t.metadata.createdBy.name === name).length,
+      color: colors[i % colors.length]
+    }));
+
+    // Add default projects if needed
+    if (projects.length < 2) {
+      projects = [
+        ...projects,
+        { name: "dacroq", requests: 98, color: "blue-500" },
+        { name: "benweb", requests: 102, color: "emerald-500" }
+      ];
+    }
+
+    return { metrics, projects };
   };
 
   // Poll health every 30s
@@ -132,63 +259,15 @@ export default function MonitoringPage() {
         if (!res.ok) throw new Error(`Status ${res.status}`);
         const tests = await res.json();
 
-        // Build status counts
-        const statusCounts = tests.reduce(
-          (acc: Record<string, number>, t: any) => {
-            acc[t.status] = (acc[t.status] || 0) + 1;
-            return acc;
-          },
-          {}
-        );
-        const testMetrics: TestMetric[] = Object.entries(statusCounts).map(
-          ([status, count]) => ({ status, count })
-        );
-
-        // Build ApiMetrics
-        const metrics: ApiMetrics = {
-          tests_run: testMetrics,
-          api_requests: tests.length * 3 + 50,
-          data_transferred: Math.round(tests.length * 5.2),
-          average_response_time: 120 + Math.random() * 100,
-          errors: Math.floor(tests.length * 0.03),
-        };
+        const { metrics, projects } = processTestResults(tests);
         setApiMetrics(metrics);
-
-        // Build projects
-        const names = Array.from(
-          new Set(
-            tests
-              .filter((t: any) => t.metadata?.createdBy?.name)
-              .map((t: any) => t.metadata.createdBy.name)
-          )
-        );
-        const colors = [
-          "blue-500",
-          "emerald-500",
-          "violet-500",
-          "amber-500",
-          "rose-500",
-        ];
-        const pd: Project[] = names.map((n, i) => ({
-          name: n,
-          requests: tests.filter(
-            (t: any) => t.metadata?.createdBy?.name === n
-          ).length,
-          color: colors[i % colors.length],
-        }));
-        if (pd.length < 2) {
-          pd.push(
-            { name: "dacroq", requests: 98, color: "blue-500" },
-            { name: "benweb", requests: 102, color: "emerald-500" }
-          );
-        }
-        setProjects(pd);
-
+        setProjects(projects);
         setHasResults(true);
       } catch (e) {
         console.error("Error polling metrics:", e);
       }
     };
+
     pollMetrics();
     const id = setInterval(pollMetrics, 15000);
     return () => clearInterval(id);
@@ -250,9 +329,66 @@ export default function MonitoringPage() {
     return () => clearInterval(id);
   }, [refreshKey]);
 
-  // Static error times
-  const errorTime1 = "12:55:55";
-  const errorTime2 = "12:50:23";
+  // Update the query handler
+  const handleQuery = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const timeRange = getTimeRangeMs();
+      const res = await fetch(`${API_BASE}/api/tests?timeRange=${timeRange}`);
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      const tests = await res.json();
+
+      const { metrics, projects } = processTestResults(tests);
+      setApiMetrics(metrics);
+      setProjects(projects);
+      setHasResults(true);
+    } catch (e: any) {
+      console.error("Error:", e);
+      setError(`Failed to run query: ${e.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fix the handleRestart function
+  const handleRestart = async () => {
+    if (!window.confirm(
+      'Are you sure you want to restart the service? This will temporarily interrupt all API operations.'
+    )) {
+      return;
+    }
+    setIsRestarting(true);
+    const res = await fetch(`${API_BASE}/api/admin/restart`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    if (!res.ok) {
+      setIsRestarting(false);
+      alert(`Restart failed with status ${res.status}`);
+      return;
+    }
+    alert(
+      'Restart initiated. The page will automatically reload when the service is back online.'
+    );
+    const pollHealth = async () => {
+      try {
+        const healthRes = await fetch(`${API_BASE}/api/health`);
+        if (healthRes.ok) {
+          window.location.reload();
+        } else {
+          setTimeout(pollHealth, 1000);
+        }
+      } catch {
+        setTimeout(pollHealth, 1000);
+      }
+    };
+    setTimeout(pollHealth, 2000);
+  };
+  
 
   return (
     <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 space-y-6">
@@ -266,14 +402,26 @@ export default function MonitoringPage() {
             Live system & API health and real-time metrics
           </p>
         </div>
-        <Button
-          size="sm"
-          className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
-          onClick={handleRefresh}
-        >
-          <RiRefreshLine className="h-4 w-4" />
-          Refresh Now
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            onClick={handleRestart}
+            disabled={isRestarting}
+          >
+            <RiRefreshLine className={`h-4 w-4 mr-1 ${isRestarting ? 'animate-spin' : ''}`} />
+            {isRestarting ? 'Restarting...' : 'Restart Service'}
+          </Button>
+          <Button
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
+            onClick={handleRefresh}
+          >
+            <RiRefreshLine className="h-4 w-4" />
+            Refresh Now
+          </Button>
+        </div>
       </div>
 
       {/* Live Overview */}
@@ -537,6 +685,255 @@ export default function MonitoringPage() {
         </div>
       </div>
 
+      {/* Hardware Control Panel */}
+      <div className="bg-white dark:bg-gray-800 border rounded-lg shadow-sm p-4">
+        <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+          Hardware Control
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Armorgos Controls */}
+          <div className="space-y-4">
+            <h3 className="text-md font-medium text-gray-700 dark:text-gray-300">
+              Armorgos
+            </h3>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-600 dark:text-gray-400">
+                Clock Generator
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {[0, 1, 2].map((osc) => (
+                  <Button
+                    key={`osc-${osc}`}
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(`${API_BASE}/api/hardware/armorgos/control`, {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify({
+                            operation: 'set_oscillator',
+                            target: 'clkgen',
+                            value: {
+                              oscillator: osc,
+                              state: true
+                            },
+                            port: '/dev/ttyACM0'
+                          })
+                        });
+                        if (!res.ok) throw new Error(`Status ${res.status}`);
+                      } catch (e) {
+                        console.error(`Error controlling oscillator ${osc}:`, e);
+                      }
+                    }}
+                  >
+                    OSC{osc}
+                  </Button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`${API_BASE}/api/hardware/armorgos/control`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          operation: 'reset',
+                          target: 'system',
+                          port: '/dev/ttyACM0'
+                        })
+                      });
+                      if (!res.ok) throw new Error(`Status ${res.status}`);
+                    } catch (e) {
+                      console.error('Error resetting system:', e);
+                    }
+                  }}
+                >
+                  Reset
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Daedalus Controls */}
+          <div className="space-y-4">
+            <h3 className="text-md font-medium text-gray-700 dark:text-gray-300">
+              Daedalus
+            </h3>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-600 dark:text-gray-400">
+                Die Control
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {[1, 2].map((die) => (
+                  <div key={`die-${die}`} className="space-y-1">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">Die {die}</div>
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => {
+                          try {
+                            const res = await fetch(`${API_BASE}/api/hardware/daedalus/control`, {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                              },
+                              body: JSON.stringify({
+                                operation: 'pause',
+                                target: 'system',
+                                value: {
+                                  die,
+                                  state: true
+                                },
+                                port: '/dev/ttyACM1'
+                              })
+                            });
+                            if (!res.ok) throw new Error(`Status ${res.status}`);
+                          } catch (e) {
+                            console.error(`Error pausing die ${die}:`, e);
+                          }
+                        }}
+                      >
+                        Pause
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => {
+                          try {
+                            const res = await fetch(`${API_BASE}/api/hardware/daedalus/control`, {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                              },
+                              body: JSON.stringify({
+                                operation: 'pause',
+                                target: 'system',
+                                value: {
+                                  die,
+                                  state: false
+                                },
+                                port: '/dev/ttyACM1'
+                              })
+                            });
+                            if (!res.ok) throw new Error(`Status ${res.status}`);
+                          } catch (e) {
+                            console.error(`Error resuming die ${die}:`, e);
+                          }
+                        }}
+                      >
+                        Resume
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Medusa Controls */}
+          <div className="space-y-4">
+            <h3 className="text-md font-medium text-gray-700 dark:text-gray-300">
+              Medusa
+            </h3>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-600 dark:text-gray-400">
+                System Control
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`${API_BASE}/api/hardware/medusa/control`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          operation: 'reset',
+                          target: 'system',
+                          port: '/dev/ttyACM2'
+                        })
+                      });
+                      if (!res.ok) throw new Error(`Status ${res.status}`);
+                    } catch (e) {
+                      console.error('Error resetting system:', e);
+                    }
+                  }}
+                >
+                  Reset
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`${API_BASE}/api/hardware/medusa/control`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          operation: 'fetch',
+                          target: 'system',
+                          value: {
+                            state: true
+                          },
+                          port: '/dev/ttyACM2'
+                        })
+                      });
+                      if (!res.ok) throw new Error(`Status ${res.status}`);
+                    } catch (e) {
+                      console.error('Error enabling fetch:', e);
+                    }
+                  }}
+                >
+                  Enable Fetch
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="flex justify-between items-center">
+            <h3 className="text-md font-medium text-gray-700 dark:text-gray-300">
+              Hardware Status
+            </h3>
+            <Button
+              size="sm"
+              onClick={handleRefresh}
+              className="flex items-center gap-2"
+            >
+              <RiRefreshLine className="h-4 w-4" />
+              Refresh
+            </Button>
+          </div>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-6">
+            {MACHINE_TYPES.map((type) => (
+              <div key={type} className="space-y-2">
+                <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400 capitalize">
+                  {type}
+                </h4>
+                <pre className="text-xs bg-gray-50 dark:bg-gray-900 p-2 rounded overflow-auto">
+                  {JSON.stringify(hardwareStatus[type] || 'No data', null, 2)}
+                </pre>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Query Builder */}
       <div className="bg-white dark:bg-gray-800 border rounded-lg shadow-sm mb-6">
         <div className="border-b px-6 py-4 border-gray-200 dark:border-gray-700">
@@ -581,78 +978,12 @@ export default function MonitoringPage() {
             <Button
               className="md:ml-auto bg-blue-600 hover:bg-blue-700 text-white"
               size="sm"
-              onClick={async () => {
-                setIsLoading(true);
-                setError(null);
-                try {
-                  const timeRange = getTimeRangeMs();
-                  const res = await fetch(
-                    `${API_BASE}/api/tests?timeRange=${timeRange}`
-                  );
-                  if (!res.ok) throw new Error(`Status ${res.status}`);
-                  const tests = await res.json();
-
-                  // process...
-                  const statusCounts = tests.reduce(
-                    (acc: Record<string, number>, t: any) => {
-                      acc[t.status] = (acc[t.status] || 0) + 1;
-                      return acc;
-                    },
-                    {}
-                  );
-                  const testMetrics = Object.entries(statusCounts).map(
-                    ([status, count]) => ({ status, count })
-                  );
-                  const metrics: ApiMetrics = {
-                    tests_run: testMetrics,
-                    api_requests: tests.length * 3 + 50,
-                    data_transferred: Math.round(tests.length * 5.2),
-                    average_response_time: 120 + Math.random() * 100,
-                    errors: Math.floor(tests.length * 0.03),
-                  };
-                  setApiMetrics(metrics);
-
-                  const names = Array.from(
-                    new Set(
-                      tests
-                        .filter((t: any) => t.metadata?.createdBy?.name)
-                        .map((t: any) => t.metadata.createdBy.name)
-                    )
-                  );
-                  const colors = [
-                    "blue-500",
-                    "emerald-500",
-                    "violet-500",
-                    "amber-500",
-                    "rose-500",
-                  ];
-                  const pd = names.map((n, i) => ({
-                    name: n,
-                    requests: tests.filter(
-                      (t: any) => t.metadata?.createdBy?.name === n
-                    ).length,
-                    color: colors[i % colors.length],
-                  }));
-                  if (pd.length < 2) {
-                    pd.push(
-                      { name: "dacroq", requests: 98, color: "blue-500" },
-                      { name: "benweb", requests: 102, color: "emerald-500" }
-                    );
-                  }
-                  setProjects(pd);
-                  setHasResults(true);
-                } catch (e: any) {
-                  console.error("Error:", e);
-                  setError(`Failed to run query: ${e.message}`);
-                } finally {
-                  setIsLoading(false);
-                }
-              }}
+              onClick={handleQuery}
               disabled={isLoading}
             >
               {isLoading ? (
                 <>
-                  <RiLoader4Line className="h-4 w-4 mr-1 animate-spin" />
+                  <RiLoader4Line className="h-4 w-4 animate-spin" />
                   Running...
                 </>
               ) : (
@@ -703,6 +1034,33 @@ export default function MonitoringPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Terminal Console */}
+      <div className="bg-white dark:bg-gray-800 border rounded-lg shadow-sm p-4">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+            System Terminal
+          </h2>
+          <div className="flex items-center space-x-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs"
+              onClick={() => {
+                alert("Available commands:\n- status: Check API status\n- restart: Restart service\n- log: Show recent logs\n- help: More commands");
+              }}
+            >
+              Help
+            </Button>
+          </div>
+        </div>
+        
+        <Terminal />
+        
+        <p className="text-xs text-gray-500 mt-2">
+          Execute commands to control the KSAT API service and connected hardware. Type 'help' for available commands.
+        </p>
       </div>
     </div>
   );
