@@ -60,7 +60,7 @@ import { Checkbox } from "@/components/Checkbox";
 import { TestRun } from "@/types/test";
 
 // Base URL for the backend API; configure NEXT_PUBLIC_API_BASE_URL in .env.local
-const API_BASE = "https://medusa.bendatsko.com";
+const API_BASE = "https://dacroq-api.bendatsko.com";
 
 // Hardware configuration options
 const CHIP_TYPES = ["3SAT", "LDPC", "HARDWARE", "RISC-V"];

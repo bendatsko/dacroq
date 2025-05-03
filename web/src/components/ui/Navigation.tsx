@@ -35,41 +35,41 @@ function Navigation() {
           {/* Logo and main navigation */}
           <div className="flex items-center gap-4">
             {/* Logo with quantum icon */}
-            <Link href="/" className="flex items-center">
-              <span className="sr-only">Dacroq</span>
-              <div className="relative h-7 w-7 flex items-center justify-center"> {/* Reduced size from h-8 w-8 to h-7 w-7 */}
-                <svg 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  viewBox="0 0 24 24" 
-                  className="h-7 w-7 text-blue-600 dark:text-blue-400"
-                >
-                  {/* Inner orbit (angled) */}
-                  <ellipse 
-                    cx="12" 
-                    cy="12" 
-                    rx="5" 
-                    ry="10" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="1.5" 
-                    className="opacity-70"
-                    transform="rotate(45, 12, 12)"
-                  />
-                  
-                  {/* Core (qubit) */}
-                  <circle 
-                    cx="12" 
-                    cy="12" 
-                    r="3" 
-                    fill="currentColor" 
-                    className="opacity-90"
-                  />
-                </svg>
-              </div>
-              <span className="text-base font-semibold tracking-tight text-gray-900 dark:text-white"> {/* Reduced from text-lg to text-base */}
-                Dacroq
-              </span>
-            </Link>
+            {/*<Link href="/" className="flex items-center">*/}
+            {/*  <span className="sr-only">Dacroq</span>*/}
+            {/*  <div className="relative h-7 w-7 flex items-center justify-center"> /!* Reduced size from h-8 w-8 to h-7 w-7 *!/*/}
+            {/*    <svg */}
+            {/*      xmlns="http://www.w3.org/2000/svg" */}
+            {/*      viewBox="0 0 24 24" */}
+            {/*      className="h-7 w-7 text-blue-600 dark:text-blue-400"*/}
+            {/*    >*/}
+            {/*      /!* Inner orbit (angled) *!/*/}
+            {/*      <ellipse */}
+            {/*        cx="12" */}
+            {/*        cy="12" */}
+            {/*        rx="5" */}
+            {/*        ry="10" */}
+            {/*        fill="none" */}
+            {/*        stroke="currentColor" */}
+            {/*        strokeWidth="1.5" */}
+            {/*        className="opacity-70"*/}
+            {/*        transform="rotate(45, 12, 12)"*/}
+            {/*      />*/}
+            {/*      */}
+            {/*      /!* Core (qubit) *!/*/}
+            {/*      <circle */}
+            {/*        cx="12" */}
+            {/*        cy="12" */}
+            {/*        r="3" */}
+            {/*        fill="currentColor" */}
+            {/*        className="opacity-90"*/}
+            {/*      />*/}
+            {/*    </svg>*/}
+            {/*  </div>*/}
+            {/*  <span className="text-base font-semibold tracking-tight text-gray-900 dark:text-white"> /!* Reduced from text-lg to text-base *!/*/}
+            {/*    Dacroq*/}
+            {/*  </span>*/}
+            {/*</Link>*/}
 
             {/* Desktop Navigation Links */}
             <nav className="hidden md:flex">

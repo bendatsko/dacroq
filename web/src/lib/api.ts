@@ -1,9 +1,11 @@
+import { API_CONFIG } from './config';
+
 export const getApiUrl = () => {
-  // In development, use localhost:8080
-  // In production, use dacroq.eecs.umich.edu/api
+  // In development, use localhost:8000
+  // In production, use the API_CONFIG
   return process.env.NODE_ENV === 'development' 
-    ? process.env.NEXT_PUBLIC_API_URL 
-    : process.env.NEXT_PUBLIC_API_URL_PRODUCTION;
+    ? 'http://localhost:8000'
+    : API_CONFIG.BASE_URL;
 };
 
 export const api = {

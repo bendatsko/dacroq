@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // The port where your Flask API is running
-const API_BASE_URL = 'https://medusa.bendatsko.com';
+const API_BASE_URL = 'dacroq-api.bendatsko.com';
 
 export async function GET(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;

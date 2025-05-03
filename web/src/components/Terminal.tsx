@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { RiLoader4Line, RiEyeLine, RiStopLine, RiPlayLine, RiRefreshLine } from "@remixicon/react";
 
 // API endpoint - using the same as in the main app
-const API_BASE = "https://medusa.bendatsko.com";
+const API_BASE = "https://dacroq-api.bendatsko.com";
 
 // Terminal interface types
 interface TerminalHistoryItem {

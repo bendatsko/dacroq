@@ -23,7 +23,7 @@ import {
 } from "@remixicon/react";
 
 // API base URL
-const API_BASE = "https://medusa.bendatsko.com";
+const API_BASE = "https://dacroq-api.bendatsko.com";
 
 // Type for API health status
 type ApiStatus = 'checking' | 'online' | 'degraded' | 'offline' | 'error';

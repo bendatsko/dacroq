@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 ALLOWED_ORIGINS = {
     "http://localhost:3000",
     "https://dacroq.eecs.umich.edu",
-    "https://medusa.bendatsko.com",
+    "https://dacroq-api.bendatsko.com",
     "https://release.bendatsko.com"
 }
 
@@ -222,6 +222,88 @@ def dict_from_row(row):
         return None
     return {key: row[key] for key in row.keys()}
 
+# --- Servo Control Configuration ---
+SERVO_PINS = (12, 13, 18)          # hardware‑PWM GPIOs
+SERVO_MIN_US = 0.5 / 1000          # 0.0005 s
+SERVO_MAX_US = 2.4 / 1000          # 0.0024 s
+
+# --- Servo Control Implementation ---
+try:
+    from gpiozero import AngularServo
+    
+    def _create_servos(pins):
+        out = [
+            AngularServo(
+                pin,
+                min_angle=0,
+                max_angle=180,
+                min_pulse_width=SERVO_MIN_US,
+                max_pulse_width=SERVO_MAX_US,
+            )
+            for pin in pins
+        ]
+        for s in out:
+            s.angle = None
+        return out
+    
+    servos = _create_servos(SERVO_PINS)
+    
+    def move_servo(index, angle):
+        if not 0 <= index < len(servos):
+            raise IndexError(f"Servo {index} out of range (0‑{len(servos)-1})")
+        servos[index].angle = angle
+    
+    def release_servos():
+        for s in servos:
+            s.angle = None
+    
+    def press_button_servo0():
+        move_servo(0, 120); time.sleep(0.5)
+        move_servo(0, 85);  time.sleep(0.1)
+        move_servo(0, 120); time.sleep(0.5)
+        move_servo(0, None)
+    
+    def press_button_servo1():
+        move_servo(1, 50); time.sleep(0.5)
+        move_servo(1, 28); time.sleep(0.1)
+        move_servo(1, 50); time.sleep(0.5)
+        move_servo(1, None)
+    
+    def press_button_servo2():
+        move_servo(2, 90); time.sleep(0.5)
+        move_servo(2, 40); time.sleep(0.3)
+        move_servo(2, 90); time.sleep(0.5)
+        move_servo(2, None)
+    
+    def reset_all():
+        """Equivalent to running press0, press1, press2 in sequence."""
+        press_button_servo0()
+        press_button_servo1()
+        press_button_servo2()
+        
+    SERVO_AVAILABLE = True
+    
+except ImportError:
+    # If gpiozero is not available, provide mock functions for non-GPIO environments
+    def move_servo(index, angle):
+        logger.info(f"MOCK: Move servo {index} to angle {angle}")
+    
+    def release_servos():
+        logger.info("MOCK: Release all servos")
+    
+    def press_button_servo0():
+        logger.info("MOCK: Press button with servo 0")
+    
+    def press_button_servo1():
+        logger.info("MOCK: Press button with servo 1")
+    
+    def press_button_servo2():
+        logger.info("MOCK: Press button with servo 2")
+    
+    def reset_all():
+        logger.info("MOCK: Reset all servos")
+    
+    SERVO_AVAILABLE = False
 
 # --- File Storage Config & Other Helpers (unchanged) ---
 UPLOAD_FOLDER = Path.home() / "ksat-api" / "uploads"
@@ -234,7 +316,6 @@ def allowed_file(filename):
 def generate_id():
     ts = int(datetime.now(pytz.timezone('America/Detroit')).timestamp())
     return f"{ts}-{uuid.uuid4().hex[:8]}"
-
 
 # --- API Metrics Middleware ---
 @app.before_request
@@ -1472,6 +1553,7 @@ def update_doc_section(section_id):
         conn.close()
         
         return jsonify(doc), 200
+        
     except Exception as e:
         logger.error(f"Error updating documentation: {str(e)}")
         return jsonify({'error': str(e)}), 500
@@ -1936,519 +2018,91 @@ def platformio_status(hardware_type):
         logger.error(f"Error getting PlatformIO status: {e}")
         return jsonify({'error': str(e)}), 500
 
-# Clean up monitor processes on application shutdown
-def cleanup_monitor_processes():
-    if hasattr(app, 'monitor_processes'):
-        for process in app.monitor_processes.values():
-            try:
-                process.terminate()
-                process.wait(timeout=5)
-            except:
-                process.kill()
-        app.monitor_processes.clear()
-
-import atexit
-atexit.register(cleanup_monitor_processes)
-
-# Initial documentation data import
-def import_initial_docs():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # Check if we already have documentation
-    cursor.execute('SELECT COUNT(*) FROM documentation')
-    count = cursor.fetchone()[0]
-    
-    if count == 0:
-        # Define initial documentation sections
-        initial_docs = [
-            {
-                "section_id": "introduction",
-                "title": "Introduction",
-                "content": """
-## What is Dacroq?
-Dacroq stands for Digitally Assisted CMOS Relaxation Oscillator-based Quantum-inspired computing. Specifically, the Dacroq Test Framework system integrates a Next.js web interface with a Go-based API server, enabling hardware-accelerated optimization problem-solving. 
-
-## Current Capabilities
-- 3-SAT solving using our primary hardware accelerator (Daedalus)
-- Support for multiple input formats, including DIMACS CNF and batch processing via ZIP files
-- Comprehensive performance benchmarking and metrics analysis
-- Specialized problem libraries and preset loading for test cases
-
-## Platform Architecture
-The Dacroq platform comprises:
-- A Next.js web frontend for user interaction
-- A Go-based API server for backend processing
-- Custom hardware solvers for 3-SAT, K-SAT, and LDPC problems
-"""
-            },
-            {
-                "section_id": "quick-start",
-                "title": "Quick Start Guide",
-                "content": """# Getting Started with Dacroq
-
-Follow these steps to run your first test on the Dacroq platform:
-
-## Running Your First 3-SAT Test
-1. **Prepare Your Input**
-   - Single .cnf file in DIMACS format
-   - .zip archive with multiple .cnf files
-   - Select a pre-loaded problem from our presets (available in /api/presets)
-   - Direct plaintext input with CNF formatting
-
-2. **Configure and Submit**
-   - Navigate to the solver interface
-   - Upload or select your problem input
-   - Configure any optional solver parameters
-   - Click "Run" to start processing
-
-3. **Monitor and Review**
-   - Watch real-time updates in the dashboard
-   - Wait for the test status to update from "Processing" to "Completed"
-   - Click on a completed test to view detailed results and performance metrics
-
-## Test Management
-- All test runs are displayed in the dashboard for collaborative review
-- Downloadable results and benchmarks for offline analysis
-- Options to delete tests that are no longer needed"""
-            },
-            {
-                "section_id": "hardware-architecture",
-                "title": "Hardware Architecture",
-                "content": """# Dacroq Hardware Architecture
-
-## Overview
-The Dacroq platform leverages custom hardware accelerators to solve complex Boolean satisfiability problems efficiently. Our system includes three specialized hardware modules:
-
-- **Daedalus (3-SAT Solver):** Equipped with 50 relaxation oscillators, an analog crossbar network, and SPI-based configuration.
-- **Amorgos (LDPC Decoder):** Designed for high-performance error correction.
-- **Medusa (K-SAT Solver):** Under development for handling variable clause lengths.
-
-## Hardware Components
-### Daedalus (3-SAT Solver)
-- 50 relaxation oscillators for mapping Boolean variables
-- Analog crossbar network for clause evaluation
-- SPI-controlled scan chains for rapid configuration
-- Real-time error monitoring and automatic problem decomposition
-
-### Communication & Control
-- Teensy 4.1 microcontroller bridges for hardware interfacing
-- High-speed serial communication (2M baud) with error-correcting protocols
-- Integration with the Go-based API server for hardware management
-
-## Problem Decomposition
-For problems exceeding hardware capacity:
-- Spectral partitioning and variable clustering techniques
-- Generation of optimized subproblems
-- Hierarchical solution recombination for accurate results"""
-            },
-            {
-                "section_id": "embedded-system",
-                "title": "Embedded System Integration",
-                "content": """# Embedded System Integration
-
-## Overview
-The Dacroq platform integrates with our custom embedded hardware through a series of bridge interfaces. This document describes how to connect, configure, and interact with the embedded hardware components.
-
-## Hardware Bridge Setup
-1. **USB Connection**
-   - Connect the Teensy 4.1 microcontroller to your development machine
-   - Verify COM port assignment (Windows) or device node (Linux/macOS)
-   - Default communication parameters: 2M baud, 8-N-1
-
-2. **Bridge Firmware**
-   - The bridge firmware should be loaded onto the Teensy 4.1 microcontroller
-   - Latest firmware (v1.2.1) available in the firmware repository
-   - Update using the Teensy Loader application
-
-## Hardware Status API
-The embedded system periodically reports status through the /api/hardware endpoints:
-
-- GET /api/hardware - Retrieve status of all connected hardware
-- POST /api/hardware/{device_id} - Update the status of a specific device
-- Temperature, voltage, and performance metrics updated every 5 seconds
-
-## Troubleshooting
-Common issues and their solutions:
-1. Connection timeout: Check USB cable and port assignments
-2. Communication errors: Verify baud rate settings match on both sides
-3. Hardware initialization failure: Cycle power to the hardware and restart bridge"""
-            },
-        ]
-        
-        now = datetime.now(pytz.timezone('America/Detroit')).isoformat()
-        
-        for doc in initial_docs:
-            doc_id = generate_id()
-            cursor.execute('''
-            INSERT INTO documentation (id, section_id, title, content, created, updated, created_by, updated_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                doc_id,
-                doc["section_id"],
-                doc["title"],
-                doc["content"],
-                now,
-                now,
-                "system",
-                "system"
-            ))
-        
-        # Create initial admin user
-        user_id = generate_id()
-        cursor.execute('''
-        INSERT INTO users (id, email, name, role, created)
-        VALUES (?, ?, ?, ?, ?)
-        ''', (
-            user_id,
-            "admin@dacroq.eecs.umich.edu",
-            "System Administrator",
-            "admin",
-            now
-        ))
-        
-        # Insert initial hardware status data
-        hardware_id_1 = generate_id()
-        hardware_id_2 = generate_id()
-        hardware_id_3 = generate_id()
-        
-        cursor.execute('''
-        INSERT INTO hardware_status (id, device_id, device_type, status, temperature, voltage, last_seen, metadata)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            hardware_id_1,
-            "teensy_4.1_bridge",
-            "bridge",
-            "online",
-            42.3,
-            3.3,
-            now,
-            json.dumps({
-                "baud_rate": 2000000,
-                "connected_since": (datetime.now(pytz.timezone('America/Detroit')) - timedelta(hours=24)).isoformat(),
-                "firmware_version": "1.2.1"
-            })
-        ))
-        
-        cursor.execute('''
-        INSERT INTO hardware_status (id, device_id, device_type, status, temperature, voltage, last_seen, metadata)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            hardware_id_2,
-            "daedalus_solver",
-            "solver",
-            "online",
-            45.7,
-            5.0,
-            now,
-            json.dumps({
-                "oscillator_count": 50,
-                "active_oscillators": 48,
-                "current_draw": 120, # mA
-                "model": "Daedalus K-SAT v2.1"
-            })
-        ))
-        
-        cursor.execute('''
-        INSERT INTO hardware_status (id, device_id, device_type, status, temperature, voltage, last_seen, metadata)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            hardware_id_3,
-            "embedded_control",
-            "controller",
-            "online",
-            36.9,
-            3.3,
-            now,
-            json.dumps({
-                "free_memory": 218400, # bytes
-                "uptime": 267840, # seconds
-                "processor": "ARM Cortex-M7"
-            })
-        ))
-        
-        conn.commit()
-        logger.info("Imported initial documentation, created admin user, and added hardware status")
-    
-    conn.close()
-
-# Call the import function after database initialization
-init_db()
-import_initial_docs()
-
-# Hardware Control Interfaces
-HARDWARE_CONFIGS = {
-    'armorgos': {
-        'clkgen': {
-            'oscillators': [
-                {'name': 'OSC0', 'pin': 3},
-                {'name': 'OSC1', 'pin': 18}, 
-                {'name': 'OSC2', 'pin': 5}
-            ],
-            'dividers': [
-                {'name': 'DIV0', 'pin': 24},
-                {'name': 'DIV1', 'pin': 4}
-            ],
-            'bypass': {'pin': 7},
-            'reset': {'pin': 17}
-        },
-        'control': {
-            'reset': {'pin': 16},
-            'done': {'pin': 6}
-        },
-        'spi': {
-            'mode0': {'pin': 9},
-            'mode1': {'pin': 8},
-            'miso': {'pin': 12},
-            'mosi': {'pin': 11},
-            'clk': {'pin': 13},
-            'cs_chip': {'pin': 10},
-            'cs_dac': {'pin': 25}
-        },
-        'dac': {
-            'ldac': {'pin': 26}
-        }
-    },
-    'daedalus': {
-        'system': {
-            'pause_die1': {'pin': 31},
-            'pause_die2': {'pin': 30},
-            'term_die1': {'pin': 28},
-            'term_die2': {'pin': 29}
-        },
-        'temperature': {
-            'sensor': {'pin': 'A17'},
-            'tx': {'pin': 8},
-            'rx': {'pin': 7}
-        },
-        'scan_chain': {
-            'clk_in': {'pin': 6},
-            'clk_out': {'pin': 34},
-            'in': [
-                {'name': 'IN0', 'pin': 10},
-                {'name': 'IN1', 'pin': 9},
-                {'name': 'IN2', 'pin': 32}
-            ],
-            'out': [
-                {'name': 'OUT0', 'pin': 35},
-                {'name': 'OUT1', 'pin': 36},
-                {'name': 'OUT2', 'pin': 37}
-            ],
-            'write_en_die1': {'pin': 16},
-            'write_en_die2': {'pin': 17}
-        },
-        'tia': {
-            'out_d1': {'pin': 'A6'},
-            'out_d2': {'pin': 'A7'}
-        },
-        'spi': {
-            'die1': {
-                'mode0': {'pin': 39},
-                'mode1': {'pin': 38},
-                'cs': {'pin': 4}
-            },
-            'die2': {
-                'mode0': {'pin': 14},
-                'mode1': {'pin': 15},
-                'cs': {'pin': 33}
-            },
-            'clk': {'pin': 13},
-            'sdo': {'pin': 12},
-            'sdi': {'pin': 11}
-        }
-    },
-    'medusa': {
-        'system': {
-            'clk_gen': {
-                'osc0': {'pin': 19},
-                'osc1': {'pin': 22},
-                'osc2': {'pin': 23},
-                'div0': {'pin': 16},
-                'div1': {'pin': 17},
-                'bypass': {'pin': 15},
-                'rstn': {'pin': 18}
-            },
-            'fetch_en': {'pin': 14},
-            'fetch_done': {'pin': 36},
-            'rstn': {'pin': 37}
-        },
-        'peripherals': {
-            'dac_cs': {'pin': 32},
-            'dp0_cs': {'pin': 31},
-            'dp1_cs': {'pin': 30},
-            'dp2_cs': {'pin': 29}
-        },
-        'medusa_spi': {
-            'cs': {'pin': 10},
-            'mode0': {'pin': 3},
-            'mode1': {'pin': 21}
-        },
-        'error': {
-            'left': {'pin': 20},
-            'right': {'pin': 2}
-        }
-    }
-}
-
-@app.route('/api/hardware/<hardware_type>/control', methods=['POST'])
-def hardware_control(hardware_type):
-    """Control hardware-specific features"""
+@app.route('/api/servo/control', methods=['POST'])
+def servo_control():
+    """Control servo motors"""
     try:
         data = request.json
+        
         if not data:
-            return jsonify({'error': 'No control data provided'}), 400
+            return jsonify({'error': 'No data provided'}), 400
             
-        hardware_type = hardware_type.lower()
-        if hardware_type not in HARDWARE_CONFIGS:
-            return jsonify({'error': f'Unknown hardware type: {hardware_type}'}), 400
+        action = data.get('action')
+        if not action:
+            return jsonify({'error': 'No action specified'}), 400
             
-        config = HARDWARE_CONFIGS[hardware_type]
-        operation = data.get('operation')
-        target = data.get('target')
-        value = data.get('value')
+        # Handle different servo actions
+        result = {'success': True, 'action': action}
         
-        if not operation or not target:
-            return jsonify({'error': 'Missing operation or target'}), 400
+        if action == 'move':
+            # Move a specific servo to a specific angle
+            servo_index = data.get('servo')
+            angle = data.get('angle')
             
-        # Map operation to hardware command
-        command = None
-        
-        if hardware_type == 'armorgos':
-            if target == 'clkgen':
-                if operation == 'set_oscillator':
-                    osc_num = value.get('oscillator')
-                    state = value.get('state')
-                    if osc_num is None or state is None:
-                        return jsonify({'error': 'Missing oscillator number or state'}), 400
-                    pin = config['clkgen']['oscillators'][osc_num]['pin']
-                    command = f'digitalWrite({pin}, {"HIGH" if state else "LOW"})'
-                    
-            elif target == 'spi':
-                if operation == 'configure':
-                    mode = value.get('mode', 0)
-                    command = f'SPI.begin(); SPI.setDataMode({mode});'
-                    
-        elif hardware_type == 'daedalus':
-            if target == 'system':
-                if operation == 'pause':
-                    die = value.get('die')
-                    state = value.get('state')
-                    if die not in [1, 2] or state is None:
-                        return jsonify({'error': 'Invalid die number or state'}), 400
-                    pin = config['system'][f'pause_die{die}']['pin']
-                    command = f'digitalWrite({pin}, {"HIGH" if state else "LOW"})'
-                    
-            elif target == 'scan_chain':
-                if operation == 'write':
-                    data = value.get('data')
-                    die = value.get('die')
-                    if not data or die not in [1, 2]:
-                        return jsonify({'error': 'Missing scan chain data or invalid die'}), 400
-                    command = f'writeScanChain({die}, {data})'
-                    
-        elif hardware_type == 'medusa':
-            if target == 'system':
-                if operation == 'reset':
-                    command = f'digitalWrite({config["system"]["rstn"]["pin"]}, LOW); delay(10); digitalWrite({config["system"]["rstn"]["pin"]}, HIGH);'
-                elif operation == 'fetch':
-                    state = value.get('state')
-                    if state is None:
-                        return jsonify({'error': 'Missing fetch state'}), 400
-                    command = f'digitalWrite({config["system"]["fetch_en"]["pin"]}, {"HIGH" if state else "LOW"})'
-                    
-        if not command:
-            return jsonify({'error': 'Invalid operation or target combination'}), 400
+            if servo_index is None:
+                return jsonify({'error': 'No servo index specified'}), 400
+            if angle is None:
+                return jsonify({'error': 'No angle specified'}), 400
+                
+            try:
+                move_servo(int(servo_index), float(angle) if angle is not None else None)
+                result['details'] = f"Moved servo {servo_index} to {angle}°"
+            except Exception as e:
+                return jsonify({'error': f'Servo control error: {str(e)}'}), 400
+                
+        elif action == 'press':
+            # Press a button using pre-defined servo motion
+            servo_index = data.get('servo')
             
-        # Execute command through serial connection
-        port = data.get('port')
-        if not port:
-            return jsonify({'error': 'No serial port specified'}), 400
+            if servo_index is None:
+                return jsonify({'error': 'No servo index specified'}), 400
+                
+            if servo_index == 0:
+                press_button_servo0()
+                result['details'] = "Pressed button with servo 0"
+            elif servo_index == 1:
+                press_button_servo1()
+                result['details'] = "Pressed button with servo 1"
+            elif servo_index == 2:
+                press_button_servo2()
+                result['details'] = "Pressed button with servo 2"
+            else:
+                return jsonify({'error': f'Invalid servo index: {servo_index}'}), 400
+                
+        elif action == 'reset_all':
+            # Reset all servos
+            reset_all()
+            result['details'] = "Reset all servos"
             
-        # Send command to device
-        import serial
-        ser = serial.Serial(port, 2000000, timeout=1)
-        ser.write(command.encode())
-        response = ser.readline().decode().strip()
-        ser.close()
-        
-        return jsonify({
-            'success': True,
-            'command': command,
-            'response': response
-        })
+        elif action == 'release':
+            # Release all servos
+            release_servos()
+            result['details'] = "Released all servos"
+            
+        else:
+            return jsonify({'error': f'Unknown action: {action}'}), 400
+            
+        return jsonify(result)
         
     except Exception as e:
-        logger.error(f"Error in hardware control: {e}")
+        logger.error(f"Error in servo control: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/hardware/<hardware_type>/status', methods=['GET'])
-def hardware_status(hardware_type):
-    """Get detailed status of specific hardware"""
+@app.route('/api/servo/status', methods=['GET'])
+def servo_status():
+    """Get the current status of servo control capabilities"""
     try:
-        hardware_type = hardware_type.lower()
-        if hardware_type not in HARDWARE_CONFIGS:
-            return jsonify({'error': f'Unknown hardware type: {hardware_type}'}), 400
-            
-        # Get serial port
-        port = request.args.get('port')
-        if not port:
-            return jsonify({'error': 'No serial port specified'}), 400
-            
-        # Query hardware status
-        import serial
-        ser = serial.Serial(port, 2000000, timeout=1)
-        
         status = {
-            'type': hardware_type,
-            'connected': True,
-            'port': port,
-            'subsystems': {}
+            'available': SERVO_AVAILABLE,
+            'pins': SERVO_PINS,
+            'count': len(SERVO_PINS)
         }
         
-        if hardware_type == 'armorgos':
-            # Query oscillator states
-            ser.write(b'getOscStates()')
-            osc_states = ser.readline().decode().strip().split(',')
-            status['subsystems']['oscillators'] = {
-                f'OSC{i}': bool(int(state)) 
-                for i, state in enumerate(osc_states)
-            }
-            
-        elif hardware_type == 'daedalus':
-            # Query temperature
-            ser.write(b'getTemperature()')
-            temp = float(ser.readline().decode().strip())
-            status['subsystems']['temperature'] = temp
-            
-            # Query die states
-            ser.write(b'getDieStates()')
-            die_states = ser.readline().decode().strip().split(',')
-            status['subsystems']['dies'] = {
-                f'DIE{i+1}': {
-                    'active': bool(int(states[0])),
-                    'error': bool(int(states[1]))
-                }
-                for i, states in enumerate(die_states)
-            }
-            
-        elif hardware_type == 'medusa':
-            # Query system state
-            ser.write(b'getSystemState()')
-            sys_state = ser.readline().decode().strip().split(',')
-            status['subsystems']['system'] = {
-                'fetch_enabled': bool(int(sys_state[0])),
-                'fetch_done': bool(int(sys_state[1])),
-                'error_left': bool(int(sys_state[2])),
-                'error_right': bool(int(sys_state[3]))
-            }
-            
-        ser.close()
         return jsonify(status)
         
     except Exception as e:
-        logger.error(f"Error getting hardware status: {e}")
+        logger.error(f"Error getting servo status: {e}")
         return jsonify({'error': str(e)}), 500
-
 
 @app.route('/api/admin/restart', methods=['POST'])
 def restart_service():

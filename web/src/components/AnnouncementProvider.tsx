@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { Toast, ToastProps } from '@/components/ui/Toast';
 
 // API endpoint - using the same as in the main app
-const API_BASE = "https://medusa.bendatsko.com";
+const API_BASE = "https://dacroq-api.bendatsko.com";
 
 // Interface for an announcement
 export interface Announcement {

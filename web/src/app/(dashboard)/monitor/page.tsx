@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   RiRefreshLine,
   RiLoader4Line,
+  RiRestartLine,
 } from "@remixicon/react";
 import {
   LineChart,
@@ -21,7 +22,7 @@ import { Terminal } from "@/components/Terminal";
 // -----------------------------------------------------------------------------
 // Constants & Types
 // -----------------------------------------------------------------------------
-const API_BASE = "https://medusa.bendatsko.com";
+const API_BASE = "https://dacroq-api.bendatsko.com";
 
 const MACHINE_TYPES = ["machine-1", "machine-2", "machine-3"] as const;
 type MachineType = (typeof MACHINE_TYPES)[number];
@@ -50,12 +51,6 @@ interface ApiMetrics {
   data_transferred: number;
   average_response_time: number;
   errors: number;
-}
-
-interface Project {
-  name: string;
-  requests: number;
-  color: string;
 }
 
 interface TimeBucket {
@@ -96,15 +91,9 @@ type HardwareStatus = Record<MachineType, MachineStatus>;
 // -----------------------------------------------------------------------------
 export default function MonitoringPage() {
   // ----- state -----
-  const [queryTimeRange, setQueryTimeRange] = useState("Last 24 hours");
-  const [visualizationType, setVisualizationType] = useState("API Requests");
-  const [hasResults, setHasResults] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [healthData, setHealthData] = useState<ApiHealth | null>(null);
   const [apiMetrics, setApiMetrics] = useState<ApiMetrics | null>(null);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
   const [isClient, setIsClient] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
 
@@ -125,23 +114,13 @@ export default function MonitoringPage() {
   // Helpers
   // ---------------------------------------------------------------------------
   const getTimeRangeMs = () => {
-    switch (queryTimeRange) {
-      case "Last 1 hour":
-        return 60 * 60 * 1000;
-      case "Last 6 hours":
-        return 6 * 60 * 60 * 1000;
-      case "Last 24 hours":
-        return 24 * 60 * 60 * 1000;
-      case "Last 7 days":
-        return 7 * 24 * 60 * 60 * 1000;
-      default:
-        return 24 * 60 * 60 * 1000;
-    }
+    // Fixed default to 24 hours
+    return 24 * 60 * 60 * 1000;
   };
 
   const processTestResults = (
     tests: TestData[]
-  ): { metrics: ApiMetrics; projects: Project[] } => {
+  ): { metrics: ApiMetrics } => {
     // tally status counts
     const statusCounts = tests.reduce<Record<string, number>>((acc, t) => {
       acc[t.status] = (acc[t.status] || 0) + 1;
@@ -160,31 +139,7 @@ export default function MonitoringPage() {
       errors: Math.floor(tests.length * 0.03),
     };
 
-    const validTests = tests.filter(
-      (t): t is TestData & { metadata: { createdBy: { name: string } } } =>
-        typeof t.metadata?.createdBy?.name === "string"
-    );
-
-    const uniqueNames = Array.from(
-      new Set(validTests.map((t) => t.metadata.createdBy.name))
-    );
-    const colors = ["blue-500", "emerald-500", "violet-500", "amber-500"];
-    let projects: Project[] = uniqueNames.map((name, i) => ({
-      name,
-      requests: validTests.filter(
-        (t) => t.metadata.createdBy.name === name
-      ).length,
-      color: colors[i % colors.length],
-    }));
-
-    if (projects.length < 2) {
-      projects = [
-        ...projects,
-        { name: "dacroq", requests: 98, color: "blue-500" },
-        { name: "benweb", requests: 102, color: "emerald-500" },
-      ];
-    }
-    return { metrics, projects };
+    return { metrics };
   };
 
   // ---------------------------------------------------------------------------
@@ -204,7 +159,7 @@ export default function MonitoringPage() {
     fetchHealth();
     const id = setInterval(fetchHealth, 30_000);
     return () => clearInterval(id);
-  }, [refreshKey]);
+  }, []);
 
   // Test-metrics – 15 s
   useEffect(() => {
@@ -216,10 +171,8 @@ export default function MonitoringPage() {
         );
         if (!res.ok) throw new Error(`Status ${res.status}`);
         const tests = await res.json();
-        const { metrics, projects } = processTestResults(tests);
+        const { metrics } = processTestResults(tests);
         setApiMetrics(metrics);
-        setProjects(projects);
-        setHasResults(true);
       } catch (e) {
         console.error("Error polling metrics:", e);
       }
@@ -227,7 +180,7 @@ export default function MonitoringPage() {
     pollMetrics();
     const id = setInterval(pollMetrics, 15_000);
     return () => clearInterval(id);
-  }, [queryTimeRange, refreshKey]);
+  }, []);
 
   // Sliding-window charts – 10 s
   useEffect(() => {
@@ -255,7 +208,7 @@ export default function MonitoringPage() {
     fetchSeries();
     const id = setInterval(fetchSeries, 10_000);
     return () => clearInterval(id);
-  }, [refreshKey]);
+  }, []);
 
   // System metrics – 1 s
   useEffect(() => {
@@ -281,7 +234,7 @@ export default function MonitoringPage() {
     fetchSystem();
     const id = setInterval(fetchSystem, 1_000);
     return () => clearInterval(id);
-  }, [refreshKey]);
+  }, []);
 
   // Hardware status – 1 s (still fetched; UI removed)
   useEffect(() => {
@@ -317,23 +270,63 @@ export default function MonitoringPage() {
   // ---------------------------------------------------------------------------
   // User actions
   // ---------------------------------------------------------------------------
-  const handleQuery = async () => {
-    setIsLoading(true);
-    setError(null);
+  const handleBoardReset = async (servoIndex: number) => {
+    const boardNames = ["LDPC", "3SAT", "KSAT"];
+    const boardName = boardNames[servoIndex];
+    
+    if (!window.confirm(`Are you sure you want to reset the ${boardName} board (servo ${servoIndex})?`)) {
+      return;
+    }
+    
     try {
-      const timeRange = getTimeRangeMs();
-      const res = await fetch(`${API_BASE}/api/tests?timeRange=${timeRange}`);
-      if (!res.ok) throw new Error(`Status ${res.status}`);
-      const tests = await res.json();
-      const { metrics, projects } = processTestResults(tests);
-      setApiMetrics(metrics);
-      setProjects(projects);
-      setHasResults(true);
-    } catch (e: any) {
-      setError(`Failed to run query: ${e.message}`);
-      console.error(e);
-    } finally {
-      setIsLoading(false);
+      const res = await fetch(`${API_BASE}/api/servo/control`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "press",
+          servo: servoIndex
+        }),
+      });
+      
+      if (!res.ok) {
+        alert(`Reset failed with status ${res.status}`);
+        return;
+      }
+      
+      alert(`${boardName} board reset initiated successfully.`);
+    } catch (e) {
+      console.error(`Error resetting ${boardName} board:`, e);
+      alert(`Error resetting ${boardName} board: ${e}`);
+    }
+  };
+
+  const handleResetAll = async () => {
+    if (!window.confirm("Are you sure you want to reset ALL boards? This will reset LDPC, 3SAT, and KSAT in sequence.")) {
+      return;
+    }
+    
+    try {
+      const res = await fetch(`${API_BASE}/api/servo/control`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "reset_all"
+        }),
+      });
+      
+      if (!res.ok) {
+        alert(`Reset all failed with status ${res.status}`);
+        return;
+      }
+      
+      alert("All boards reset initiated successfully.");
+    } catch (e) {
+      console.error("Error resetting all boards:", e);
+      alert(`Error resetting all boards: ${e}`);
     }
   };
 
@@ -386,7 +379,7 @@ export default function MonitoringPage() {
           onClick={handleRestart}
           disabled={isRestarting}
         >
-          <RiRefreshLine
+          <RiRestartLine
             className={`h-4 w-4 mr-1 ${isRestarting ? "animate-spin" : ""}`}
           />
           {isRestarting ? "Restarting…" : "Restart Service"}
@@ -447,7 +440,7 @@ export default function MonitoringPage() {
               </span>
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              SQLite @ medusa.bendatsko.com
+              SQLite @ dacroq-api.bendatsko.com
             </p>
           </div>
 
@@ -519,83 +512,77 @@ export default function MonitoringPage() {
         </div>
       </section>
 
-      {/* ------------------------------------------------------------- Console */}
-      <section className="bg-white dark:bg-gray-800 border rounded-lg shadow-sm p-4">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-medium text-gray-900 dark:text-white">
-            System Terminal
-          </h2>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() =>
-              alert(
-                "Available commands:\n- status: Check API status\n- restart: Restart service\n- log: Show recent logs\n- help: More commands"
-              )
-            }
-          >
-            Help
-          </Button>
-        </div>
-        {isClient && <Terminal />}
-        <p className="text-xs text-gray-500 mt-2">
-          Type <code>help</code> for a list of commands.
-        </p>
-      </section>
+      {/* ----------------------------------------- Hardware Control and Reset */}
+      <section className="bg-white dark:bg-gray-800 border rounded-lg shadow-sm p-4 space-y-6">
+        <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+          Hardware Control
+        </h2>
 
-      {/* ---------------------------------------- Solver Metrics / Query Builder */}
-      <section className="bg-white dark:bg-gray-800 border rounded-lg shadow-sm">
-        <header className="border-b px-6 py-4 border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-medium text-gray-900 dark:text-white">
-            Query Builder
-          </h2>
-        </header>
-
-        <div className="p-6 space-y-6">
-          {/* -- form controls -- */}
-          <div className="flex flex-col md:flex-row md:items-end gap-4">
-            {/* time-range */}
-            <LabeledSelect
-              label="Time Range"
-              value={queryTimeRange}
-              onChange={setQueryTimeRange}
-              options={[
-                "Last 1 hour",
-                "Last 6 hours",
-                "Last 24 hours",
-                "Last 7 days",
-              ]}
-            />
-            {/* visualization type */}
-            <LabeledSelect
-              label="Visualization"
-              value={visualizationType}
-              onChange={setVisualizationType}
-              options={[
-                "API Requests",
-                "Data Transfer",
-                "Response Time",
-                "Error Rate",
-              ]}
-            />
-            <Button
-              size="sm"
-              className="md:ml-auto bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={handleQuery}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <RiLoader4Line className="h-4 w-4 animate-spin" /> Running…
-                </>
-              ) : (
-                "Run Query"
-              )}
-            </Button>
+        <div className="space-y-4">
+          <div className="p-4 border rounded-lg">
+            <h3 className="text-md font-medium mb-3">Microcontroller Reset</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Use these controls to reset the microcontrollers on each board. A reset will restart the Teensy ARM 4.1 microcontroller.
+            </p>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="p-4 border rounded-lg">
+                <h4 className="text-sm font-medium mb-2">LDPC Board</h4>
+                <p className="text-xs text-gray-500 mb-2">Servo 0</p>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="w-full"
+                  onClick={() => handleBoardReset(0)}
+                >
+                  <RiRestartLine className="h-4 w-4 mr-1" />
+                  Reset LDPC
+                </Button>
+              </div>
+              
+              <div className="p-4 border rounded-lg">
+                <h4 className="text-sm font-medium mb-2">3SAT Board</h4>
+                <p className="text-xs text-gray-500 mb-2">Servo 1</p>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="w-full"
+                  onClick={() => handleBoardReset(1)}
+                >
+                  <RiRestartLine className="h-4 w-4 mr-1" />
+                  Reset 3SAT
+                </Button>
+              </div>
+              
+              <div className="p-4 border rounded-lg">
+                <h4 className="text-sm font-medium mb-2">KSAT Board</h4>
+                <p className="text-xs text-gray-500 mb-2">Servo 2</p>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="w-full"
+                  onClick={() => handleBoardReset(2)}
+                >
+                  <RiRestartLine className="h-4 w-4 mr-1" />
+                  Reset KSAT
+                </Button>
+              </div>
+              
+              <div className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-700">
+                <h4 className="text-sm font-medium mb-2">All Boards</h4>
+                <p className="text-xs text-gray-500 mb-2">Sequential reset</p>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
+                  onClick={handleResetAll}
+                >
+                  <RiRestartLine className="h-4 w-4 mr-1" />
+                  Reset All Boards
+                </Button>
+              </div>
+            </div>
           </div>
-
-          {/* where / group-by etc – minimal placeholder (same interface) */}
-          <AdvancedFiltersPlaceholder />
         </div>
       </section>
     </div>

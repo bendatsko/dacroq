@@ -165,40 +165,13 @@ export default function LoginPage() {
         
         <div className="bg-white dark:bg-gray-800 p-6 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
           {/* Logo section */}
-        <div className="relative mx-auto w-fit mb-6">
+        <div className="relative mx-auto w-fit m-3">
           <span className="sr-only">Dacroq</span>
           <div className="relative">
             <div className="flex items-center justify-center flex-col">
-              <div className="relative h-16 w-16 flex items-center justify-center mb-2">
-                <svg 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  viewBox="0 0 24 24" 
-                  className="h-16 w-16 text-blue-600 dark:text-blue-400"
-                >
-                  {/* Inner orbit (angled) */}
-                  <ellipse 
-                    cx="12" 
-                    cy="12" 
-                    rx="5" 
-                    ry="10" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="1.5" 
-                    className="opacity-70"
-                    transform="rotate(45, 12, 12)"
-                  />
-                  
-                  {/* Core (qubit) */}
-                  <circle 
-                    cx="12" 
-                    cy="12" 
-                    r="3" 
-                    fill="currentColor" 
-                    className="opacity-90"
-                  />
-                </svg>
-              </div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dacroq</h1>
+             
+              <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Sign in</h1>
+              <h1 className="text-sm font-normal text-gray-600 dark:text-gray-400">Sign in to continue to Dacroq</h1>
             </div>
           </div>
         </div>
