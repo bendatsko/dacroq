@@ -8,6 +8,7 @@
 *.out
 /vendor/
 /go/
+.idea
 
 # Node.js - More aggressive patterns
 node_modules/
