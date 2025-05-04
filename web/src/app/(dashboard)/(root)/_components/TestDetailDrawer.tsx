@@ -36,10 +36,9 @@ import {
 import { Badge } from "@/components/Badge";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { API_CONFIG } from "@/lib/config";
 
 // Base URL for the backend API
-const API_BASE = API_CONFIG.BASE_URL;
+const API_BASE = "https://dacroq-api.bendatsko.com";
 
 export interface TestDetailDrawerProps {
   open: boolean;

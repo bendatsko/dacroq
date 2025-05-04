@@ -1,0 +1,12 @@
+/Users/admin/Desktop/PySA-pysa-walksat/build-release/CMakeFiles/test.dir
+/Users/admin/Desktop/PySA-pysa-walksat/build-release/CMakeFiles/edit_cache.dir
+/Users/admin/Desktop/PySA-pysa-walksat/build-release/CMakeFiles/rebuild_cache.dir
+/Users/admin/Desktop/PySA-pysa-walksat/build-release/src/CMakeFiles/walk-sat.dir
+/Users/admin/Desktop/PySA-pysa-walksat/build-release/src/CMakeFiles/walk-sat.x.dir
+/Users/admin/Desktop/PySA-pysa-walksat/build-release/src/CMakeFiles/test.dir
+/Users/admin/Desktop/PySA-pysa-walksat/build-release/src/CMakeFiles/edit_cache.dir
+/Users/admin/Desktop/PySA-pysa-walksat/build-release/src/CMakeFiles/rebuild_cache.dir
+/Users/admin/Desktop/PySA-pysa-walksat/build-release/tests/CMakeFiles/test_walk_sat.x.dir
+/Users/admin/Desktop/PySA-pysa-walksat/build-release/tests/CMakeFiles/test.dir
+/Users/admin/Desktop/PySA-pysa-walksat/build-release/tests/CMakeFiles/edit_cache.dir
+/Users/admin/Desktop/PySA-pysa-walksat/build-release/tests/CMakeFiles/rebuild_cache.dir

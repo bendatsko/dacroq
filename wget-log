@@ -1,0 +1,6 @@
+--2025-05-03 21:38:26--  http://www.nominal-animal.net/answers/install-teensy-rules
+Resolving www.nominal-animal.net (www.nominal-animal.net)... 188.165.143.18
+Connecting to www.nominal-animal.net (www.nominal-animal.net)|188.165.143.18|:80... connected.
+HTTP request sent, awaiting response... 403 Forbidden
+2025-05-03 21:38:26 ERROR 403: Forbidden.
+
