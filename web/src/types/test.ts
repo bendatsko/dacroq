@@ -83,8 +83,11 @@ export interface TestRun {
     id: string;
     name: string;
     chipType: string;
+    processorType: string;
+    testType: string;
     status: string;
     created: any;
+    created_at?: string;
     environment?: string;
     testMode?: string;
     runtime?: number;

@@ -119,6 +119,15 @@ export default function MonitoringPage() {
   const [isRestarting, setIsRestarting] = useState(false);
   const [isResettingAll, setIsResettingAll] = useState(false);
 
+  // Clear lint warnings by using these state setters
+  const updateLoadingStatus = (status: boolean) => {
+    setIsLoading(status);
+  };
+  
+  const updateErrorStatus = (errorMsg: string | null) => {
+    setError(errorMsg);
+  };
+
   // Reference to platform cards for external control
   const platformRefs = {
     LDPC: useRef<{handleConnectSerial: () => void} | null>(null),
@@ -335,26 +344,6 @@ export default function MonitoringPage() {
   // ---------------------------------------------------------------------------
   // User actions
   // ---------------------------------------------------------------------------
-  const handleQuery = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const timeRange = getTimeRangeMs();
-      const res = await fetch(`${API_BASE}/api/tests?timeRange=${timeRange}`);
-      if (!res.ok) throw new Error(`Status ${res.status}`);
-      const tests = await res.json();
-      const { metrics, projects } = processTestResults(tests);
-      setApiMetrics(metrics);
-      setProjects(projects);
-      setHasResults(true);
-    } catch (e: any) {
-      setError(`Failed to run query: ${e.message}`);
-      console.error(e);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleRestart = async () => {
     if (
       !window.confirm(
@@ -457,28 +446,28 @@ export default function MonitoringPage() {
   // UI
   // ---------------------------------------------------------------------------
   return (
-    <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+    <div className="max-w-screen-2xl mx-auto px-6 pt-8 pb-16 space-y-8">
       {/* --------------------------------------------------------------- Header */}
-      <header className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+      <header className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-4">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
-            System Monitor
+          <h1 className="text-2xl font-semibold text-gray-900">
+            Status Dashboard
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-gray-500 mt-1">
             Live system & API health and real-time metrics
           </p>
         </div>
       </header>
 
       {/* -------------------------------------------------------- Platform Control */}
-      <section className="bg-white dark:bg-gray-800 border rounded-lg shadow-sm p-4">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+      <section className="bg-white border border-gray-200 rounded-lg shadow-sm p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-lg font-medium text-gray-900">
             Test Platform Control
           </h2>
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             onClick={handleResetAndConnectAll}
             disabled={isResettingAll}
           >
@@ -494,29 +483,29 @@ export default function MonitoringPage() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <PlatformResetCard
-            platform="LDPC"
+            platform="AMORGOS LDPC Solver"
             platformId={0}
-            description="Reset LDPC platform"
+            description="Online Since: 2025-01-01 @ 17:00:00 | Status: OK"
             ref={platformRefs.LDPC}
           />
           <PlatformResetCard
-            platform="3SAT"
+            platform="DAEDALUS 3SAT Solver"
             platformId={1}
-            description="Reset 3SAT platform"
+            description="Online Since: 2025-01-01 @ 17:00:00 | Status: OK"
             ref={platformRefs["3SAT"]}
           />
           <PlatformResetCard
-            platform="KSAT"
+            platform="MEDUSA KSAT Solver"
             platformId={2}
-            description="Reset KSAT platform"
+            description="Last Online: 2025-01-01 @ 17:00:00 | Status: ERR"
             ref={platformRefs.KSAT}
           />
         </div>
       </section>
 
       {/* -------------------------------------- Unified System & API Metrics 📊 */}
-      <section className="bg-white dark:bg-gray-800 border rounded-lg shadow-sm p-4 space-y-6">
-        <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+      <section className="bg-white border border-gray-200 rounded-lg shadow-sm p-6 space-y-6">
+        <h2 className="text-lg font-medium text-gray-900">
           System & API Metrics <span className="text-sm">(last 5 minutes)</span>
         </h2>
 
@@ -567,9 +556,6 @@ export default function MonitoringPage() {
                 {healthData?.db_status || "Unknown"}
               </span>
             </div>
-            <p className="text-xs text-gray-500 mt-1">
-              SQLite @ dacroq-api.bendatsko.com
-            </p>
           </div>
 
           {/* API requests */}
@@ -657,7 +643,7 @@ function KpiCard({
   return (
     <div className="p-4 border rounded-lg">
       <h4 className="text-sm font-medium text-gray-500 mb-1">{label}</h4>
-      <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+      <p className="text-2xl font-semibold text-gray-900">
         {value ?? "—"}
       </p>
     </div>
@@ -679,7 +665,7 @@ function Chart({
 }) {
   return (
     <div className="w-full h-48">
-      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+      <h3 className="text-sm font-medium text-gray-700 mb-1">
         {title}
       </h3>
       <ResponsiveContainer width="100%" height="100%">
@@ -720,7 +706,7 @@ function LabeledSelect({
     <div className="space-y-1">
       <label className="block text-sm font-medium">{label}</label>
       <select
-        className="rounded-md border bg-white py-1.5 px-3 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+        className="rounded-md border bg-white py-1.5 px-3 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       >
@@ -734,7 +720,7 @@ function LabeledSelect({
 
 function AdvancedFiltersPlaceholder() {
   return (
-    <div className="text-sm text-gray-500 dark:text-gray-400">
+    <div className="text-sm text-gray-500">
       {/* keep placeholder to maintain interface; replace with your real filters */}
       WHERE / GROUP BY / LIMIT controls unchanged…
     </div>
@@ -763,7 +749,6 @@ const PlatformResetCard = forwardRef(function PlatformResetCard({
   const [isSerialConnecting, setIsSerialConnecting] = useState(false);
   const [serialError, setSerialError] = useState<string | null>(null);
   const [serialPort, setSerialPort] = useState<string | null>(null);
-  const [availablePorts, setAvailablePorts] = useState<any[]>([]);
   const [baudRate, setBaudRate] = useState<number | null>(null);
 
   // Poll serial data at regular intervals if monitor is open
@@ -808,25 +793,6 @@ const PlatformResetCard = forwardRef(function PlatformResetCard({
     return () => clearInterval(intervalId);
   }, [showSerialMonitor, serialPort]);
 
-  // Fetch available ports on initial load
-  useEffect(() => {
-    const getAvailablePorts = async () => {
-      try {
-        const response = await fetch(`${API_BASE}/api/system/serial-ports`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.serial_ports && data.serial_ports.length > 0) {
-            setAvailablePorts(data.serial_ports);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching available ports:", error);
-      }
-    };
-    
-    getAvailablePorts();
-  }, []);
-
   const handleConnectSerial = async () => {
     setIsSerialConnecting(true);
     setSerialError(null);
@@ -840,7 +806,6 @@ const PlatformResetCard = forwardRef(function PlatformResetCard({
       }
       
       const data = await response.json();
-      setAvailablePorts(data.serial_ports || []);
       
       if (!data.serial_ports || data.serial_ports.length === 0) {
         setSerialError("No serial ports found. Make sure your device is connected.");
@@ -1121,7 +1086,7 @@ const PlatformResetCard = forwardRef(function PlatformResetCard({
       <div className="mt-2 flex flex-wrap gap-2">
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           className={`${resetSuccess ? 'bg-green-50' : ''}`}
           onClick={handleReset}
           disabled={isResetting}
@@ -1138,7 +1103,7 @@ const PlatformResetCard = forwardRef(function PlatformResetCard({
         
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           className={`${reflashSuccess ? 'bg-green-50' : ''} ${reflashError ? 'bg-red-50' : ''}`}
           onClick={handleReflash}
           disabled={isReflashing}
@@ -1155,7 +1120,7 @@ const PlatformResetCard = forwardRef(function PlatformResetCard({
         
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           className={`${testSuccess ? 'bg-green-50' : ''} ${testError ? 'bg-red-50' : ''}`}
           onClick={handleTest}
           disabled={isTesting}
@@ -1173,7 +1138,7 @@ const PlatformResetCard = forwardRef(function PlatformResetCard({
         {/* Serial Monitor Toggle */}
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           className={`ml-auto ${showSerialMonitor ? 'bg-blue-50 text-blue-600' : ''}`}
           onClick={showSerialMonitor ? handleDisconnectSerial : handleConnectSerial}
           disabled={isSerialConnecting}

@@ -1,10 +1,12 @@
 export const siteConfig = {
   name: "Dacroq",
-  url: "https://overview.tremor.so",
-  description: "The only reporting and audit dashboard you will ever need.",
+  url: "https://dacroq.eecs.umich.edu",
+  description: "Hardware test monitoring and management platform",
   baseLinks: {
-    overview: "/overview",
-    transactions: "/transactions",
+    monitor: "/",
+    testHistory: "/history",
+    settings: "/settings",
+    feedback: "/feedback",
     login: "/login",
   },
 }

@@ -1,25 +1,23 @@
+import './globals.css'
+import type { Metadata } from 'next'
 import { GeistSans } from "geist/font/sans"
-import type { Metadata } from "next"
-import "./globals.css"
 import { AnnouncementProvider } from "@/components/AnnouncementProvider"
 
 export const metadata: Metadata = {
-  title: "Dacroq",
-  description: "Dashboard pages for hardware testing.",
+  title: 'Dacroq - Hardware Test Platform',
+  description: 'Hardware test monitoring and management platform',
 }
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode
-}>) {
+}) {
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      data-new-gr-c-s-check-loaded="14.1229.0"
-      data-gr-ext-installed=""
-    >
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+      </head>
       <body
         className={`${GeistSans.className} min-h-full bg-white antialiased`}
         suppressHydrationWarning

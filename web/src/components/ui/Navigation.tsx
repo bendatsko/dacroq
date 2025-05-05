@@ -1,153 +1,316 @@
-"use client"
+"use client";
 
-import { usePathname, useRouter } from "next/navigation"
-import Link from "next/link"
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuSeparator, 
-  DropdownMenuTrigger 
-} from "@/components/DropdownMenu"
-import { RiMenuLine, RiLogoutBoxLine } from "@remixicon/react"
-import { auth } from "@/lib/firebase"
+import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
+import Link from "next/link";
+import {
+  RiArrowDownSLine,
+  RiUser3Line,
+  RiLogoutBoxRLine,
+  RiHistoryLine,
+  RiDashboardLine,
+  RiSettings4Line,
+  RiMenuLine,
+  RiCloseLine,
+  RiAdminLine,
+  RiFeedbackLine,
+  RiCpuLine
+} from "@remixicon/react";
+import { Button } from "@/components/ui/button";
+import { siteConfig } from "@/app/siteConfig";
 
-function Navigation() {
-  const pathname = usePathname()
-  const router = useRouter()
+export default function Navigation() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const pathname = usePathname();
+  const [userData, setUserData] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  // Handle sign out with intentional logout flag
-  const handleSignOut = (e) => {
-    e.preventDefault()
-    // Set intentional logout flag in session storage
-    sessionStorage.setItem("intentionalLogout", "true")
-    // Sign out from Firebase
-    auth.signOut().then(() => {
-      // Navigate to login page
-      router.push("/login")
-    })
-  }
+  useEffect(() => {
+    // Get user data from localStorage
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      const parsedUser = JSON.parse(storedUser);
+      setUserData(parsedUser);
+      setIsAdmin(parsedUser.role === "admin");
+    }
+  }, []);
+
+  const handleSignOut = () => {
+    sessionStorage.setItem("intentionalLogout", "true");
+    window.location.href = "/login";
+  };
+
+  // Close menus when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuOpen && !(event.target as Element).closest('#user-menu')) {
+        setUserMenuOpen(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [userMenuOpen]);
+
+  // Add scroll effect for navbar background
+  const [scrolled, setScrolled] = useState(false);
+  
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 10);
+    };
+    
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   return (
-    <div className="bg-white border-b border-gray-200 dark:border-gray-800 dark:bg-gray-900">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6">
-        <div className="flex h-14 items-center justify-between"> {/* Reduced height from h-16 to h-14 */}
-          {/* Logo and main navigation */}
-          <div className="flex items-center gap-4">
-            {/* Logo with quantum icon */}
-            {/*<Link href="/" className="flex items-center">*/}
-            {/*  <span className="sr-only">Dacroq</span>*/}
-            {/*  <div className="relative h-7 w-7 flex items-center justify-center"> /!* Reduced size from h-8 w-8 to h-7 w-7 *!/*/}
-            {/*    <svg */}
-            {/*      xmlns="http://www.w3.org/2000/svg" */}
-            {/*      viewBox="0 0 24 24" */}
-            {/*      className="h-7 w-7 text-blue-600 dark:text-blue-400"*/}
-            {/*    >*/}
-            {/*      /!* Inner orbit (angled) *!/*/}
-            {/*      <ellipse */}
-            {/*        cx="12" */}
-            {/*        cy="12" */}
-            {/*        rx="5" */}
-            {/*        ry="10" */}
-            {/*        fill="none" */}
-            {/*        stroke="currentColor" */}
-            {/*        strokeWidth="1.5" */}
-            {/*        className="opacity-70"*/}
-            {/*        transform="rotate(45, 12, 12)"*/}
-            {/*      />*/}
-            {/*      */}
-            {/*      /!* Core (qubit) *!/*/}
-            {/*      <circle */}
-            {/*        cx="12" */}
-            {/*        cy="12" */}
-            {/*        r="3" */}
-            {/*        fill="currentColor" */}
-            {/*        className="opacity-90"*/}
-            {/*      />*/}
-            {/*    </svg>*/}
-            {/*  </div>*/}
-            {/*  <span className="text-base font-semibold tracking-tight text-gray-900 dark:text-white"> /!* Reduced from text-lg to text-base *!/*/}
-            {/*    Dacroq*/}
-            {/*  </span>*/}
-            {/*</Link>*/}
+    <>
+      {/* Desktop Navigation */}
+      <header className={`fixed top-0 left-0 right-0 z-40 transition-all duration-200 ${
+        scrolled ? "bg-white/95 backdrop-blur-md shadow-sm dark:bg-gray-900/95" : "bg-white dark:bg-gray-900"
+      }`}>
+        <nav className="container mx-auto px-4 h-14 flex items-center justify-between">
+          <div className="flex items-center">
+            {/* Brand */}
+            <Link href="/" className="flex items-center gap-1.5 h-8 mr-10">
+              <RiCpuLine className="size-5 text-gray-700 dark:text-gray-300" />
+              <span className="font-medium text-gray-900 dark:text-white text-base tracking-tight">Dacroq</span>
+            </Link>
 
-            {/* Desktop Navigation Links */}
-            <nav className="hidden md:flex">
-              <div className="flex h-14 space-x-4"> {/* Reduced height from h-16 to h-14 */}
-                <Link 
-                  href="/" 
-                  className={`inline-flex items-center px-3 h-full border-b-2 text-sm font-medium transition-colors 
-                    ${pathname === "/" 
-                      ? "border-blue-500 text-gray-900 dark:text-white" 
-                      : "border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white dark:hover:border-gray-700"
-                    }`}
-                >
-                  Test History
-                </Link>
-                <Link 
-                  href="/monitor"
-                  className={`inline-flex items-center px-3 h-full border-b-2 text-sm font-medium transition-colors 
-                    ${pathname.startsWith("/monitor") 
-                      ? "border-blue-500 text-gray-900 dark:text-white" 
-                      : "border-transparent text-gray-600 hover:border-gray-300 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white dark:hover:border-gray-700"
-                    }`}
-                >
-                 System Monitor
-                </Link>
-          
+            {/* Main Navigation - Desktop */}
+            <div className="hidden md:flex gap-6">
+              <Link 
+                href={siteConfig.baseLinks.monitor} 
+                className={`flex items-center gap-1.5 px-2 py-1 text-sm font-medium transition-colors ${
+                  pathname === siteConfig.baseLinks.monitor ? 'text-gray-900 dark:text-white' : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white'
+                }`}
+              >
+                <RiDashboardLine className="size-4" />
+                Dashboard
+              </Link>
               
-          
-              </div>
-            </nav>
+              <Link 
+                href={siteConfig.baseLinks.testHistory} 
+                className={`flex items-center gap-1.5 px-2 py-1 text-sm font-medium transition-colors ${
+                  pathname === siteConfig.baseLinks.testHistory ? 'text-gray-900 dark:text-white' : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white'
+                }`}
+              >
+                <RiHistoryLine className="size-4" />
+                History
+              </Link>
+              
+              {isAdmin && (
+                <Link 
+                  href="/admin" 
+                  className={`flex items-center gap-1.5 px-2 py-1 text-sm font-medium transition-colors ${
+                    pathname === '/admin' ? 'text-gray-900 dark:text-white' : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white'
+                  }`}
+                >
+                  <RiAdminLine className="size-4" />
+                  Admin
+                </Link>
+              )}
+            </div>
           </div>
 
-          {/* Menu Dropdown Button (Mobile) */}
-          <div className="flex items-center">
-            <DropdownMenu>
-              <DropdownMenuTrigger className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500">
-                <span className="sr-only">Open menu</span>
-                <RiMenuLine className="h-5 w-5" aria-hidden="true" /> {/* Reduced size from h-6 w-6 to h-5 w-5 */}
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem>
-                  <Link href="/" className="flex w-full">
-                    Test History
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Link href="/monitor" className="flex w-full">
-                    System Monitor
-                  </Link>
-                </DropdownMenuItem>
-      
-              
-           
-            
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-red-600 hover:text-red-700 dark:text-red-500 dark:hover:text-red-400">
-                  <button onClick={handleSignOut} className="flex w-full items-center">
-                    <RiLogoutBoxLine className="mr-2 h-4 w-4" />
-                    Sign Out
-                  </button>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+          {/* Mobile Menu Button */}
+          <div className="flex md:hidden">
+            <button 
+              type="button" 
+              onClick={() => setMobileMenuOpen(true)}
+              className="text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+            >
+              <RiMenuLine className="size-5" />
+            </button>
+          </div>
 
-            {/* Desktop Sign Out Button */}
-            <div className="hidden md:flex items-center ml-4">
-              <button 
-                onClick={handleSignOut}
-                className="px-3 py-1.5 rounded-md text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors flex items-center"
+          {/* User Section */}
+          {userData && (
+            <div className="relative hidden md:block">
+              <button
+                id="user-menu"
+                onClick={() => setUserMenuOpen(!userMenuOpen)}
+                className="flex items-center whitespace-nowrap gap-2"
               >
-                <RiLogoutBoxLine className="mr-1.5 h-3.5 w-3.5" />
-                Sign Out
+                {userData.photoURL ? (
+                  <img
+                    src={userData.photoURL}
+                    alt={userData.displayName}
+                    className="h-8 w-8 rounded-full mr-2"
+                  />
+                ) : (
+                  <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center mr-2 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                    <RiUser3Line className="size-4" />
+                  </div>
+                )}
+                <div className="hidden sm:block">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{userData.displayName}</p>
+                </div>
+                <RiArrowDownSLine className={`transition-transform ${userMenuOpen ? 'rotate-180' : ''} text-gray-500`} />
               </button>
+              
+              {/* User Dropdown */}
+              {userMenuOpen && (
+                <div className="absolute right-0 mt-2 w-56 bg-white shadow-lg rounded-md border border-gray-100 py-1 z-50 dark:bg-gray-800 dark:border-gray-700">
+                  {userData && (
+                    <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-700">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Signed in as</p>
+                      <p className="font-medium text-gray-900 dark:text-white text-sm truncate">{userData.email}</p>
+                    </div>
+                  )}
+
+                  <div className="py-1">
+                    <Link 
+                      href={siteConfig.baseLinks.settings} 
+                      className="flex items-center px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700/50"
+                    >
+                      <RiSettings4Line className="mr-3 size-4 text-gray-500 dark:text-gray-400" />
+                      Settings
+                    </Link>
+                    <Link 
+                      href={siteConfig.baseLinks.feedback} 
+                      className="flex items-center px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700/50"
+                    >
+                      <RiFeedbackLine className="mr-3 size-4 text-gray-500 dark:text-gray-400" />
+                      Feedback
+                    </Link>
+                  </div>
+                  <div className="py-1 border-t border-gray-100 dark:border-gray-700">
+                    <button
+                      onClick={handleSignOut}
+                      className="flex items-center px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 w-full text-left dark:text-gray-300 dark:hover:bg-gray-700/50"
+                    >
+                      <RiLogoutBoxRLine className="mr-3 size-4 text-gray-500 dark:text-gray-400" />
+                      Sign out
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </nav>
+      </header>
+
+      {/* Mobile Navigation */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 bg-white dark:bg-gray-900">
+          <div className="container mx-auto p-4 h-full flex flex-col">
+            {/* Mobile Menu Header */}
+            <div className="flex items-center justify-between mb-4">
+              {/* Brand */}
+              <Link href="/" className="flex items-center gap-1.5">
+                <RiCpuLine className="size-5 text-gray-700 dark:text-gray-300" />
+                <span className="font-medium text-gray-900 dark:text-white text-base">Dacroq</span>
+              </Link>
+
+              {/* Close Button */}
+              <button onClick={() => setMobileMenuOpen(false)} className="text-gray-600 dark:text-gray-300">
+                <RiCloseLine className="size-5" />
+              </button>
+            </div>
+
+            {/* User Info - Mobile */}
+            {userData && (
+              <div className="mb-4 pb-3 border-b border-gray-100 dark:border-gray-800">
+                <div className="flex items-center">
+                  {userData?.photoURL ? (
+                    <img 
+                      src={userData.photoURL} 
+                      alt="User" 
+                      className="h-8 w-8 rounded-full object-cover border border-gray-200 dark:border-gray-700 mr-3"
+                    />
+                  ) : (
+                    <div className="h-8 w-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mr-3 text-gray-600 dark:text-gray-400">
+                      <RiUser3Line className="size-4" />
+                    </div>
+                  )}
+                  <div>
+                    <p className="font-medium text-gray-900 dark:text-white">{userData.displayName}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{userData.email}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Mobile Nav Links */}
+            <nav className="space-y-1 flex-1">
+              <Link 
+                href={siteConfig.baseLinks.monitor} 
+                className={`flex items-center px-3 py-2 rounded-md ${
+                  pathname === siteConfig.baseLinks.monitor ? 'bg-gray-50 text-gray-900 dark:bg-gray-800 dark:text-white' : 'text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'
+                }`}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <RiDashboardLine className="mr-3 size-4" />
+                Dashboard
+              </Link>
+              
+              <Link 
+                href={siteConfig.baseLinks.testHistory} 
+                className={`flex items-center px-3 py-2 rounded-md ${
+                  pathname === siteConfig.baseLinks.testHistory ? 'bg-gray-50 text-gray-900 dark:bg-gray-800 dark:text-white' : 'text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'
+                }`}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <RiHistoryLine className="mr-3 size-4" />
+                History
+              </Link>
+              
+              {isAdmin && (
+                <Link 
+                  href="/admin" 
+                  className={`flex items-center px-3 py-2 rounded-md ${
+                    pathname === '/admin' ? 'bg-gray-50 text-gray-900 dark:bg-gray-800 dark:text-white' : 'text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'
+                  }`}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <RiAdminLine className="mr-3 size-4" />
+                  Admin
+                </Link>
+              )}
+
+              {/* Secondary Links */}
+              <div className="pt-2 mt-2 border-t border-gray-100 dark:border-gray-800">
+                <Link 
+                  href={siteConfig.baseLinks.settings} 
+                  className="flex items-center px-3 py-2 rounded-md text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <RiSettings4Line className="mr-3 size-4" />
+                  Settings
+                </Link>
+                
+                <Link 
+                  href={siteConfig.baseLinks.feedback} 
+                  className="flex items-center px-3 py-2 rounded-md text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <RiFeedbackLine className="mr-3 size-4" />
+                  Feedback
+                </Link>
+              </div>
+            </nav>
+
+            {/* Sign Out - Mobile */}
+            <div className="py-3 border-t border-gray-100 dark:border-gray-800">
+              <Button 
+                variant="secondary" 
+                size="sm"
+                onClick={handleSignOut}
+                className="flex items-center gap-2 w-full"
+              >
+                <RiLogoutBoxRLine className="size-4" />
+                Sign Out
+              </Button>
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  )
-}
+      )}
 
-export { Navigation }
+      {/* Spacer to push content below fixed header */}
+      <div className="h-14"></div>
+    </>
+  );
+}

@@ -67,14 +67,16 @@ export default function LoginPage() {
 
       // Check system maintenance status
       try {
-        const maintenanceRef = doc(db, "system", "maintenance");
-        const maintenanceDoc = await getDoc(maintenanceRef);
-        const maintenanceMode = maintenanceDoc.exists() && maintenanceDoc.data()?.enabled;
+        const settingsRef = doc(db, "system", "settings");
+        const settingsDoc = await getDoc(settingsRef);
         
-        if (maintenanceMode) {
-          const whitelistedEmails = maintenanceDoc.data()?.whitelistedEmails || [];
-          if (userData?.role !== "admin" && !whitelistedEmails.includes(user.email)) {
-            setError("System is currently under maintenance. Only administrators and whitelisted users may access at this time.");
+        if (settingsDoc.exists() && settingsDoc.data()?.maintenanceMode) {
+          // Only allow admins during maintenance mode
+          if (userData?.role !== "admin") {
+            const maintenanceMessage = settingsDoc.data()?.maintenanceMessage || 
+              "System is currently under maintenance. Only administrators can access the system.";
+            
+            setError(maintenanceMessage);
             setIsProcessing(false);
             return;
           }
@@ -157,65 +159,32 @@ export default function LoginPage() {
 
   return (
     <div
-      className="flex min-h-screen flex-col items-center justify-center px-4 py-20 lg:px-6 bg-gray-50 dark:bg-gray-900"
+      className="flex min-h-screen flex-col items-center justify-center px-4 py-20 lg:px-6 bg-gray-50"
       suppressHydrationWarning
     >
       <div className="relative sm:mx-auto sm:w-full sm:max-w-sm">
         
         
-        <div className="bg-white dark:bg-gray-800 p-6 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
-          {/* Logo section */}
-        <div className="relative mx-auto w-fit mb-6">
-          <span className="sr-only">Dacroq</span>
-          <div className="relative">
-            <div className="flex items-center justify-center flex-col">
-              <div className="relative h-16 w-16 flex items-center justify-center mb-2">
-                <svg 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  viewBox="0 0 24 24" 
-                  className="h-16 w-16 text-blue-600 dark:text-blue-400"
-                >
-                  {/* Inner orbit (angled) */}
-                  <ellipse 
-                    cx="12" 
-                    cy="12" 
-                    rx="5" 
-                    ry="10" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="1.5" 
-                    className="opacity-70"
-                    transform="rotate(45, 12, 12)"
-                  />
-                  
-                  {/* Core (qubit) */}
-                  <circle 
-                    cx="12" 
-                    cy="12" 
-                    r="3" 
-                    fill="currentColor" 
-                    className="opacity-90"
-                  />
-                </svg>
-              </div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dacroq</h1>
-            </div>
+        <div className="bg-white p-8 shadow-sm rounded-lg border border-gray-100">
+          {/* Brand section */}
+          <div className="mb-8 text-center">
+            <h1 className="text-2xl font-medium text-gray-900 tracking-tight">Dacroq</h1>
+            <p className="mt-2 text-sm text-gray-500">Hardware Test Platform</p>
           </div>
-        </div>
           
           {/* Error display */}
           {error && (
-            <div className="mt-4 rounded-md bg-red-50 p-4 text-sm text-red-800 dark:bg-red-900/10 dark:text-red-500">
+            <div className="mb-6 rounded-md bg-red-50 p-4 text-sm text-red-800">
               {error}
             </div>
           )}
 
           {/* Sign-in button */}
-          <div className="mt-4">
+          <div className="mt-6">
             <Button
               type="button"
               variant="secondary"
-              className="w-full flex items-center justify-center"
+              className="w-full flex items-center justify-center py-2.5"
               onClick={handleGoogleSignIn}
               disabled={isProcessing}
             >
@@ -228,25 +197,25 @@ export default function LoginPage() {
 
           {/* Status message when logged in but not auto-redirected */}
           {isLoggedIn && !isProcessing && (
-            <div className="mt-4 rounded-md bg-blue-50 p-4 text-sm text-blue-800 dark:bg-blue-900/10 dark:text-blue-500">
+            <div className="mt-6 rounded-md bg-blue-50 p-4 text-sm text-blue-800">
               You are signed in. Click the button above to continue to dashboard.
             </div>
           )}
         </div>
 
         {/* Terms of service */}
-        <p className="mt-4 text-xs text-center text-gray-500 dark:text-gray-400">
+        <p className="mt-6 text-xs text-center text-gray-500">
           By signing in, you agree to our{" "}
           <a
             href="https://its.umich.edu/computing/ai/terms-of-service"
-            className="underline underline-offset-2 text-blue-600 dark:text-blue-400"
+            className="underline underline-offset-2 text-blue-600"
           >
             terms of service
           </a>{" "}
           and{" "}
           <a
             href="https://spg.umich.edu/policy/601.07"
-            className="underline underline-offset-2 text-blue-600 dark:text-blue-400"
+            className="underline underline-offset-2 text-blue-600"
           >
             privacy policy
           </a>

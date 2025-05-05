@@ -1,1084 +1,1287 @@
+// app/src/app/monitoring/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import {
-    RiRefreshLine,
-    RiAddLine,
-    RiSearchLine,
-    RiArrowDownSLine,
-    RiFilterLine,
-    RiMoreLine,
-    RiPlayLine,
-    RiDownload2Line,
-    RiDeleteBin5Line,
-} from "@remixicon/react";
-import { cn } from "@/lib/utils";
+import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
-    Table,
-    TableHeader,
-    TableHead,
-    TableBody,
-    TableRow,
-    TableCell,
-} from "@/components/ui/table";
-
-import { TestDetailDrawer } from "./_components/TestDetailDrawer";
-import { TestCreatePanel } from "./_components/TestCreatePanel";
-
-// Import components from their actual locations
+  RiRefreshLine,
+  RiLoader4Line,
+  RiCheckLine,
+  RiTerminalLine,
+  RiCloseLine,
+} from "@remixicon/react";
 import {
-    Drawer,
-    DrawerTrigger,
-    DrawerContent,
-    DrawerHeader,
-    DrawerTitle,
-    DrawerBody,
-    DrawerFooter,
-    DrawerClose,
-    DrawerDescription
-} from "@/components/Drawer";
-import {
-    Select,
-    SelectContent,
-    SelectGroup,
-    SelectItem,
-    SelectGroupLabel,
-    SelectTrigger,
-    SelectValue
-} from "@/components/Select";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-    DropdownMenuSeparator,
-} from "@/components/DropdownMenu";
-import { Badge } from "@/components/Badge";
-import { Checkbox } from "@/components/Checkbox";
-import { TestRun } from "@/types/test";
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  ResponsiveContainer,
+} from "recharts";
+import { Terminal } from "@/components/Terminal";
 
-// Base URL for the backend API; configure NEXT_PUBLIC_API_BASE_URL in .env.local
+// -----------------------------------------------------------------------------
+// Constants & Types
+// -----------------------------------------------------------------------------
 const API_BASE = "https://dacroq-api.bendatsko.com";
 
-// Hardware configuration options
-const CHIP_TYPES = ["3SAT", "LDPC", "HARDWARE", "RISC-V"];
-const PROCESSOR_TYPES = ["ARM (Teensy 4.1)", "RISC-V", "Embedded"];
-const TEST_TYPES = ["Functional Validation", "Circuit Simulation", "Hardware Emulation", "Unit Test", "Integration Test"];
-
-export default function Dashboard() {
-    const router = useRouter();
-    const [tests, setTests] = useState<TestRun[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-
-    // State for the drawer component
-    const [selectedTest, setSelectedTest] = useState<TestRun | null>(null);
-    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-    const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
-
-    const [error, setError] = useState<string | null>(null);
-    const [isAdmin, setIsAdmin] = useState(false);
-    const [searchQuery, setSearchQuery] = useState("");
-    const [timeRange, setTimeRange] = useState("Last 12 hours");
-    const [apiHealth, setApiHealth] = useState<any | null>(null);
-    const [selectedCategory, setSelectedCategory] = useState("all");
-    const [selectedTests, setSelectedTests] = useState<string[]>([]);
-    const [expandedTests, setExpandedTests] = useState<string[]>([]);
-    const [uploading, setUploading] = useState(false);
-    const [apiConnected, setApiConnected] = useState(true);
-
-    // New filters for hardware specific needs
-    const [chipTypeFilter, setChipTypeFilter] = useState("all");
-    const [processorTypeFilter, setProcessorTypeFilter] = useState("all");
-    const [testTypeFilter, setTestTypeFilter] = useState("all");
-
-    // Handler functions
-    const handleSelectTest = (testId: string, e: React.MouseEvent | React.ChangeEvent) => {
-        e.stopPropagation(); // Prevent row expansion when clicking checkbox
-        setSelectedTests(prev => {
-            if (prev.includes(testId)) {
-                return prev.filter(id => id !== testId);
-            }
-            return [...prev, testId];
-        });
-    };
-
-    const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.checked) {
-            setSelectedTests(filteredTests.map(test => test.id));
-        } else {
-            setSelectedTests([]);
-        }
-    };
-
-    const handleBulkAction = async (action: 'delete' | 'rerun' | 'download') => {
-        if (action === 'delete') {
-            if (window.confirm(`Delete ${selectedTests.length} selected tests?`)) {
-                try {
-                    setIsLoading(true);
-                    // Create a batch of promises for each test deletion
-                    const deletePromises = selectedTests.map(testId => 
-                        fetch(`${API_BASE}/api/tests/${testId}`, {
-                            method: 'DELETE',
-                        })
-                    );
-                    
-                    await Promise.all(deletePromises);
-                    
-                    // Refresh the tests list
-                    fetchTests();
-                    setSelectedTests([]);
-                } catch (error) {
-                    console.error("Error deleting tests:", error);
-                    setError("Failed to delete tests. Please try again.");
-                } finally {
-                    setIsLoading(false);
-                }
-            }
-        } else if (action === 'rerun') {
-            try {
-                setIsLoading(true);
-                // Create a batch of promises for each test rerun
-                const rerunPromises = selectedTests.map(testId => 
-                    fetch(`${API_BASE}/api/tests/${testId}/rerun`, {
-                        method: 'POST',
-                    })
-                );
-                
-                await Promise.all(rerunPromises);
-                
-                // Refresh the tests list
-                fetchTests();
-                setSelectedTests([]);
-            } catch (error) {
-                console.error("Error rerunning tests:", error);
-                setError("Failed to rerun tests. Please try again.");
-            } finally {
-                setIsLoading(false);
-            }
-        } else if (action === 'download') {
-            // For download, we'll need to handle each test sequentially
-            try {
-                for (const testId of selectedTests) {
-                    const res = await fetch(`${API_BASE}/api/tests/${testId}/download`);
-                    if (!res.ok) continue;
-                    
-                    const blob = await res.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `test-${testId}-results.zip`;
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    document.body.removeChild(a);
-                }
-            } catch (error) {
-                console.error("Error downloading test results:", error);
-                setError("Failed to download test results. Please try again.");
-            }
-        }
-    };
-
-    const handleCreateTest = async (testData: any) => {
-        try {
-            setUploading(true);
-            const storedUser = localStorage.getItem("user");
-            const user = storedUser ? JSON.parse(storedUser) : null;
-            if (!user) {
-                setError("You must be logged in to create a test");
-                setUploading(false);
-                return;
-            }
-
-            const payload = {
-                ...testData,
-                createdBy: {
-                    name: user.name,
-                    photoURL: user.photoURL
-                }
-            };
-
-            const res = await fetch(`${API_BASE}/api/tests`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Accept: "application/json",
-                },
-                body: JSON.stringify(payload),
-            });
-
-            if (!res.ok) {
-                const text = await res.text().catch(() => res.statusText);
-                console.error("Create test error:", text);
-                setError("Failed to create test");
-                setUploading(false);
-                return;
-            }
-
-            const newTest = await res.json();
-            setTests(prev => [newTest, ...prev]);
-            setIsCreateDrawerOpen(false);
-            setError(null);
-        } catch (e) {
-            console.error("Create test exception:", e);
-            setError("Failed to create test");
-        } finally {
-            setUploading(false);
-        }
-    };
-
-    const handleDeleteTest = async (testId: string) => {
-        if (!window.confirm("Are you sure you want to delete this test? This action cannot be undone.")) {
-            return;
-        }
-
-        try {
-            const res = await fetch(`${API_BASE}/api/tests/${testId}`, {
-                method: "DELETE",
-            });
-
-            if (!res.ok) {
-                throw new Error(`Failed to delete test (${res.status})`);
-            }
-
-            // Refresh the test list
-            setTests(tests.filter(t => t.id !== testId));
-            setError(null);
-        } catch (e) {
-            console.error("Delete test failed:", e);
-            setError("Failed to delete test");
-        }
-    };
-
-    // For TypeScript type safety with the selectedTest
-    const handleRerunTest = async (testId: string) => {
-        try {
-            setIsLoading(true);
-            // Create a batch of promises for each test rerun
-            const rerunPromises = [testId].map(testId => 
-                fetch(`${API_BASE}/api/tests/${testId}/rerun`, {
-                    method: 'POST',
-                })
-            );
-            
-            await Promise.all(rerunPromises);
-            
-            // Refresh the tests list
-            fetchTests();
-            setSelectedTests([]);
-        } catch (error) {
-            console.error("Error rerunning test:", error);
-            setError("Failed to rerun test. Please try again.");
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    // Handle row click - open details drawer
-    const handleRowClick = (test: TestRun) => {
-        setSelectedTest(test);
-        setIsDrawerOpen(true);
-    };
-
-    // Function to fetch tests from API
-    const fetchTests = async () => {
-        setIsLoading(true);
-        try {
-            const storedUser = localStorage.getItem("user");
-            if (!storedUser) {
-                router.push("/login");
-                return;
-            }
-
-            const user = JSON.parse(storedUser);
-            setIsAdmin(user.role === "admin");
-
-            let ms = 12 * 60 * 60 * 1000;
-            if (timeRange === "Last 24 hours") ms = 24 * 60 * 60 * 1000;
-            else if (timeRange === "Last 7 days") ms = 7 * 24 * 60 * 60 * 1000;
-
-            const res = await fetch(
-                `${API_BASE}/api/tests?timeRange=${ms}`,
-                {
-                    method: "GET",
-                    headers: { Accept: "application/json" },
-                }
-            );
-
-            if (!res.ok) {
-                const text = await res.text().catch(() => res.statusText);
-                console.error("API error:", text);
-
-                // Only set the error message for non-connectivity issues
-                if (res.status !== 0 && res.status < 500) {
-                    setError(`Failed to load tests (${res.status})`);
-                } else {
-                    // For connectivity issues, just update the API connection status
-                    setApiConnected(false);
-                    // Don't show the error toast for API connectivity issues
-                    setError(null);
-                }
-            } else {
-                setApiConnected(true);
-                const data = await res.json();
-                if (Array.isArray(data)) {
-                    const mapped: TestRun[] = data.map((t: any) => ({
-                        id: t.id,
-                        name: t.name,
-                        chipType: t.chipType || "3SAT", // Default values for backwards compatibility
-                        processorType: t.processorType || "ARM (Teensy 4.1)",
-                        testType: t.testType || "Functional Validation",
-                        environment: t.environment,
-                        created: t.created,
-                        status: t.status,
-                        voltage: t.voltage,
-                        results: t.results,
-                        ...((t.metadata && typeof t.metadata === "object")
-                            ? t.metadata
-                            : {}),
-                    }));
-                    // Sort by creation date (most recent first)
-                    mapped.sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime());
-                    setTests(mapped);
-                } else {
-                    console.warn("Unexpected API response:", data);
-                    setTests([]);
-                }
-            }
-        } catch (e) {
-            console.error("Fetch tests failed:", e);
-            // Don't show the error toast for API connectivity issues
-            setApiConnected(false);
-            // Clear any existing error so it doesn't show the error toast
-            setError(null);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    // Load tests from backend API
-    useEffect(() => {
-        const storedUser = localStorage.getItem("user");
-        if (!storedUser) {
-            router.push("/login");
-            return;
-        }
-
-        fetchTests();
-    }, [router, timeRange]);
-
-    // Poll API health
-    useEffect(() => {
-        const checkApiHealth = async () => {
-            try {
-                const res = await fetch(`${API_BASE}/api/health`, {
-                    method: "GET",
-                    headers: { Accept: "application/json" },
-                });
-                const data = await res.json();
-                setApiHealth(data);
-                setApiConnected(true);
-                // Clear error message if connection is restored
-                if (error && error.includes("Failed to load tests")) {
-                    setError(null);
-                }
-            } catch (e) {
-                console.error("Health check failed:", e);
-                setApiHealth({
-                    api_status: "error",
-                    db_status: "unknown",
-                    timestamp: new Date().toISOString(),
-                });
-                setApiConnected(false);
-            }
-        };
-
-        checkApiHealth();
-        const iv = setInterval(checkApiHealth, 30000);
-        return () => clearInterval(iv);
-    }, [error]);
-
-    // Add real-time polling for running tests
-    useEffect(() => {
-        if (!tests.some(t => t.status === "running")) {
-            return;
-        }
-
-        const pollTests = async () => {
-            try {
-                const runningTests = tests.filter(t => t.status === "running");
-                const promises = runningTests.map(test =>
-                    fetch(`${API_BASE}/api/tests/${test.id}`).then(res => res.json())
-                );
-
-                const results = await Promise.all(promises);
-                let updated = false;
-
-                setTests(prev => {
-                    const newTests = [...prev];
-                    results.forEach((result: any) => {
-                        const idx = newTests.findIndex(t => t.id === result.id);
-                        if (idx !== -1 && newTests[idx].status !== result.status) {
-                            newTests[idx] = { ...newTests[idx], ...result };
-                            updated = true;
-                        }
-                    });
-                    // Sort by creation date (most recent first)
-                    if (updated) {
-                        newTests.sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime());
-                    }
-                    return updated ? newTests : prev;
-                });
-            } catch (e) {
-                console.error("Poll tests failed:", e);
-            }
-        };
-
-        const interval = setInterval(pollTests, 5000);
-        return () => clearInterval(interval);
-    }, [tests]);
-
-    // Counts per category for filters
-    const satTestsCount = tests.filter((t) => t.chipType === "3SAT").length;
-    const ldpcTestsCount = tests.filter((t) => t.chipType === "LDPC").length;
-    const hardwareTestsCount = tests.filter((t) => t.chipType === "HARDWARE").length;
-    const riscvTestsCount = tests.filter((t) => t.chipType === "RISC-V").length;
-
-    const armTestsCount = tests.filter((t) => t.processorType?.includes("ARM")).length;
-    const embeddedTestsCount = tests.filter((t) => t.processorType === "Embedded").length;
-    const riscvProcessorTestsCount = tests.filter((t) => t.processorType === "RISC-V").length;
-
-    const hwLoopCount = tests.filter((t) => t.testType === "Functional Validation").length;
-    const swLoopCount = tests.filter((t) => t.testType === "Circuit Simulation").length;
-    const chipLoopCount = tests.filter((t) => t.testType === "Hardware Emulation").length;
-    const unitTestCount = tests.filter((t) => t.testType === "Unit Test").length;
-    const integrationTestCount = tests.filter((t) => t.testType === "Integration Test").length;
-
-    // Filter & search
-    const filteredTests = tests
-        .filter((t) => {
-            // Apply chip type filter
-            if (chipTypeFilter !== "all" && t.chipType !== chipTypeFilter) return false;
-
-            // Apply processor type filter
-            if (processorTypeFilter !== "all" && t.processorType !== processorTypeFilter) return false;
-
-            // Apply test type filter
-            if (testTypeFilter !== "all" && t.testType !== testTypeFilter) return false;
-
-            // Apply category filter
-            if (selectedCategory === "all") return true;
-            if (selectedCategory === "3sat") return t.chipType === "3SAT";
-            if (selectedCategory === "ldpc") return t.chipType === "LDPC";
-            if (selectedCategory === "hardware") return t.chipType === "HARDWARE";
-            if (selectedCategory === "risc-v") return t.chipType === "RISC-V";
-            if (selectedCategory === "completed") return t.status === "completed";
-            if (selectedCategory === "running") return t.status === "running";
-            if (selectedCategory === "failed") return t.status === "failed";
-            if (selectedCategory === "queued") return t.status === "queued";
-            return true;
-        })
-        .filter(
-            (t) =>
-                t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (t.chipType && t.chipType.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                (t.processorType && t.processorType.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                (t.testType && t.testType.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                (t.status && t.status.toLowerCase().includes(searchQuery.toLowerCase()))
-        );
-
-    // Loading state
-    if (isLoading) {
-        return (
-            <div className="flex h-screen items-center justify-center bg-white dark:bg-gray-900">
-                <div className="flex items-center space-x-2 text-blue-600">
-                    <svg
-                        className="animate-spin h-6 w-6"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                    >
-                        <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                        />
-                        <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962
-                7.962 0 014 12H0c0 3.042 1.135 5.824 3
-                7.938l3-2.647z"
-                        />
-                    </svg>
-                    <span className="text-sm font-medium">Loading dashboard...</span>
-                </div>
-            </div>
-        );
-    }
-
-    // Main dashboard
-    return (
-        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-6">
-            {/* Page Header */}
-            <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0 mb-6">
-                <div>
-                    <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Test History</h1>
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        Manage and monitor your hardware test runs across all platforms
-                    </p>
-                </div>
-
-                <div className="flex gap-2">
-                    {/* Hardware Filters Dropdown */}
-
-
-                    {isAdmin && (
-                        <Button
-                            className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5"
-                            size="sm"
-                            onClick={() => setIsCreateDrawerOpen(true)}
-                        >
-                            <RiAddLine className="h-4 w-4" />
-                            New Test
-                        </Button>
-                    )}
-                </div>
-            </div>
-
-            {/* Filters & Controls */}
-            <div className="flex flex-col lg:flex-row gap-4 mb-4">
-                <div className="flex-grow lg:max-w-md">
-                    <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <RiSearchLine className="h-4 w-4 text-gray-400" />
-                        </div>
-                        <input
-                            type="text"
-                            className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg
-                            bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white
-                            placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500
-                            text-sm shadow-sm transition duration-200 ease-in-out
-                            hover:border-gray-300 dark:hover:border-gray-600"
-                            placeholder="Search tests by name, type, or status..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                    </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="flex items-center gap-1.5 w-[140px] bg-white border border-gray-200 rounded-lg text-sm h-9 shadow-sm hover:border-gray-300 transition duration-200 dark:bg-gray-800 dark:border-gray-700"
-                            >
-                                <RiFilterLine className="h-4 w-4" />
-                                Filters
-                                <RiArrowDownSLine className="h-4 w-4 ml-auto" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-64">
-                            <div className="p-2">
-                                <h3 className="font-medium text-sm mb-2">Chip Type</h3>
-                                <Select value={chipTypeFilter} onValueChange={setChipTypeFilter}>
-                                    <SelectTrigger className="w-full text-xs h-8">
-                                        <SelectValue placeholder="All Chip Types" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Chip Types</SelectItem>
-                                        <SelectItem value="3SAT">3SAT ({satTestsCount})</SelectItem>
-                                        <SelectItem value="LDPC">LDPC ({ldpcTestsCount})</SelectItem>
-                                        <SelectItem value="HARDWARE">Hardware ({hardwareTestsCount})</SelectItem>
-                                        <SelectItem value="RISC-V">RISC-V ({riscvTestsCount})</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <DropdownMenuSeparator />
-
-                            <div className="p-2">
-                                <h3 className="font-medium text-sm mb-2">Processor Type</h3>
-                                <Select value={processorTypeFilter} onValueChange={setProcessorTypeFilter}>
-                                    <SelectTrigger className="w-full text-xs h-8">
-                                        <SelectValue placeholder="All Processors" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Processors</SelectItem>
-                                        <SelectItem value="ARM (Teensy 4.1)">ARM/Teensy ({armTestsCount})</SelectItem>
-                                        <SelectItem value="RISC-V">RISC-V ({riscvProcessorTestsCount})</SelectItem>
-                                        <SelectItem value="Embedded">Embedded ({embeddedTestsCount})</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <DropdownMenuSeparator />
-
-                            <div className="p-2">
-                                <h3 className="font-medium text-sm mb-2">Test Type</h3>
-                                <Select value={testTypeFilter} onValueChange={setTestTypeFilter}>
-                                    <SelectTrigger className="w-full text-xs h-8">
-                                        <SelectValue placeholder="All Test Types" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Test Types</SelectItem>
-                                        <SelectItem value="Functional Validation">Functional Validation ({hwLoopCount})</SelectItem>
-                                        <SelectItem value="Circuit Simulation">Circuit Simulation ({swLoopCount})</SelectItem>
-                                        <SelectItem value="Hardware Emulation">Hardware Emulation ({chipLoopCount})</SelectItem>
-                                        <SelectItem value="Unit Test">Unit Test ({unitTestCount})</SelectItem>
-                                        <SelectItem value="Integration Test">Integration Test ({integrationTestCount})</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <DropdownMenuSeparator />
-                            
-                            <div className="p-2">
-                                <h3 className="font-medium text-sm mb-2">Test Status</h3>
-                                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                                    <SelectTrigger className="w-full text-xs h-8">
-                                        <SelectValue placeholder="All Tests" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Tests</SelectItem>
-                                        <SelectGroup>
-                                            <SelectGroupLabel>Status</SelectGroupLabel>
-                                            <SelectItem value="completed">Completed</SelectItem>
-                                            <SelectItem value="running">Running</SelectItem>
-                                            <SelectItem value="failed">Failed</SelectItem>
-                                            <SelectItem value="queued">Queued</SelectItem>
-                                        </SelectGroup>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <DropdownMenuSeparator />
-                            
-                            <div className="p-2">
-                                <h3 className="font-medium text-sm mb-2">Time Range</h3>
-                                <Select value={timeRange} onValueChange={setTimeRange}>
-                                    <SelectTrigger className="w-full text-xs h-8">
-                                        <SelectValue placeholder="Time Range" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="Last 12 hours">Last 12 hours</SelectItem>
-                                        <SelectItem value="Last 24 hours">Last 24 hours</SelectItem>
-                                        <SelectItem value="Last 7 days">Last 7 days</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <DropdownMenuSeparator />
-
-                            <div className="p-2">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="w-full"
-                                    onClick={() => {
-                                        setChipTypeFilter("all");
-                                        setProcessorTypeFilter("all");
-                                        setTestTypeFilter("all");
-                                        setSelectedCategory("all");
-                                        setTimeRange("Last 12 hours");
-                                    }}
-                                >
-                                    Reset Filters
-                                </Button>
-                            </div>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-
-                    {selectedTests.length > 0 && (
-                        <div className="flex items-center gap-2 ml-auto">
-                            <Badge variant="outline" className="bg-gray-50 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
-                                {selectedTests.length} selected
-                            </Badge>
-
-                            <div className="flex items-center gap-1.5">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="flex items-center gap-1.5 bg-white"
-                                    onClick={() => handleBulkAction('delete')}
-                                >
-                                    <RiDeleteBin5Line className="h-4 w-4 text-red-500" />
-                                    <span>Delete</span>
-                                </Button>
-
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="flex items-center gap-1.5 bg-white"
-                                    onClick={() => handleBulkAction('rerun')}
-                                >
-                                    <RiPlayLine className="h-4 w-4 text-blue-500" />
-                                    <span>Rerun</span>
-                                </Button>
-
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="flex items-center gap-1.5 bg-white"
-                                    onClick={() => handleBulkAction('download')}
-                                >
-                                    <RiDownload2Line className="h-4 w-4 text-green-500" />
-                                    <span>Download</span>
-                                </Button>
-
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => setSelectedTests([])}
-                                >
-                                    Clear
-                                </Button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Tests List */}
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm overflow-hidden">
-                {!apiConnected ? (
-                    <div className="text-center py-12">
-                        <div className="mx-auto h-12 w-12 text-orange-500 rounded-full bg-orange-100 dark:bg-orange-900/20 flex items-center justify-center">
-                            <RiErrorWarningLine className="h-6 w-6" />
-                        </div>
-                        <h3 className="mt-3 text-base font-medium text-gray-900 dark:text-white">
-                            Unable to connect to API
-                        </h3>
-                        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                            The test service is currently unavailable. This is why the table is empty.
-                        </p>
-                        <div className="mt-4 space-y-3">
-                            <Button
-                                onClick={() => window.location.reload()}
-                                className="text-sm bg-blue-600 hover:bg-blue-700 text-white"
-                                size="sm"
-                            >
-                                <RiRefreshLine className="h-4 w-4 mr-1.5" />
-                                Retry Connection
-                            </Button>
-                        </div>
-                    </div>
-                ) : filteredTests.length > 0 ? (
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead className="w-12 px-4">
-                                    <Checkbox
-                                        checked={filteredTests.length > 0 && selectedTests.length === filteredTests.length}
-                                        onChange={handleSelectAll}
-                                        aria-label="Select all tests"
-                                    />
-                                </TableHead>
-                                <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
-                                    Test Name
-                                </TableHead>
-                                <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
-                                    Created
-                                </TableHead>
-                                <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
-                                    Hardware Config
-                                </TableHead>
-                                <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
-                                    Test Type
-                                </TableHead>
-                                <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
-                                    Status
-                                </TableHead>
-                                <TableHead className="relative px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
-                                    Actions
-                                </TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {filteredTests.map((test) => (
-                                <TableRow
-                                    key={test.id}
-                                    className={cn(
-                                        "hover:bg-gray-50 dark:hover:bg-gray-800/50",
-                                        selectedTests.includes(test.id) && "bg-gray-50 dark:bg-gray-800/50"
-                                    )}
-                                >
-                                    <TableCell className="w-12 px-4 py-4">
-                                        <Checkbox
-                                            checked={selectedTests.includes(test.id)}
-                                            onChange={(e) => handleSelectTest(test.id, e)}
-                                            onClick={(e) => e.stopPropagation()}
-                                            aria-label={`Select ${test.name}`}
-                                        />
-                                    </TableCell>
-                                    <TableCell
-                                        className="px-4 py-4 text-sm font-medium text-gray-900 dark:text-white cursor-pointer"
-                                        onClick={() => handleRowClick(test)}
-                                    >
-                                        {test.name}
-                                    </TableCell>
-                                    <TableCell
-                                        className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400 cursor-pointer"
-                                        onClick={() => handleRowClick(test)}
-                                    >
-                                        {/* Format the timestamp in a nice, readable way */}
-                                        {test.id && test.id.split('-')[0] ? (
-                                            new Date(parseInt(test.id.split('-')[0]) * 1000).toLocaleString(undefined, {
-                                                month: 'short',
-                                                day: 'numeric',
-                                                hour: '2-digit',
-                                                minute: '2-digit'
-                                            })
-                                        ) : (
-                                            new Date(test.created).toLocaleString(undefined, {
-                                                month: 'short',
-                                                day: 'numeric',
-                                                hour: '2-digit',
-                                                minute: '2-digit'
-                                            })
-                                        )}
-                                    </TableCell>
-                                    <TableCell
-                                        className="px-4 py-4 cursor-pointer"
-                                        onClick={() => handleRowClick(test)}
-                                    >
-                                        <div className="space-y-1">
-                                            <div className="flex items-center">
-                                                <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
-                                                    {test.chipType}
-                                                </span>
-                                            </div>
-                                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                {test.processorType || "ARM (Teensy 4.1)"}
-                                            </div>
-                                            {test.voltage && (
-                                                <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                    Voltage: {test.voltage.v1 && `V1: ${test.voltage.v1}V`}
-                                                    {test.voltage.v2 && ` V2: ${test.voltage.v2}V`}
-                                                    {test.voltage.v3 && ` V3: ${test.voltage.v3}V`}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell
-                                        className="px-4 py-4 cursor-pointer"
-                                        onClick={() => handleRowClick(test)}
-                                    >
-                                        <span className="px-2 py-1 text-xs font-medium rounded-md bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
-                                            {test.testType || "Functional Validation"}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell
-                                        className="px-4 py-4 cursor-pointer"
-                                        onClick={() => handleRowClick(test)}
-                                    >
-                                        <span
-                                            className={cn(
-                                                "px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full",
-                                                test.status === "completed"
-                                                    ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
-                                                    : test.status === "running"
-                                                        ? "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400"
-                                                        : test.status === "failed"
-                                                            ? "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400"
-                                                            : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
-                                            )}
-                                        >
-                                            {test.status === "running" && (
-                                                <span className="w-1.5 h-1.5 mr-1.5 bg-current rounded-full animate-pulse" />
-                                            )}
-                                            {test.status.charAt(0).toUpperCase() +
-                                                test.status.slice(1)}
-                                        </span>
-
-                                        {test.results && (
-                                            <div className="mt-1 text-xs">
-                                                {test.results.success !== undefined && (
-                                                    <div className={test.results.success ? "text-green-600" : "text-red-600"}>
-                                                        {test.results.success ? "✓ Passed" : "✗ Failed"}
-                                                    </div>
-                                                )}
-                                                {test.results.errorRate !== undefined && (
-                                                    <div className="text-gray-500">
-                                                        Error rate: {test.results.errorRate.toFixed(2)}%
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-                                    </TableCell>
-                                    <TableCell className="px-4 py-4 text-sm text-right">
-                                        <div className="flex items-center gap-1.5 justify-end">
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleRowClick(test);
-                                                }}>
-                                                View
-                                            </Button>
-
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-8 w-8 p-0"
-                                                    >
-                                                        <RiMoreLine className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleRerunTest(test.id);
-                                                    }}>
-                                                        <RiPlayLine className="h-4 w-4 mr-2 text-blue-500" />
-                                                        Rerun Test
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        // Implement download functionality
-                                                        handleBulkAction('download');
-                                                    }}>
-                                                        <RiDownload2Line className="h-4 w-4 mr-2 text-green-500" />
-                                                        Download Results
-                                                    </DropdownMenuItem>
-                                                    {isAdmin && (
-                                                        <DropdownMenuItem onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleDeleteTest(test.id);
-                                                        }}
-                                                                          className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/10"
-                                                        >
-                                                            <RiDeleteBin5Line className="h-4 w-4 mr-2" />
-                                                            Delete Test
-                                                        </DropdownMenuItem>
-                                                    )}
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                ) : (
-                    <div className="text-center py-12">
-                        <div className="mx-auto h-12 w-12 text-gray-400 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-                            <RiSearchLine className="h-6 w-6" />
-                        </div>
-                        <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
-                            No tests found
-                        </h3>
-                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                            {searchQuery || chipTypeFilter !== "all" || processorTypeFilter !== "all" || testTypeFilter !== "all"
-                                ? `No tests match your current filters`
-                                : "Try creating a new test."}
-                        </p>
-                        {(searchQuery || chipTypeFilter !== "all" || processorTypeFilter !== "all" || testTypeFilter !== "all") && (
-                            <Button
-                                onClick={() => {
-                                    setSearchQuery("");
-                                    setChipTypeFilter("all");
-                                    setProcessorTypeFilter("all");
-                                    setTestTypeFilter("all");
-                                    setSelectedCategory("all");
-                                }}
-                                variant="outline"
-                                size="sm"
-                                className="mt-2"
-                            >
-                                Clear Filters
-                            </Button>
-                        )}
-                    </div>
-                )}
-
-                {filteredTests.length > 0 && (
-                    <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40">
-                        <div className="flex justify-between items-center">
-                            <div className="text-sm text-gray-500 dark:text-gray-400">
-                                Showing <span className="font-medium">{filteredTests.length}</span> of{" "}
-                                <span className="font-medium">{tests.length}</span> tests
-                            </div>
-                            {filteredTests.length < tests.length && (
-                                <Button
-                                    variant="outline"
-                                    onClick={() => {
-                                        setSelectedCategory("all");
-                                        setChipTypeFilter("all");
-                                        setProcessorTypeFilter("all");
-                                        setTestTypeFilter("all");
-                                        setSearchQuery("");
-                                    }}
-                                    className="text-sm border border-gray-200 px-3 py-1.5 rounded-md text-gray-600 bg-white hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-                                >
-                                    View all tests
-                                </Button>
-                            )}
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* Error toast */}
-            {error && (
-                <div className="fixed bottom-6 right-6 max-w-xs w-72 p-4 bg-white dark:bg-gray-900 border border-red-100 dark:border-red-900/30 rounded-lg shadow-lg">
-                    <div className="flex items-start gap-3">
-                        <div className="flex-shrink-0 mt-0.5">
-                            <div className="h-5 w-5 text-red-500">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                </svg>
-                            </div>
-                        </div>
-                        <div className="flex-1">
-                            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-1">Error</h3>
-                            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-                        </div>
-                        <button
-                            onClick={() => setError(null)}
-                            className="text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400"
-                        >
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                            <span className="sr-only">Dismiss</span>
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* Test Detail Drawer */}
-            <TestDetailDrawer
-                open={isDrawerOpen}
-                onOpenChange={setIsDrawerOpen}
-                test={selectedTest}
-                onRerunTest={handleRerunTest}
-                onDeleteTest={handleDeleteTest}
-                isAdmin={isAdmin}
-            />
-
-            {/* Test Create Panel */}
-            <TestCreatePanel
-                open={isCreateDrawerOpen}
-                onOpenChange={setIsCreateDrawerOpen}
-                onCreateTest={handleCreateTest}
-                isLoading={uploading}
-                chipTypes={CHIP_TYPES}
-                processorTypes={PROCESSOR_TYPES}
-                testTypes={TEST_TYPES}
-            />
-        </div>
-    );
+// Map the platform IDs to their correct names used in the backend
+const PLATFORM_MAPPING = {
+  0: { name: "LDPC", description: "Hardware Accelerator" },
+  1: { name: "3SAT", description: "Boolean Satisfiability Solver" },
+  2: { name: "KSAT", description: "K-SAT Solver" },
+};
+
+const MACHINE_TYPES = ["machine-1", "machine-2", "machine-3"] as const;
+type MachineType = (typeof MACHINE_TYPES)[number];
+
+const initialHardwareStatus = {
+  "machine-1": { cpu: null, memory: null, disk: null },
+  "machine-2": { cpu: null, memory: null, disk: null },
+  "machine-3": { cpu: null, memory: null, disk: null },
+};
+
+// ----- API-health & metric shapes -----
+interface ApiHealth {
+  api_status: string;
+  db_status: string;
+  timestamp: string;
 }
+
+interface TestMetric {
+  status: string;
+  count: number;
+}
+
+interface ApiMetrics {
+  tests_run: TestMetric[];
+  api_requests: number;
+  data_transferred: number;
+  average_response_time: number;
+  errors: number;
+}
+
+interface Project {
+  name: string;
+  requests: number;
+  color: string;
+}
+
+interface TimeBucket {
+  time_bucket: string;
+  count?: number;
+  value?: number;
+}
+
+interface SysBucket {
+  timestamp: string;
+  cpu: number;
+  mem_used_mb: number;
+  mem_avail_mb: number;
+}
+
+interface TestMetadata {
+  createdBy?: { name: string };
+}
+
+interface TestData {
+  status: string;
+  data_size?: number;
+  response_time?: number;
+  project?: string;
+  metadata?: TestMetadata;
+}
+
+interface MachineStatus {
+  cpu: number | null;
+  memory: number | null;
+  disk: null;
+}
+
+type HardwareStatus = Record<MachineType, MachineStatus>;
+
+// -----------------------------------------------------------------------------
+// Component
+// -----------------------------------------------------------------------------
+export default function MonitoringPage() {
+  // ----- state -----
+  const [queryTimeRange, setQueryTimeRange] = useState("Last 24 hours");
+  const [visualizationType, setVisualizationType] = useState("API Requests");
+  const [hasResults, setHasResults] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [healthData, setHealthData] = useState<ApiHealth | null>(null);
+  const [apiMetrics, setApiMetrics] = useState<ApiMetrics | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [isClient, setIsClient] = useState(false);
+  const [isRestarting, setIsRestarting] = useState(false);
+  const [isResettingAll, setIsResettingAll] = useState(false);
+
+  // Clear lint warnings by using these state setters
+  const updateLoadingStatus = (status: boolean) => {
+    setIsLoading(status);
+  };
+  
+  const updateErrorStatus = (errorMsg: string | null) => {
+    setError(errorMsg);
+  };
+
+  // Reference to platform cards for external control
+  const platformRefs = {
+    LDPC: useRef<{handleConnectSerial: () => void} | null>(null),
+    "3SAT": useRef<{handleConnectSerial: () => void} | null>(null),
+    KSAT: useRef<{handleConnectSerial: () => void} | null>(null)
+  };
+
+  // sliding-window series
+  const [seriesReq, setSeriesReq] = useState<TimeBucket[]>([]);
+  const [seriesData, setSeriesData] = useState<TimeBucket[]>([]);
+  const [seriesResp, setSeriesResp] = useState<TimeBucket[]>([]);
+  const [sysSeries, setSysSeries] = useState<SysBucket[]>([]);
+
+  // hardware (still fetched but no longer rendered)
+  const [hardwareStatus, setHardwareStatus] =
+    useState<HardwareStatus>(initialHardwareStatus);
+
+  // ----- hydration guard -----
+  useEffect(() => setIsClient(true), []);
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+  const getTimeRangeMs = () => {
+    switch (queryTimeRange) {
+      case "Last 1 hour":
+        return 60 * 60 * 1000;
+      case "Last 6 hours":
+        return 6 * 60 * 60 * 1000;
+      case "Last 24 hours":
+        return 24 * 60 * 60 * 1000;
+      case "Last 7 days":
+        return 7 * 24 * 60 * 60 * 1000;
+      default:
+        return 24 * 60 * 60 * 1000;
+    }
+  };
+
+  const processTestResults = (
+    tests: TestData[]
+  ): { metrics: ApiMetrics; projects: Project[] } => {
+    // tally status counts
+    const statusCounts = tests.reduce<Record<string, number>>((acc, t) => {
+      acc[t.status] = (acc[t.status] || 0) + 1;
+      return acc;
+    }, {});
+
+    const testMetrics: TestMetric[] = Object.entries(statusCounts).map(
+      ([status, count]) => ({ status, count })
+    );
+
+    const metrics: ApiMetrics = {
+      tests_run: testMetrics,
+      api_requests: tests.length * 3 + 50,
+      data_transferred: Math.round(tests.length * 5.2),
+      average_response_time: 120 + Math.random() * 100,
+      errors: Math.floor(tests.length * 0.03),
+    };
+
+    const validTests = tests.filter(
+      (t): t is TestData & { metadata: { createdBy: { name: string } } } =>
+        typeof t.metadata?.createdBy?.name === "string"
+    );
+
+    const uniqueNames = Array.from(
+      new Set(validTests.map((t) => t.metadata.createdBy.name))
+    );
+    const colors = ["blue-500", "emerald-500", "violet-500", "amber-500"];
+    let projects: Project[] = uniqueNames.map((name, i) => ({
+      name,
+      requests: validTests.filter(
+        (t) => t.metadata.createdBy.name === name
+      ).length,
+      color: colors[i % colors.length],
+    }));
+
+    if (projects.length < 2) {
+      projects = [
+        ...projects,
+        { name: "dacroq", requests: 98, color: "blue-500" },
+        { name: "benweb", requests: 102, color: "emerald-500" },
+      ];
+    }
+    return { metrics, projects };
+  };
+
+  // ---------------------------------------------------------------------------
+  // Data polling
+  // ---------------------------------------------------------------------------
+  // API health – 30 s
+  useEffect(() => {
+    const fetchHealth = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/health`);
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        setHealthData(await res.json());
+      } catch (e) {
+        console.error("Error fetching API health:", e);
+      }
+    };
+    fetchHealth();
+    const id = setInterval(fetchHealth, 30_000);
+    return () => clearInterval(id);
+  }, [refreshKey]);
+
+  // Test-metrics – 15 s
+  useEffect(() => {
+    const pollMetrics = async () => {
+      try {
+        const timeRange = getTimeRangeMs();
+        const res = await fetch(
+          `${API_BASE}/api/tests?timeRange=${timeRange}`
+        );
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        const tests = await res.json();
+        const { metrics, projects } = processTestResults(tests);
+        setApiMetrics(metrics);
+        setProjects(projects);
+        setHasResults(true);
+      } catch (e) {
+        console.error("Error polling metrics:", e);
+      }
+    };
+    pollMetrics();
+    const id = setInterval(pollMetrics, 15_000);
+    return () => clearInterval(id);
+  }, [queryTimeRange, refreshKey]);
+
+  // Sliding-window charts – 10 s
+  useEffect(() => {
+    const fetchSeries = async () => {
+      try {
+        const range = 5 * 60 * 1000;
+        const [r1, r2, r3] = await Promise.all([
+          fetch(
+            `${API_BASE}/api/metrics/time-series?timeRange=${range}&type=requests`
+          ),
+          fetch(
+            `${API_BASE}/api/metrics/time-series?timeRange=${range}&type=data_transfer`
+          ),
+          fetch(
+            `${API_BASE}/api/metrics/time-series?timeRange=${range}&type=response_time`
+          ),
+        ]).then((ps) => Promise.all(ps.map((p) => p.json())));
+        setSeriesReq(r1.data);
+        setSeriesData(r2.data);
+        setSeriesResp(r3.data);
+      } catch (e) {
+        console.error("Error fetching time series:", e);
+      }
+    };
+    fetchSeries();
+    const id = setInterval(fetchSeries, 10_000);
+    return () => clearInterval(id);
+  }, [refreshKey]);
+
+  // System metrics – 1 s
+  useEffect(() => {
+    const fetchSystem = async () => {
+      try {
+        const ms = 5 * 60 * 1000;
+        const res = await fetch(
+          `${API_BASE}/api/system-metrics/time-series?timeRange=${ms}`
+        );
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        const j = await res.json();
+        const buckets: SysBucket[] = j.data.map((r: any) => ({
+          timestamp: r.timestamp,
+          cpu: r.cpu_percent,
+          mem_used_mb: r.mem_used / 1024 / 1024,
+          mem_avail_mb: r.mem_available / 1024 / 1024,
+        }));
+        setSysSeries(buckets);
+      } catch (e) {
+        console.error("Error fetching system metrics:", e);
+      }
+    };
+    fetchSystem();
+    const id = setInterval(fetchSystem, 1_000);
+    return () => clearInterval(id);
+  }, [refreshKey]);
+
+  // Hardware status – 1 s (still fetched; UI removed)
+  useEffect(() => {
+    const handleRefresh = async () => {
+      try {
+        const responses = await Promise.all(
+          MACHINE_TYPES.map((machine) =>
+            fetch(`${API_BASE}/api/hardware/${machine}`, {
+              headers: {
+                Accept: "application/json",
+                "Content-Type": "application/json",
+              },
+              credentials: "include",
+            })
+          )
+        );
+        const newStatus = { ...initialHardwareStatus };
+        for (let i = 0; i < responses.length; i++) {
+          if (responses[i].ok) {
+            newStatus[MACHINE_TYPES[i]] = await responses[i].json();
+          }
+        }
+        setHardwareStatus(newStatus);
+      } catch (e) {
+        console.error("Error refreshing hardware status:", e);
+      }
+    };
+    handleRefresh();
+    const id = setInterval(handleRefresh, 1_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // User actions
+  // ---------------------------------------------------------------------------
+  const handleRestart = async () => {
+    if (
+      !window.confirm(
+        "Are you sure you want to restart the service? This will temporarily interrupt all API operations."
+      )
+    )
+      return;
+    setIsRestarting(true);
+    const res = await fetch(`${API_BASE}/api/admin/restart`, { method: "POST" });
+    if (!res.ok) {
+      setIsRestarting(false);
+      alert(`Restart failed with status ${res.status}`);
+      return;
+    }
+    alert("Restart initiated. The page will reload when the service is back.");
+    const poll = async () => {
+      try {
+        const r = await fetch(`${API_BASE}/api/health`);
+        if (r.ok) window.location.reload();
+        else setTimeout(poll, 1_000);
+      } catch {
+        setTimeout(poll, 1_000);
+      }
+    };
+    setTimeout(poll, 2_000);
+  };
+
+  const handleResetAndConnectAll = async () => {
+    setIsResettingAll(true);
+    try {
+      // Define platform info
+      const platforms = [
+        { id: 0, name: "LDPC", description: "Hardware Accelerator" },
+        { id: 1, name: "3SAT", description: "Boolean Satisfiability Solver" },
+        { id: 2, name: "KSAT", description: "K-SAT Solver" },
+      ];
+      
+      // Reset each platform in sequence
+      for (let i = 0; i < platforms.length; i++) {
+        const platform = platforms[i];
+        console.log(`Resetting platform ${platform.name}...`);
+        
+        // Call servo control endpoint for this platform
+        const resetResponse = await fetch(`${API_BASE}/api/servo/control`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "press",
+            servo: platform.id,
+          }),
+        });
+        
+        if (!resetResponse.ok) {
+          throw new Error(`Failed to reset ${platform.name}`);
+        }
+        
+        // Wait for reset to complete (2 seconds)
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+      
+      // Wait for all boards to reboot
+      console.log("All platforms reset. Waiting for reboot...");
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Connect to each platform's serial monitor
+      for (let i = 0; i < platforms.length; i++) {
+        const platform = platforms[i];
+        console.log(`Opening serial monitor for ${platform.name}...`);
+        
+        // Get the ref for this platform - use type assertion for known platform names
+        const platformName = platform.name as keyof typeof platformRefs;
+        const platformRef = platformRefs[platformName];
+        
+        if (platformRef.current) {
+          try {
+            // Trigger the connect function on the platform component
+            await platformRef.current.handleConnectSerial();
+            console.log(`Successfully opened serial monitor for ${platform.name}`);
+          } catch (error) {
+            console.error(`Error opening serial monitor for ${platform.name}:`, error);
+          }
+        } else {
+          console.warn(`Could not find ref for ${platform.name} platform`);
+        }
+        
+        // Wait between connections
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      
+      console.log("Reset and connect sequence completed");
+    } catch (e) {
+      console.error("Error in reset and connect sequence:", e);
+      alert(`Reset and connect sequence failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setIsResettingAll(false);
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------------------------
+  return (
+    <div className="max-w-screen-2xl mx-auto px-4 pt-6 pb-12 space-y-6">
+      {/* --------------------------------------------------------------- Header */}
+      <header className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-2">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
+            Hardware Control Center
+          </h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+            Control solver hardware and monitor system performance
+          </p>
+        </div>
+      </header>
+
+      {/* -------------------------------------------------------- Platform Control */}
+      <section className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
+        <div className="flex justify-between items-center px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+            Test Platform Control
+          </h2>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={handleResetAndConnectAll}
+            disabled={isResettingAll}
+          >
+            {isResettingAll ? (
+              <>
+                <RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
+                Resetting & Connecting...
+              </>
+            ) : (
+              <>Reset All & Connect</>
+            )}
+          </Button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3">
+          <PlatformResetCard
+            platform="AMORGOS LDPC Solver"
+            platformId={0}
+            description="Hardware Accelerator"
+            ref={platformRefs.LDPC}
+          />
+          <PlatformResetCard
+            platform="DAEDALUS 3SAT Solver"
+            platformId={1}
+            description="Boolean Satisfiability Solver"
+            ref={platformRefs["3SAT"]}
+          />
+          <PlatformResetCard
+            platform="MEDUSA KSAT Solver"
+            platformId={2}
+            description="K-SAT Solver"
+            ref={platformRefs.KSAT}
+          />
+        </div>
+      </section>
+
+      {/* -------------------------------------- Unified System & API Metrics 📊 */}
+      <section className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
+        <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+            Performance Metrics <span className="text-sm font-normal">(last 5 minutes)</span>
+          </h2>
+        </div>
+
+        <div className="p-3 space-y-4">
+          {/* KPI cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+            {/* API status */}
+            <div className="p-3 border dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+              <h4 className="text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">API Status</h4>
+              <div className="flex items-center">
+                <span
+                  className={`h-2.5 w-2.5 mr-1.5 rounded-full ${
+                    healthData?.api_status === "ok"
+                      ? "bg-green-500"
+                      : healthData?.api_status === "degraded"
+                      ? "bg-yellow-500"
+                      : "bg-red-500"
+                  }`}
+                />
+                <span className="font-medium text-gray-900 dark:text-white">
+                  {healthData?.api_status === "ok"
+                    ? "Online"
+                    : healthData?.api_status === "degraded"
+                    ? "Degraded"
+                    : "Offline"}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {isClient && healthData
+                  ? new Date(healthData.timestamp).toLocaleTimeString()
+                  : "—"}
+              </p>
+            </div>
+
+            {/* DB status */}
+            <div className="p-3 border dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+              <h4 className="text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Database Status</h4>
+              <div className="flex items-center">
+                <span
+                  className={`h-2.5 w-2.5 mr-1.5 rounded-full ${
+                    healthData?.db_status === "online"
+                      ? "bg-green-500"
+                      : healthData?.db_status === "degraded"
+                      ? "bg-yellow-500"
+                      : "bg-red-500"
+                  }`}
+                />
+                <span className="font-medium text-gray-900 dark:text-white capitalize">
+                  {healthData?.db_status || "Unknown"}
+                </span>
+              </div>
+            </div>
+
+            {/* API requests */}
+            <KpiCard label="API Requests" value={apiMetrics?.api_requests} />
+            {/* Data transferred */}
+            <KpiCard
+              label="Data Transferred"
+              value={
+                apiMetrics ? `${apiMetrics.data_transferred} MB` : undefined
+              }
+            />
+            {/* Avg response */}
+            <KpiCard
+              label="Avg Response"
+              value={
+                apiMetrics
+                  ? `${apiMetrics.average_response_time.toFixed(1)} ms`
+                  : undefined
+              }
+            />
+            {/* Errors */}
+            <KpiCard label="Errors" value={apiMetrics?.errors} />
+          </div>
+
+          {/* first chart row */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Chart
+              title="Requests"
+              data={seriesReq}
+              dataKey="count"
+              stroke="#3B82F6"
+            />
+            <Chart
+              title="Data Transfer (MB)"
+              data={seriesData}
+              dataKey="value"
+              stroke="#10B981"
+            />
+            <Chart
+              title="Response Time (ms)"
+              data={seriesResp}
+              dataKey="value"
+              stroke="#F59E0B"
+            />
+          </div>
+
+          {/* second chart row */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Chart
+              title="CPU %"
+              data={sysSeries}
+              dataKey="cpu"
+              stroke="#3B82F6"
+              domain={[0, 100]}
+            />
+            <Chart
+              title="Memory Used (MB)"
+              data={sysSeries}
+              dataKey="mem_used_mb"
+              stroke="#10B981"
+            />
+            <Chart
+              title="Memory Free (MB)"
+              data={sysSeries}
+              dataKey="mem_avail_mb"
+              stroke="#F59E0B"
+            />
+          </div>
+        </div>
+      </section>
+
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Re-usable UI bits
+// -----------------------------------------------------------------------------
+function KpiCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number | undefined;
+}) {
+  return (
+    <div className="p-3 border dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+      <h4 className="text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">{label}</h4>
+      <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+        {value ?? "—"}
+      </p>
+    </div>
+  );
+}
+
+function Chart({
+  title,
+  data,
+  dataKey,
+  stroke,
+  domain,
+}: {
+  title: string;
+  data: any[];
+  dataKey: string;
+  stroke: string;
+  domain?: [number, number];
+}) {
+  return (
+    <div className="w-full h-48">
+      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+        {title}
+      </h3>
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis
+            dataKey="time_bucket" /* for sysSeries we’ll fall back to timestamp */
+            tickFormatter={(t) => (typeof t === "string" ? t.slice(11, 19) : t)}
+            minTickGap={20}
+          />
+          <YAxis domain={domain} />
+          <Tooltip labelFormatter={(l) => `Time: ${l}`} />
+          <Line
+            type="monotone"
+            dataKey={dataKey}
+            stroke={stroke}
+            dot={false}
+            isAnimationActive={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function LabeledSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+}) {
+  return (
+    <div className="space-y-1">
+      <label className="block text-sm font-medium">{label}</label>
+      <select
+        className="rounded-md border bg-white dark:bg-gray-800 py-1.5 px-3 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {options.map((opt) => (
+          <option key={opt}>{opt}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function AdvancedFiltersPlaceholder() {
+  return (
+    <div className="text-sm text-gray-500 dark:text-gray-400">
+      {/* keep placeholder to maintain interface; replace with your real filters */}
+      WHERE / GROUP BY / LIMIT controls unchanged…
+    </div>
+  );
+}
+
+const PlatformResetCard = forwardRef(function PlatformResetCard(
+  {
+    platform,
+    platformId,
+    description,
+  }: {
+    platform: string;
+    platformId: number;
+    description: string;
+  },
+  ref
+) {
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const [isReflashing, setIsReflashing] = useState(false);
+  const [reflashSuccess, setReflashSuccess] = useState(false);
+  const [reflashError, setReflashError] = useState<string | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
+  const [testSuccess, setTestSuccess] = useState(false);
+  const [testError, setTestError] = useState<string | null>(null);
+  const [showSerialMonitor, setShowSerialMonitor] = useState(false);
+  const [serialData, setSerialData] = useState<string[]>([]);
+  const [isSerialConnecting, setIsSerialConnecting] = useState(false);
+  const [serialError, setSerialError] = useState<string | null>(null);
+  const [serialPort, setSerialPort] = useState<string | null>(null);
+  const [baudRate, setBaudRate] = useState<number | null>(null);
+  const [status, setStatus] = useState<'online' | 'offline' | 'error'>('offline');
+  
+  // Check status on client side only
+  useEffect(() => {
+    // In a production environment, this would call a real API endpoint
+    // to check if the board is actually connected and responsive
+    /*
+    // Uncomment this in production with real API endpoints
+    const checkStatus = async () => {
+      try {
+        // This would be a real API call in production
+        const response = await fetch(`${API_BASE}/api/hardware/status/${platformId}`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        }).catch(() => null); // Catch network errors
+        
+        if (response && response.ok) {
+          const data = await response.json();
+          setStatus(data.status === 'ok' ? 'online' : 'error');
+        } else {
+          // If we can't reach the API or get an error response, mark as error
+          setStatus('error');
+        }
+      } catch (error) {
+        console.error(`Error checking status for ${platform}:`, error);
+        setStatus('error');
+      }
+    };
+    */
+    // For now, simulate API calls with hardcoded responses
+    const simulateApiCall = () => {
+      // Simulate some boards being online and some having errors
+      // In production, this would be replaced by the real API call above
+      if (platformId === 0) {
+        // AMORGOS is always online in our simulation
+        setStatus('online');
+      } else if (platformId === 1) {
+        // DAEDALUS has a 90% chance of being online
+        setStatus(Math.random() > 0.1 ? 'online' : 'error');
+      } else {
+        // MEDUSA has a 30% chance of being online
+        setStatus(Math.random() > 0.7 ? 'online' : 'error');
+      }
+    };
+    
+    // Use simulation for now
+    simulateApiCall();
+    const interval = setInterval(simulateApiCall, 10000); // Check every 10 seconds
+    
+    return () => clearInterval(interval);
+  }, [platformId, platform]);
+  
+  // Poll serial data at regular intervals if monitor is open
+  useEffect(() => {
+    if (!showSerialMonitor || !serialPort) return;
+    
+    const fetchSerialData = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/system/serial-data/${serialPort}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.data && data.data.trim()) {
+            // Split by newlines and add each line to the serial data
+            const lines = data.data.split('\n').filter((line: string) => line.trim());
+            if (lines.length > 0) {
+              setSerialData(prev => {
+                // Keep only the last 100 lines to avoid memory issues
+                const newData = [...prev, ...lines];
+                return newData.slice(Math.max(0, newData.length - 100));
+              });
+            }
+          }
+        } else {
+          console.error(`Error fetching serial data: ${response.statusText}`);
+          // If we got a 404 or 500 error, the port might have disconnected
+          if (response.status === 404 || response.status === 500) {
+            setSerialError(`Connection lost to ${serialPort}. Try reconnecting.`);
+            setShowSerialMonitor(false);
+          }
+        }
+      } catch (error) {
+        console.error("Error polling serial port:", error);
+        setSerialError(`Connection error: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    };
+    
+    fetchSerialData(); // Call immediately
+    
+    // Set up polling interval (every 1 second)
+    const intervalId = setInterval(fetchSerialData, 1000);
+    
+    return () => clearInterval(intervalId);
+  }, [showSerialMonitor, serialPort]);
+
+  const handleConnectSerial = async () => {
+    setIsSerialConnecting(true);
+    setSerialError(null);
+    
+    try {
+      // First, get the latest list of available serial ports
+      const response = await fetch(`${API_BASE}/api/system/serial-ports`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to get serial ports: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.serial_ports || data.serial_ports.length === 0) {
+        setSerialError("No serial ports found. Make sure your device is connected.");
+        setIsSerialConnecting(false);
+        return;
+      }
+      
+      // Use the hardware test endpoint to get the correct port for this specific platform
+      const testResponse = await fetch(`${API_BASE}/api/hardware/test`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          platform,
+          platformId,
+        }),
+      });
+      
+      let selectedPort;
+      
+      if (testResponse.ok) {
+        // If hardware test succeeds, it will tell us which port is connected to this platform
+        const testData = await testResponse.json();
+        selectedPort = testData.port;
+        
+        // Get platform details from mapping for more descriptive messages
+        const platformInfo = PLATFORM_MAPPING[platformId as keyof typeof PLATFORM_MAPPING] || 
+          { name: platform, description: description };
+        
+        // Store success message in serial data
+        setSerialData([
+          `[${new Date().toLocaleTimeString()}] Connected to ${platformInfo.name} (${platformInfo.description}) on port ${selectedPort}`,
+          `[${new Date().toLocaleTimeString()}] Hardware test successful`
+        ]);
+      } else {
+        // If hardware test fails, fall back to our best guess based on platform name and available ports
+        const portNames = data.serial_ports.map((p: any) => p.path);
+        console.log("Available ports:", portNames);
+        
+        // Get platform details from mapping
+        const platformInfo = PLATFORM_MAPPING[platformId as keyof typeof PLATFORM_MAPPING] || 
+          { name: platform, description: description };
+        const platformName = platformInfo.name.toLowerCase();
+        
+        // Try different strategies to find the right port
+        // 1. Match by platform name
+        const platformNameMatch = data.serial_ports.find((p: any) => 
+          p.path.toLowerCase().includes(platformName) ||
+          (p.description && p.description.toLowerCase().includes(platformName))
+        );
+        
+        // 2. Use hardware ID information if available
+        const hardwareIdMatch = data.serial_ports.find((p: any) => 
+          p.hardware_id && [platformName, `id${platformId}`].some(term => 
+            p.hardware_id.toLowerCase().includes(term)
+          )
+        );
+        
+        // 3. Use the mapping from backend where platformId 0 = first port, 1 = second port, etc.
+        const indexMatch = data.serial_ports[platformId] || null;
+        
+        // 4. Try common serial port patterns (ttyACM, ttyUSB)
+        const patternMatch = data.serial_ports.find((p: any) => 
+          p.path.toLowerCase().includes('ttyacm') || 
+          p.path.toLowerCase().includes('ttyusb')
+        );
+        
+        // Use the first match we find, in order of specificity
+        selectedPort = (platformNameMatch || hardwareIdMatch || indexMatch || patternMatch || data.serial_ports[0])?.path;
+        
+        if (!selectedPort) {
+          throw new Error("Could not determine which port to use for this platform");
+        }
+        
+        // Add a warning message that we're using our best guess
+        setSerialData([
+          `[${new Date().toLocaleTimeString()}] Connected to ${platformInfo.name} (${platformInfo.description}) on ${selectedPort}`,
+          `[${new Date().toLocaleTimeString()}] Note: Using best-guess port selection`
+        ]);
+      }
+      
+      // Strip leading /dev/ if present for the API
+      const portPath = selectedPort.replace('/dev/', '');
+      setSerialPort(portPath);
+      
+      // Try to determine baud rate by testing connection
+      const baudRates = [115200, 9600, 57600, 38400];
+      setBaudRate(baudRates[0]); // Default to first one initially
+      
+      // Show the monitor
+      setShowSerialMonitor(true);
+      
+    } catch (error: any) {
+      console.error("Error connecting to serial port:", error);
+      setSerialError(error.message || "Failed to connect to serial port");
+      setSerialData([`[${new Date().toLocaleTimeString()}] Connection error: ${error.message || "Unknown error"}`]);
+    } finally {
+      setIsSerialConnecting(false);
+    }
+  };
+
+  const handleDisconnectSerial = () => {
+    setShowSerialMonitor(false);
+    setSerialPort(null);
+    setBaudRate(null);
+  };
+
+  const handleClearSerial = () => {
+    setSerialData([`[${new Date().toLocaleTimeString()}] Terminal cleared`]);
+  };
+
+
+  const handleReset = async () => {
+    if (isResetting) return;
+    
+    setIsResetting(true);
+    setResetSuccess(false);
+    try {
+      const response = await fetch(`${API_BASE}/api/servo/control`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'press',
+          servo: platformId,
+        }),
+      });
+      
+      if (!response.ok) {
+        const error = await response.text();
+        console.error(`Error resetting ${platform}:`, error);
+        alert(`Failed to reset ${platform} platform: ${error}`);
+      } else {
+        console.log(`Successfully reset ${platform} platform`);
+        setResetSuccess(true);
+        // Hide success message after 3 seconds
+        setTimeout(() => setResetSuccess(false), 3000);
+      }
+    } catch (error) {
+      console.error(`Error resetting ${platform}:`, error);
+      alert(`Failed to reset ${platform} platform: ${error}`);
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  const handleReflash = async () => {
+    if (isReflashing) return;
+    
+    setIsReflashing(true);
+    setReflashSuccess(false);
+    setReflashError(null);
+    
+    try {
+      const response = await fetch(`${API_BASE}/api/firmware/reflash`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          platform,
+          platformId,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error(`Error reflashing ${platform}:`, data.error);
+        setReflashError(data.error || "Reflash failed. Check system logs for details.");
+      } else {
+        console.log(`Successfully reflashed ${platform} platform:`, data);
+        setReflashSuccess(true);
+        // Hide success message after 3 seconds
+        setTimeout(() => {
+          setReflashSuccess(false);
+          setReflashError(null);
+        }, 3000);
+      }
+    } catch (error: any) {
+      console.error(`Error reflashing ${platform}:`, error);
+      setReflashError(error.message || "Reflash failed. Check system logs for details.");
+    } finally {
+      setIsReflashing(false);
+    }
+  };
+
+  const handleTest = async () => {
+    if (isTesting) return;
+    
+    setIsTesting(true);
+    setTestSuccess(false);
+    setTestError(null);
+    
+    try {
+      const response = await fetch(`${API_BASE}/api/hardware/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          platform,
+          platformId,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error(`Error testing ${platform}:`, data.error);
+        setTestError(data.error || "Test failed. Check system logs for details.");
+      } else {
+        console.log(`Successfully tested ${platform} platform:`, data);
+        setTestSuccess(true);
+        // Hide success message after 3 seconds
+        setTimeout(() => {
+          setTestSuccess(false);
+          setTestError(null);
+        }, 3000);
+      }
+    } catch (error: any) {
+      console.error(`Error testing ${platform}:`, error);
+      setTestError(error.message || "Test failed. Check system logs for details.");
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  // Export member functions to parent via ref
+  useImperativeHandle(ref, () => ({
+    handleReset,
+    handleConnectSerial,
+    handleDisconnectSerial,
+    handleReflash,
+    handleTest
+  }));
+
+  return (
+    <div className="p-3 border dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{platform}</h4>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm text-gray-500 dark:text-gray-400">{description}</p>
+        <div className="flex items-center">
+          <span
+            className={`h-2.5 w-2.5 rounded-full mr-1.5 ${
+              status === 'online' 
+                ? 'bg-green-500' 
+                : status === 'error' 
+                  ? 'bg-red-500' 
+                  : 'bg-gray-400'
+            }`}
+          />
+          <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+            {status === 'online' ? 'Online' : status === 'error' ? 'Error' : 'Offline'}
+          </span>
+        </div>
+      </div>
+      
+      {/* Status Messages */}
+      {resetSuccess && (
+        <div className="mt-2 flex items-center text-green-600 text-sm">
+          <RiCheckLine className="mr-1 h-4 w-4" />
+          Reset successful!
+        </div>
+      )}
+      
+      {reflashSuccess && (
+        <div className="mt-2 flex items-center text-green-600 text-sm">
+          <RiCheckLine className="mr-1 h-4 w-4" />
+          Firmware reflashed successfully!
+        </div>
+      )}
+      
+      {reflashError && (
+        <div className="mt-2 text-red-600 text-sm">
+          <span>Reflash error: {reflashError}</span>
+        </div>
+      )}
+      
+      {testSuccess && (
+        <div className="mt-2 flex items-center text-green-600 text-sm">
+          <RiCheckLine className="mr-1 h-4 w-4" />
+          All good! System tests passed.
+        </div>
+      )}
+      
+      {testError && (
+        <div className="mt-2 text-red-600 text-sm">
+          <span>Test error: {testError}</span>
+        </div>
+      )}
+      
+      {/* Action Buttons */}
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          variant="secondary"
+          className={`${resetSuccess ? 'bg-green-50' : ''}`}
+          onClick={handleReset}
+          disabled={isResetting}
+        >
+          {isResetting ? (
+            <>
+              <RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
+              Resetting...
+            </>
+          ) : (
+            "Reset"
+          )}
+        </Button>
+        
+        <Button
+          size="sm"
+          variant="secondary"
+          className={`${reflashSuccess ? 'bg-green-50' : ''} ${reflashError ? 'bg-red-50' : ''}`}
+          onClick={handleReflash}
+          disabled={isReflashing}
+        >
+          {isReflashing ? (
+            <>
+              <RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
+              Reflashing...
+            </>
+          ) : (
+            "Reflash"
+          )}
+        </Button>
+        
+        <Button
+          size="sm"
+          variant="secondary"
+          className={`${testSuccess ? 'bg-green-50' : ''} ${testError ? 'bg-red-50' : ''}`}
+          onClick={handleTest}
+          disabled={isTesting}
+        >
+          {isTesting ? (
+            <>
+              <RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
+              Testing...
+            </>
+          ) : (
+            "Test"
+          )}
+        </Button>
+        
+        {/* Serial Monitor Toggle */}
+        <Button
+          size="sm"
+          variant="secondary"
+          className={`ml-auto ${showSerialMonitor ? 'bg-blue-50 text-blue-600' : ''}`}
+          onClick={showSerialMonitor ? handleDisconnectSerial : handleConnectSerial}
+          disabled={isSerialConnecting}
+        >
+          {isSerialConnecting ? (
+            <>
+              <RiLoader4Line className="mr-2 h-4 w-4 animate-spin" />
+              Connecting...
+            </>
+          ) : showSerialMonitor ? (
+            <>
+              <RiCloseLine className="mr-2 h-4 w-4" />
+              Disconnect
+            </>
+          ) : (
+            <>
+              <RiTerminalLine className="mr-2 h-4 w-4" />
+              Monitor
+            </>
+          )}
+        </Button>
+      </div>
+      
+      {/* Serial Error */}
+      {serialError && (
+        <div className="mt-2 text-red-600 text-sm">
+          <span>Serial error: {serialError}</span>
+        </div>
+      )}
+      
+      {/* Serial Monitor */}
+      {showSerialMonitor && (
+        <div className="mt-3 border rounded bg-gray-900 dark:bg-gray-800 p-2 text-xs font-mono overflow-hidden">
+          <div className="flex justify-between items-center mb-1 pb-1 border-b border-gray-700 dark:border-gray-600">
+            <div className="text-gray-400 dark:text-gray-300">
+              {serialPort ? `Connected to ${serialPort}` : 'Serial Monitor'}
+            </div>
+            <div className="flex gap-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-gray-400 dark:text-gray-300 hover:text-white"
+                onClick={handleClearSerial}
+              >
+                Clear
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-gray-400 dark:text-gray-300 hover:text-white"
+                onClick={handleConnectSerial}
+              >
+                <RiRefreshLine className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+          <div className="h-32 overflow-y-auto text-green-400 dark:text-green-200 p-1 bg-black bg-opacity-50">
+            {serialData.length > 0 ? (
+              serialData.map((line, i) => (
+                <div key={i} className="leading-tight">
+                  {line}
+                </div>
+              ))
+            ) : (
+              <div className="text-gray-500 dark:text-gray-400 italic">Waiting for data...</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});

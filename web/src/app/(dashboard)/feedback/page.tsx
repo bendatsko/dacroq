@@ -1,8 +1,10 @@
 "use client"
 
 import { Button } from "@/components/Button"
+import { Card } from "@/components/Card"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { RiCheckLine, RiCloseLine } from "@remixicon/react"
 
 // Base URL for the backend API; configure NEXT_PUBLIC_API_BASE_URL in .env.local
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
@@ -77,117 +79,145 @@ export default function FeedbackPage() {
   }
   
   return (
-    <div className="container max-w-2xl py-10">
+    <div className="container max-w-4xl py-6">
       {notification && (
-        <div 
-          className={`mb-6 p-4 rounded-md ${
-            notification.type === "success" 
-              ? "bg-green-50 border border-green-200 text-green-800" 
-              : "bg-red-50 border border-red-200 text-red-800"
-          }`}
-        >
-          <div className="flex items-start">
-            <div className="flex-shrink-0">
-              {notification.type === "success" ? (
-                <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-              ) : (
-                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-              )}
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium">{notification.title}</h3>
-              <div className="mt-1 text-sm">{notification.message}</div>
-            </div>
-          </div>
+        <div className={`mt-4 p-3 ${
+          notification.type === "success" 
+            ? "bg-green-50 border border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400" 
+            : "bg-red-50 border border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400"
+        } rounded-md flex items-center gap-2 mb-6`}>
+          {notification.type === "success" ? (
+            <RiCheckLine className="h-5 w-5" />
+          ) : (
+            <RiCloseLine className="h-5 w-5" />
+          )}
+          <span>{notification.message}</span>
         </div>
       )}
       
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Feedback</h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Feedback</h1>
+        <p className="text-gray-500 dark:text-gray-400 mt-1">
           We value your input to help improve our testing dashboard.
         </p>
       </div>
       
-      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-950">
-        <form onSubmit={handleSubmit}>
-          <div className="mb-6">
-            <label className="block text-sm font-medium mb-2">Feedback Type</label>
-            <div className="flex flex-wrap gap-3">
-              {["suggestion", "bug", "feature-request", "general"].map((type) => (
-                <label 
-                  key={type} 
-                  className={`flex items-center rounded-md border px-3 py-2 text-sm cursor-pointer transition-colors ${
-                    feedbackType === type 
-                      ? "border-blue-500 bg-blue-50 text-blue-600 dark:border-blue-400 dark:bg-blue-950 dark:text-blue-400" 
-                      : "border-gray-200 bg-white hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800"
-                  }`}
-                >
+      <Card>
+        <div className="p-6">
+          <form onSubmit={handleSubmit}>
+            <div className="mb-6">
+              <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Feedback Type</label>
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
                   <input 
                     type="radio" 
+                    id="suggestion"
                     name="feedbackType" 
-                    value={type}
-                    checked={feedbackType === type}
-                    onChange={() => setFeedbackType(type)}
-                    className="sr-only"
+                    value="suggestion"
+                    checked={feedbackType === "suggestion"}
+                    onChange={() => setFeedbackType("suggestion")}
+                    className="h-4 w-4 text-blue-600"
                   />
-                  <span className="capitalize">{type.replace("-", " ")}</span>
-                </label>
-              ))}
+                  <label htmlFor="suggestion" className="text-sm text-gray-700 dark:text-gray-300">
+                    Suggestion
+                  </label>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <input 
+                    type="radio" 
+                    id="bug"
+                    name="feedbackType" 
+                    value="bug"
+                    checked={feedbackType === "bug"}
+                    onChange={() => setFeedbackType("bug")}
+                    className="h-4 w-4 text-blue-600"
+                  />
+                  <label htmlFor="bug" className="text-sm text-gray-700 dark:text-gray-300">
+                    Bug
+                  </label>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <input 
+                    type="radio" 
+                    id="feature"
+                    name="feedbackType" 
+                    value="feature-request"
+                    checked={feedbackType === "feature-request"}
+                    onChange={() => setFeedbackType("feature-request")}
+                    className="h-4 w-4 text-blue-600"
+                  />
+                  <label htmlFor="feature" className="text-sm text-gray-700 dark:text-gray-300">
+                    Feature Request
+                  </label>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <input 
+                    type="radio" 
+                    id="general"
+                    name="feedbackType" 
+                    value="general"
+                    checked={feedbackType === "general"}
+                    onChange={() => setFeedbackType("general")}
+                    className="h-4 w-4 text-blue-600"
+                  />
+                  <label htmlFor="general" className="text-sm text-gray-700 dark:text-gray-300">
+                    General
+                  </label>
+                </div>
+              </div>
             </div>
-          </div>
-          
-          <div className="mb-6">
-            <label htmlFor="description" className="block text-sm font-medium mb-2">
-              Description
-            </label>
-            <textarea
-              id="description"
-              rows={5}
-              className="w-full resize-y rounded-md border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-800 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-400"
-              placeholder="Please describe your feedback in detail..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              required
-            />
-          </div>
-          
-          <div className="mb-6">
-            <label htmlFor="email" className="block text-sm font-medium mb-2">
-              Email (optional)
-            </label>
-            <input
-              type="email"
-              id="email"
-              className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-800 dark:bg-gray-900 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-400"
-              placeholder="your.email@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              If you'd like us to follow up with you about your feedback
-            </p>
-          </div>
-          
-          <div className="flex justify-end gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={isSubmitting}
-              onClick={() => router.push("/")}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Submitting..." : "Submit Feedback"}
-            </Button>
-          </div>
-        </form>
-      </div>
+            
+            <div className="mb-6">
+              <label htmlFor="description" className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
+                Description
+              </label>
+              <textarea
+                id="description"
+                rows={5}
+                className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-gray-700 dark:text-gray-300"
+                placeholder="Please describe your feedback in detail..."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                required
+              />
+            </div>
+            
+            <div className="mb-6">
+              <label htmlFor="email" className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
+                Email (optional)
+              </label>
+              <input
+                type="email"
+                id="email"
+                className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-gray-700 dark:text-gray-300"
+                placeholder="your.email@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                If you'd like us to follow up with you about your feedback
+              </p>
+            </div>
+            
+            <div className="flex justify-end gap-4">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={isSubmitting}
+                onClick={() => router.push("/")}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Submitting..." : "Submit Feedback"}
+              </Button>
+            </div>
+          </form>
+        </div>
+      </Card>
     </div>
   )
 }
