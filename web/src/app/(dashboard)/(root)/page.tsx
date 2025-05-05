@@ -65,7 +65,7 @@ const API_BASE = "https://dacroq-api.bendatsko.com";
 // Hardware configuration options
 const CHIP_TYPES = ["3SAT", "LDPC", "HARDWARE", "RISC-V"];
 const PROCESSOR_TYPES = ["ARM (Teensy 4.1)", "RISC-V", "Embedded"];
-const TEST_TYPES = ["Hardware-in-Loop", "Software-in-Loop", "Chip-in-Loop", "Unit Test", "Integration Test"];
+const TEST_TYPES = ["Functional Validation", "Circuit Simulation", "Hardware Emulation", "Unit Test", "Integration Test"];
 
 export default function Dashboard() {
     const router = useRouter();
@@ -84,9 +84,6 @@ export default function Dashboard() {
     const [apiHealth, setApiHealth] = useState<any | null>(null);
     const [selectedCategory, setSelectedCategory] = useState("all");
     const [selectedTests, setSelectedTests] = useState<string[]>([]);
-    const [chipType, setChipType] = useState("3SAT");
-    const [processorType, setProcessorType] = useState("ARM (Teensy 4.1)");
-    const [testType, setTestType] = useState("Hardware-in-Loop");
     const [expandedTests, setExpandedTests] = useState<string[]>([]);
     const [uploading, setUploading] = useState(false);
     const [apiConnected, setApiConnected] = useState(true);
@@ -95,15 +92,6 @@ export default function Dashboard() {
     const [chipTypeFilter, setChipTypeFilter] = useState("all");
     const [processorTypeFilter, setProcessorTypeFilter] = useState("all");
     const [testTypeFilter, setTestTypeFilter] = useState("all");
-
-    // Toggle test expansion in accordion view
-    const toggleTestExpansion = (testId: string) => {
-        setExpandedTests(prev =>
-            prev.includes(testId)
-                ? prev.filter(id => id !== testId)
-                : [...prev, testId]
-        );
-    };
 
     // Handler functions
     const handleSelectTest = (testId: string, e: React.MouseEvent | React.ChangeEvent) => {
@@ -341,7 +329,7 @@ export default function Dashboard() {
                         name: t.name,
                         chipType: t.chipType || "3SAT", // Default values for backwards compatibility
                         processorType: t.processorType || "ARM (Teensy 4.1)",
-                        testType: t.testType || "Hardware-in-Loop",
+                        testType: t.testType || "Functional Validation",
                         environment: t.environment,
                         created: t.created,
                         status: t.status,
@@ -462,9 +450,9 @@ export default function Dashboard() {
     const embeddedTestsCount = tests.filter((t) => t.processorType === "Embedded").length;
     const riscvProcessorTestsCount = tests.filter((t) => t.processorType === "RISC-V").length;
 
-    const hwLoopCount = tests.filter((t) => t.testType === "Hardware-in-Loop").length;
-    const swLoopCount = tests.filter((t) => t.testType === "Software-in-Loop").length;
-    const chipLoopCount = tests.filter((t) => t.testType === "Chip-in-Loop").length;
+    const hwLoopCount = tests.filter((t) => t.testType === "Functional Validation").length;
+    const swLoopCount = tests.filter((t) => t.testType === "Circuit Simulation").length;
+    const chipLoopCount = tests.filter((t) => t.testType === "Hardware Emulation").length;
     const unitTestCount = tests.filter((t) => t.testType === "Unit Test").length;
     const integrationTestCount = tests.filter((t) => t.testType === "Integration Test").length;
 
@@ -548,16 +536,54 @@ export default function Dashboard() {
 
                 <div className="flex gap-2">
                     {/* Hardware Filters Dropdown */}
+
+
+                    {isAdmin && (
+                        <Button
+                            className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5"
+                            size="sm"
+                            onClick={() => setIsCreateDrawerOpen(true)}
+                        >
+                            <RiAddLine className="h-4 w-4" />
+                            New Test
+                        </Button>
+                    )}
+                </div>
+            </div>
+
+            {/* Filters & Controls */}
+            <div className="flex flex-col lg:flex-row gap-4 mb-4">
+                <div className="flex-grow lg:max-w-md">
+                    <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <RiSearchLine className="h-4 w-4 text-gray-400" />
+                        </div>
+                        <input
+                            type="text"
+                            className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg
+                            bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white
+                            placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500
+                            text-sm shadow-sm transition duration-200 ease-in-out
+                            hover:border-gray-300 dark:hover:border-gray-600"
+                            placeholder="Search tests by name, type, or status..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                    </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button
                                 variant="outline"
                                 size="sm"
-                                className="flex items-center gap-1.5"
+                                className="flex items-center gap-1.5 w-[140px] bg-white border border-gray-200 rounded-lg text-sm h-9 shadow-sm hover:border-gray-300 transition duration-200 dark:bg-gray-800 dark:border-gray-700"
                             >
                                 <RiFilterLine className="h-4 w-4" />
                                 Filters
-                                <RiArrowDownSLine className="h-4 w-4" />
+                                <RiArrowDownSLine className="h-4 w-4 ml-auto" />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-64">
@@ -604,11 +630,48 @@ export default function Dashboard() {
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All Test Types</SelectItem>
-                                        <SelectItem value="Hardware-in-Loop">Hardware-in-Loop ({hwLoopCount})</SelectItem>
-                                        <SelectItem value="Software-in-Loop">Software-in-Loop ({swLoopCount})</SelectItem>
-                                        <SelectItem value="Chip-in-Loop">Chip-in-Loop ({chipLoopCount})</SelectItem>
+                                        <SelectItem value="Functional Validation">Functional Validation ({hwLoopCount})</SelectItem>
+                                        <SelectItem value="Circuit Simulation">Circuit Simulation ({swLoopCount})</SelectItem>
+                                        <SelectItem value="Hardware Emulation">Hardware Emulation ({chipLoopCount})</SelectItem>
                                         <SelectItem value="Unit Test">Unit Test ({unitTestCount})</SelectItem>
                                         <SelectItem value="Integration Test">Integration Test ({integrationTestCount})</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <DropdownMenuSeparator />
+                            
+                            <div className="p-2">
+                                <h3 className="font-medium text-sm mb-2">Test Status</h3>
+                                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                                    <SelectTrigger className="w-full text-xs h-8">
+                                        <SelectValue placeholder="All Tests" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Tests</SelectItem>
+                                        <SelectGroup>
+                                            <SelectGroupLabel>Status</SelectGroupLabel>
+                                            <SelectItem value="completed">Completed</SelectItem>
+                                            <SelectItem value="running">Running</SelectItem>
+                                            <SelectItem value="failed">Failed</SelectItem>
+                                            <SelectItem value="queued">Queued</SelectItem>
+                                        </SelectGroup>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <DropdownMenuSeparator />
+                            
+                            <div className="p-2">
+                                <h3 className="font-medium text-sm mb-2">Time Range</h3>
+                                <Select value={timeRange} onValueChange={setTimeRange}>
+                                    <SelectTrigger className="w-full text-xs h-8">
+                                        <SelectValue placeholder="Time Range" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Last 12 hours">Last 12 hours</SelectItem>
+                                        <SelectItem value="Last 24 hours">Last 24 hours</SelectItem>
+                                        <SelectItem value="Last 7 days">Last 7 days</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -624,6 +687,8 @@ export default function Dashboard() {
                                         setChipTypeFilter("all");
                                         setProcessorTypeFilter("all");
                                         setTestTypeFilter("all");
+                                        setSelectedCategory("all");
+                                        setTimeRange("Last 12 hours");
                                     }}
                                 >
                                     Reset Filters
@@ -631,74 +696,6 @@ export default function Dashboard() {
                             </div>
                         </DropdownMenuContent>
                     </DropdownMenu>
-
-                    {isAdmin && (
-                        <Button
-                            className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5"
-                            size="sm"
-                            onClick={() => setIsCreateDrawerOpen(true)}
-                        >
-                            <RiAddLine className="h-4 w-4" />
-                            New Test
-                        </Button>
-                    )}
-                </div>
-            </div>
-
-            {/* Filters & Controls */}
-            <div className="flex flex-col lg:flex-row gap-4 mb-4">
-                <div className="flex-grow lg:max-w-md">
-                    <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <RiSearchLine className="h-4 w-4 text-gray-400" />
-                        </div>
-                        <input
-                            type="text"
-                            className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg
-                            bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white
-                            placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500
-                            text-sm shadow-sm transition duration-200 ease-in-out
-                            hover:border-gray-300 dark:hover:border-gray-600"
-                            placeholder="Search tests by name, type, or status..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                    </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                    <Select
-                        value={selectedCategory}
-                        onValueChange={setSelectedCategory}
-                    >
-                        <SelectTrigger className="w-[140px] bg-white border border-gray-200 rounded-lg text-sm h-9 shadow-sm hover:border-gray-300 transition duration-200 dark:bg-gray-800 dark:border-gray-700">
-                            <SelectValue placeholder="All Tests" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Tests</SelectItem>
-                            <SelectGroup>
-                                <SelectGroupLabel>Status</SelectGroupLabel>
-                                <SelectItem value="completed">Completed</SelectItem>
-                                <SelectItem value="running">Running</SelectItem>
-                                <SelectItem value="failed">Failed</SelectItem>
-                                <SelectItem value="queued">Queued</SelectItem>
-                            </SelectGroup>
-                        </SelectContent>
-                    </Select>
-
-                    <Select
-                        value={timeRange}
-                        onValueChange={setTimeRange}
-                    >
-                        <SelectTrigger className="w-[140px] bg-white border border-gray-200 rounded-lg text-sm h-9 shadow-sm hover:border-gray-300 transition duration-200 dark:bg-gray-800 dark:border-gray-700">
-                            <SelectValue placeholder="Time Range" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="Last 12 hours">Last 12 hours</SelectItem>
-                            <SelectItem value="Last 24 hours">Last 24 hours</SelectItem>
-                            <SelectItem value="Last 7 days">Last 7 days</SelectItem>
-                        </SelectContent>
-                    </Select>
 
                     {selectedTests.length > 0 && (
                         <div className="flex items-center gap-2 ml-auto">
@@ -760,7 +757,7 @@ export default function Dashboard() {
                         <h3 className="mt-3 text-base font-medium text-gray-900 dark:text-white">
                             Unable to connect to API
                         </h3>
-                        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+                        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                             The test service is currently unavailable. This is why the table is empty.
                         </p>
                         <div className="mt-4 space-y-3">
@@ -876,7 +873,7 @@ export default function Dashboard() {
                                         onClick={() => handleRowClick(test)}
                                     >
                                         <span className="px-2 py-1 text-xs font-medium rounded-md bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
-                                            {test.testType || "Hardware-in-Loop"}
+                                            {test.testType || "Functional Validation"}
                                         </span>
                                     </TableCell>
                                     <TableCell
