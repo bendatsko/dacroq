@@ -238,6 +238,10 @@ def dict_from_row(row):
         return None
     return {key: row[key] for key in row.keys()}
 
+# --- Hardware and Device Communication ---
+# Global serial connection cache
+SERIAL_CONNECTIONS = {}
+
 # --- Servo Control Configuration ---
 SERVO_PINS = (12, 13, 18)          # hardware‑PWM GPIOs
 SERVO_MIN_US = 0.5 / 1000          # 0.0005 s
@@ -321,7 +325,8 @@ except ImportError:
     
     SERVO_AVAILABLE = False
 
-# --- File Storage Config & Other Helpers (unchanged) ---
+
+# --- File Storage Config & Other Helpers ---
 UPLOAD_FOLDER = Path.home() / "ksat-api" / "uploads"
 LARGE_DATA_FOLDER = Path.home() / "ksat-api" / "large_data"
 ALLOWED_EXTENSIONS = {'cnf', 'zip', 'txt', 'json'}
@@ -332,6 +337,101 @@ def allowed_file(filename):
 def generate_id():
     ts = int(datetime.now(pytz.timezone('America/Detroit')).timestamp())
     return f"{ts}-{uuid.uuid4().hex[:8]}"
+
+@app.route('/api/system/serial-ports', methods=['GET'])
+def get_serial_ports():
+    """Get a list of available serial ports"""
+    try:
+        import serial.tools.list_ports
+        ports = serial.tools.list_ports.comports()
+        
+        # First look for actual USB devices (ttyACM/ttyUSB)
+        port_list = []
+        usb_ports = []
+        
+        for port in ports:
+            port_info = {
+                'path': port.device,
+                'description': port.description,
+                'hardware_id': port.hwid if hasattr(port, 'hwid') else None,
+                'is_usb': 'USB' in port.description or 'ttyACM' in port.device or 'ttyUSB' in port.device
+            }
+            
+            if port_info['is_usb']:
+                usb_ports.append(port_info)
+            port_list.append(port_info)
+            
+        # If we found USB devices, associate them with platform names
+        mapped_ports = []
+        if usb_ports:
+            # Sort by device name to get consistent ordering
+            usb_ports.sort(key=lambda p: p['path'])
+            platform_names = ['LDPC', '3SAT', 'KSAT']
+            
+            for i, port in enumerate(usb_ports):
+                if i < len(platform_names):
+                    port['suggested_platform'] = platform_names[i]
+                    mapped_ports.append(port)
+        
+        # Add all other ports after the USB ports
+        for port in port_list:
+            if port not in mapped_ports:
+                mapped_ports.append(port)
+            
+        return jsonify({
+            'success': True,
+            'serial_ports': mapped_ports
+        })
+    except Exception as e:
+        logger.error(f"Error listing serial ports: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/system/serial-data/<port>', methods=['GET'])
+def get_serial_data(port):
+    """Read data from a serial port"""
+    try:
+        # Add /dev/ prefix if not present
+        if not port.startswith('/dev/'):
+            port_path = f"/dev/{port}"
+        else:
+            port_path = port
+            
+        # Create or reuse serial connection
+        if port not in SERIAL_CONNECTIONS or not SERIAL_CONNECTIONS[port].is_open:
+            # Try common baud rates
+            baud_rates = [115200, 9600, 57600, 38400]
+            
+            for baud_rate in baud_rates:
+                try:
+                    ser = serial.Serial(port_path, baud_rate, timeout=0.1)
+                    SERIAL_CONNECTIONS[port] = ser
+                    logger.info(f"Connected to {port_path} at {baud_rate} baud")
+                    break
+                except Exception as e:
+                    logger.error(f"Failed to connect to {port_path} at {baud_rate} baud: {e}")
+                    continue
+            else:
+                raise Exception(f"Could not connect to {port_path} at any baud rate")
+        
+        # Read data with timeout
+        ser = SERIAL_CONNECTIONS[port]
+        data = ""
+        
+        start_time = time.time()
+        while time.time() - start_time < 0.5:  # 500ms timeout
+            if ser.in_waiting > 0:
+                new_data = ser.read(ser.in_waiting).decode('utf-8', errors='replace')
+                data += new_data
+            time.sleep(0.05)
+                
+        return jsonify({
+            'success': True,
+            'port': port,
+            'data': data
+        })
+    except Exception as e:
+        logger.error(f"Error reading from serial port {port}: {e}")
+        return jsonify({'error': str(e)}), 500
 
 # --- API Metrics Middleware ---
 @app.before_request
@@ -990,9 +1090,9 @@ def get_single_hardware_device(device_id):
                 'voltage': voltage,
                 'last_seen': last_seen,
                 'metadata': json.dumps({
-                    'uptime': random.randint(3600, 86400 * 7),  # 1 hour to 7 days
-                    'load': round(random.uniform(0.1, 0.9), 2),
-                    'memory_used_percent': random.randint(10, 90)
+                    'baud_rate': 2000000,
+                    'connected_since': (datetime.now(pytz.timezone('America/Detroit')) - timedelta(hours=3)).isoformat(),
+                    'firmware_version': '1.2.1'
                 })
             }
             
@@ -1707,117 +1807,6 @@ def check_admin():
         logger.error(f"Error checking admin status: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/system/serial-ports', methods=['GET'])
-def get_serial_ports():
-    """Get a list of available serial ports on the system"""
-    try:
-        # Run ls command to find serial ports
-        process = subprocess.Popen(
-            'ls -l /dev/tty*',
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-        stdout, stderr = process.communicate(timeout=10)
-        
-        if process.returncode != 0:
-            return jsonify({
-                'error': 'Failed to list serial ports',
-                'message': stderr
-            }), 500
-        
-        # Parse the output to extract serial ports
-        lines = stdout.split('\n')
-        serial_ports = []
-        
-        for line in lines:
-            if '/dev/tty' in line:
-                parts = line.strip().split()
-                if len(parts) > 8:  # Standard ls -l format has multiple columns
-                    port_path = parts[-1]
-                    port_type = 'serial'
-                    
-                    # Try to determine more details about the port
-                    if 'USB' in line or 'ACM' in port_path:
-                        port_type = 'usb-serial'
-                    
-                    serial_ports.append({
-                        'path': port_path,
-                        'type': port_type,
-                        'permissions': parts[0]
-                    })
-        
-        return jsonify({'serial_ports': serial_ports})
-        
-    except Exception as e:
-        logger.error(f"Error getting serial ports: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/system/serial-data/<path:port>', methods=['GET'])
-def get_serial_data(port):
-    """Read data from a specified serial port"""
-    try:
-        # Validate port path for security
-        if not port.startswith('dev/tty'):
-            port = f'/dev/{port}' if not port.startswith('/dev/') else port
-            
-        if not port.startswith('/dev/tty'):
-            return jsonify({'error': 'Invalid serial port path'}), 400
-            
-        # Check if port exists
-        if not os.path.exists(port):
-            return jsonify({'error': f'Serial port {port} not found'}), 404
-            
-        # Try to read from the port
-        try:
-            with open(port, 'r') as f:
-                # Read with a timeout to avoid blocking forever
-                import select
-                readable, _, _ = select.select([f], [], [], 2.0)
-                
-                if readable:
-                    data = f.read(1024)  # Read up to 1KB
-                    return jsonify({
-                        'port': port,
-                        'data': data
-                    })
-                else:
-                    return jsonify({
-                        'port': port,
-                        'data': '',
-                        'message': 'No data available (timeout)'
-                    })
-                    
-        except PermissionError:
-            return jsonify({'error': f'Permission denied accessing {port}'}), 403
-        except Exception as e:
-            # Use alternative approach with cat command
-            process = subprocess.Popen(
-                f'timeout 2 cat {port}',
-                shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            stdout, stderr = process.communicate()
-            
-            if stderr:
-                return jsonify({
-                    'port': port,
-                    'error': stderr,
-                    'message': f'Error reading from {port}'
-                }), 500
-                
-            return jsonify({
-                'port': port,
-                'data': stdout
-            })
-            
-    except Exception as e:
-        logger.error(f"Error reading from serial port {port}: {e}")
-        return jsonify({'error': str(e)}), 500
-
 @app.route('/api/system-metrics/time-series', methods=['GET'])
 def get_system_time_series():
     """
@@ -1854,6 +1843,7 @@ def handle_announcements():
             # Get active announcements that haven't expired
             conn = get_db_connection()
             cursor = conn.cursor()
+            
             now = datetime.now(pytz.timezone('America/Detroit')).isoformat()
             
             cursor.execute('''
@@ -1967,9 +1957,9 @@ def platformio_operation():
         
         # Map hardware types to their project directories
         hardware_dirs = {
-            'armorgos': '/home/medusa/ksat-api/firmware_pioenv/Armorgos25w17a',
-            'daedalus': '/home/medusa/ksat-api/firmware_pioenv/Daedalus25w10a',
-            'medusa': '/home/medusa/ksat-api/firmware_pioenv/Medusa25w11a'
+            'armorgos': '/home/kite/dacroq/firmware/Armorgos25w17a',
+            'daedalus': '/home/kite/dacroq/firmware/Daedalus25w10a',
+            'ksat': '/home/kite/dacroq/firmware/Ksat25w11a'
         }
         
         if hardware_type not in hardware_dirs:
@@ -2133,6 +2123,44 @@ def servo_control():
         # Handle different servo actions
         result = {'success': True, 'action': action}
         
+        # Store active serial connections temporarily before any reset actions
+        active_serial_connections = {}
+        if action in ['press', 'reset_all']:
+            # Backup active serial connections (except the one being reset)
+            reset_servo_index = data.get('servo')
+            for port, connection in SERIAL_CONNECTIONS.items():
+                # Skip the connection being reset if we can identify it
+                if reset_servo_index is not None:
+                    # Map servo index to expected port patterns
+                    patterns = {
+                        0: ['ACM0', 'USB0'],  # LDPC
+                        1: ['ACM1', 'USB1'],  # 3SAT
+                        2: ['ACM2', 'USB2']   # KSAT
+                    }
+                    
+                    # Skip if port matches the pattern for the servo being reset
+                    should_skip = False
+                    if reset_servo_index in patterns:
+                        for pattern in patterns[reset_servo_index]:
+                            if pattern in port:
+                                should_skip = True
+                                break
+                                
+                    if should_skip:
+                        continue
+                        
+                # Save connection details for ports we want to preserve
+                if connection.is_open:
+                    try:
+                        active_serial_connections[port] = {
+                            'baudrate': connection.baudrate,
+                            'timeout': connection.timeout
+                        }
+                        # Close temporarily to avoid issues during reset
+                        connection.close()
+                    except Exception as e:
+                        logger.error(f"Error backing up serial connection {port}: {e}")
+        
         if action == 'move':
             # Move a specific servo to a specific angle
             servo_index = data.get('servo')
@@ -2180,6 +2208,29 @@ def servo_control():
             
         else:
             return jsonify({'error': f'Unknown action: {action}'}), 400
+        
+        # Restore serial connections after reset
+        if action in ['press', 'reset_all'] and active_serial_connections:
+            # Wait a moment for USB devices to re-enumerate
+            time.sleep(1.5)
+            
+            # Restore connections
+            for port, settings in active_serial_connections.items():
+                try:
+                    # Skip if the port no longer exists
+                    if not os.path.exists(port):
+                        logger.warning(f"Port {port} no longer available after reset")
+                        continue
+                        
+                    # Reopen the connection with saved settings
+                    SERIAL_CONNECTIONS[port] = serial.Serial(
+                        port, 
+                        settings['baudrate'],
+                        timeout=settings['timeout']
+                    )
+                    logger.info(f"Restored serial connection to {port}")
+                except Exception as e:
+                    logger.error(f"Error restoring serial connection to {port}: {e}")
             
         return jsonify(result)
         
@@ -2216,6 +2267,301 @@ def restart_service():
 
     threading.Thread(target=shutdown, daemon=True).start()
     return jsonify({"message": "Service restart initiated"}), 200
+
+@app.route('/api/firmware/reflash', methods=['POST'])
+def reflash_firmware():
+    """
+    Reflash **every** firmware sub‑project found under ./firmware
+    (3sat, ldpc, ksat, …).  
+    • Reads each project’s *platformio.ini* for upload_port
+      and monitor_port.  
+    • Runs platformio run --target upload inside the directory.  
+    • Opens the monitor port with pyserial to confirm the MCU
+      enumerates (5 s timeout).  
+    • Builds a per‑project report and returns once all have finished.
+    """
+    try:
+        base_dir   = Path(__file__).parent / "firmware"
+        projects   = [p for p in base_dir.iterdir() if p.is_dir()]
+        summary    = []
+
+        def get_ports(ini: Path):
+            up, mon = None, None
+            for ln in ini.read_text().splitlines():
+                ln = ln.strip()
+                if ln.startswith("upload_port"):
+                    up  = ln.split("=", 1)[1].strip()
+                elif ln.startswith("monitor_port"):
+                    mon = ln.split("=", 1)[1].strip()
+            return up, mon
+
+        for proj in projects:
+            ini = proj / "platformio.ini"
+            if not ini.exists():
+                summary.append({
+                    "project": proj.name,
+                    "status":  "skip",
+                    "reason":  "platformio.ini missing"
+                })
+                continue
+
+            upload_port, monitor_port = get_ports(ini)
+            if not upload_port or not monitor_port:
+                summary.append({
+                    "project": proj.name,
+                    "status":  "error",
+                    "reason":  "upload_port/monitor_port not found in ini"
+                })
+                continue
+
+            # --- upload ---
+            cmd = ["platformio", "run", "--target", "upload"]
+            proc = subprocess.run(cmd, cwd=proj, stdout=subprocess.PIPE,
+                                  stderr=subprocess.PIPE, text=True, timeout=90)
+
+            if proc.returncode != 0:
+                summary.append({
+                    "project": proj.name,
+                    "status":  "error",
+                    "stage":   "upload",
+                    "stdout":  proc.stdout,
+                    "stderr":  proc.stderr
+                })
+                continue
+
+            # --- monitor check ---
+            online = False
+            try:
+                with serial.Serial(monitor_port, 2_000_000, timeout=5) as ser:
+                    ser.flushInput()
+                    time.sleep(0.2)              # give MCU a breath
+                    ser.write(b'\n')              # poke
+                    ser.readline()                # try to read one line
+                    online = True
+            except Exception as e:
+                summary.append({
+                    "project": proj.name,
+                    "status":  "error",
+                    "stage":   "monitor",
+                    "reason":  str(e)
+                })
+                continue
+
+            summary.append({
+                "project": proj.name,
+                "status":  "success" if online else "unknown",
+                "upload_port":  upload_port,
+                "monitor_port": monitor_port,
+                "message": "yay 🎉" if online else "monitor silent"
+            })
+
+        return jsonify({"results": summary}), 200
+
+    except subprocess.TimeoutExpired:
+        return jsonify({
+            "error": "Upload timed out (90 s)",
+        }), 500
+    except Exception as e:
+        logger.error(f"reflash_firmware: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/hardware/test', methods=['POST'])
+def test_hardware():
+    """Run tests on a specific hardware platform"""
+    try:
+        data = request.json
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
+        platform = data.get('platform')
+        platform_id = data.get('platformId')
+        
+        if not platform or platform_id is None:
+            return jsonify({'error': 'Missing platform information'}), 400
+        
+        # Dynamic port mapping to actual serial ports based on platform ID
+        tty_devices = []
+        try:
+            # List all ttyACM* and ttyUSB* devices
+            devices = []
+            for pattern in ['/dev/ttyACM*', '/dev/ttyUSB*']:
+                import glob
+                devices.extend(glob.glob(pattern))
+            tty_devices = sorted(devices)
+            logger.info(f"Found serial devices: {tty_devices}")
+        except Exception as e:
+            logger.error(f"Error finding serial devices: {e}")
+        
+        # Map each platform ID to a port based on physical USB layout
+        if len(tty_devices) >= 3:
+            if platform_id == 0:
+                port = tty_devices[0]  # LDPC - bottom left
+            elif platform_id == 1:
+                port = tty_devices[1]  # 3SAT - top left
+            elif platform_id == 2:
+                port = tty_devices[2]  # KSAT - top right
+            else:
+                return jsonify({'error': f'Unknown platform ID: {platform_id}'}), 400
+        elif len(tty_devices) > 0:
+            # If we don't have 3 devices, just use what we have in order
+            if platform_id < len(tty_devices):
+                port = tty_devices[platform_id]
+            else:
+                return jsonify({
+                    'error': f'Not enough devices connected. Found {len(tty_devices)} devices, need device at position {platform_id}.',
+                    'devices': tty_devices
+                }), 404
+        else:
+            # No serial devices found
+            return jsonify({
+                'error': 'No serial devices found. Please make sure the devices are connected and programmed with serial functionality.',
+                'help': 'Teensy devices need firmware with Serial.begin() to appear as serial ports.'
+            }), 404
+        
+        # Simple test - try to open the port and read some data
+        try:
+            ser = serial.Serial(port, 115200, timeout=2)
+            ser.write(b'TEST\n')
+            response = ser.readline().decode('utf-8', errors='ignore').strip()
+            ser.close()
+            
+            return jsonify({
+                'success': True,
+                'message': f'Hardware test successful for {platform} (ID: {platform_id})',
+                'port': port,
+                'response': response or 'No response received, but port is accessible'
+            })
+        except serial.SerialException as e:
+            return jsonify({
+                'error': f'Failed to communicate with {platform}',
+                'port': port,
+                'details': str(e)
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error testing hardware: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/hardware/reset-all-connect', methods=['POST'])
+def reset_all_and_connect():
+    """
+    Reset all test platforms in sequence and then establish serial connections to each.
+    This ensures a clean state for all devices and proper enumeration.
+    """
+    try:
+        # First close any existing serial connections
+        for port, connection in list(SERIAL_CONNECTIONS.items()):
+            try:
+                if connection.is_open:
+                    connection.close()
+                    logger.info(f"Closed existing serial connection to {port}")
+            except Exception as e:
+                logger.error(f"Error closing serial connection to {port}: {e}")
+        
+        # Clear the connections dictionary
+        SERIAL_CONNECTIONS.clear()
+        
+        # Reset all platforms in sequence via servo control
+        logger.info("Resetting all test platforms...")
+        
+        # Reset LDPC (servo 0)
+        press_button_servo0()
+        time.sleep(1.0)  # Wait for device to reboot
+        
+        # Reset 3SAT (servo 1)
+        press_button_servo1()
+        time.sleep(1.0)  # Wait for device to reboot
+        
+        # Reset KSAT (servo 2)
+        press_button_servo2()
+        time.sleep(2.0)  # Extra wait after last device
+        
+        # Now scan for available USB devices and connect to them
+        import serial.tools.list_ports
+        import glob
+        
+        # Scan specifically for USB serial devices
+        tty_devices = []
+        for pattern in ['/dev/ttyACM*', '/dev/ttyUSB*']:
+            tty_devices.extend(glob.glob(pattern))
+        
+        # Sort to get consistent ordering
+        tty_devices.sort()
+        
+        # Common baud rates for Teensy
+        baud_rates = [2000000, 115200, 9600]
+        
+        # Platform mapping
+        platform_info = []
+        
+        # Find and connect to each platform by position
+        for i, port_path in enumerate(tty_devices):
+            if i >= 3:  # Only handle up to 3 platforms
+                break
+                
+            platform_name = ["LDPC", "3SAT", "KSAT"][i]
+            platform_desc = [
+                "Hardware Accelerator",
+                "Boolean Satisfiability Solver",
+                "K-SAT Solver"
+            ][i]
+            
+            # Try to connect
+            connected = False
+            connection_info = {"platform": platform_name, "port": port_path}
+            
+            for baud_rate in baud_rates:
+                try:
+                    # Create connection and store in global dictionary
+                    ser = serial.Serial(port_path, baud_rate, timeout=0.5)
+                    SERIAL_CONNECTIONS[port_path] = ser
+                    
+                    # Test with a newline to see if device responds
+                    ser.write(b'\n')
+                    response = ser.readline().decode('utf-8', errors='ignore').strip()
+                    
+                    connection_info.update({
+                        "baud_rate": baud_rate,
+                        "connected": True,
+                        "description": platform_desc,
+                        "response": response
+                    })
+                    
+                    connected = True
+                    logger.info(f"Connected to {platform_name} on {port_path} at {baud_rate} baud")
+                    break
+                    
+                except Exception as e:
+                    logger.error(f"Failed to connect to {port_path} at {baud_rate} baud: {e}")
+            
+            if not connected:
+                connection_info.update({
+                    "connected": False,
+                    "error": f"Could not connect to {platform_name} on {port_path}"
+                })
+                
+            platform_info.append(connection_info)
+        
+        # If we didn't find 3 devices, add placeholder info for missing ones
+        while len(platform_info) < 3:
+            i = len(platform_info)
+            platform_name = ["LDPC", "3SAT", "KSAT"][i]
+            platform_info.append({
+                "platform": platform_name,
+                "connected": False,
+                "error": f"{platform_name} device not found"
+            })
+        
+        return jsonify({
+            "success": True,
+            "message": "Reset all platforms and established connections",
+            "platforms": platform_info
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in reset-all-connect: {e}")
+        return jsonify({"error": str(e)}), 500
 
 # --- Entry Point ---
 if __name__ == '__main__':
