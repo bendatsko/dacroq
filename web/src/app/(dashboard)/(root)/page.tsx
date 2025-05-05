@@ -483,21 +483,21 @@ export default function MonitoringPage() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3">
           <PlatformResetCard
-            platform="AMORGOS LDPC Solver"
+            platform="AMORGOS"
             platformId={0}
-            description="Hardware Accelerator"
+            description="LDPC Solver ASIC"
             ref={platformRefs.LDPC}
           />
           <PlatformResetCard
-            platform="DAEDALUS 3SAT Solver"
+            platform="DAEDALUS"
             platformId={1}
-            description="Boolean Satisfiability Solver"
+            description="3SAT Solver ASIC"
             ref={platformRefs["3SAT"]}
           />
           <PlatformResetCard
-            platform="MEDUSA KSAT Solver"
+            platform="MEDUSA"
             platformId={2}
-            description="K-SAT Solver"
+            description="K-SAT Solver ASIC"
             ref={platformRefs.KSAT}
           />
         </div>

@@ -593,47 +593,6 @@ export default function Dashboard() {
                         </Link>
                     </div>
                 </div>
-                
-                {/* Stats Overview */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-                        <div className="flex items-center">
-                            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 mr-3">
-                                <RiFileListLine className="h-5 w-5" />
-                            </div>
-                            <div>
-                                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Tests</p>
-                                <p className="text-2xl font-semibold text-gray-900 dark:text-white">{tests.length}</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-                        <div className="flex items-center">
-                            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 mr-3">
-                                <RiCheckLine className="h-5 w-5" />
-                            </div>
-                            <div>
-                                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Completed</p>
-                                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                                    {tests.filter(test => test.status === 'completed').length}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-                        <div className="flex items-center">
-                            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 mr-3">
-                                <RiTimeLine className="h-5 w-5" />
-                            </div>
-                            <div>
-                                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">In Progress</p>
-                                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                                    {tests.filter(test => test.status === 'running' || test.status === 'scheduled').length}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
 
             {/* Filters and Actions */}
