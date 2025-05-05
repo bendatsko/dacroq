@@ -1,0 +1,11 @@
+# Fixed USB port naming rules for Dacroq platforms
+# Place this file in /etc/udev/rules.d/ and run 'sudo udevadm trigger'
+
+# LDPC Platform (use the idVendor and idProduct that match your device)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="16c0", ATTRS{idProduct}=="0478", SYMLINK+="ttyUSB_LDPC"
+
+# 3SAT Platform (use the idVendor and idProduct that match your device)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="16c0", ATTRS{idProduct}=="0478", ATTRS{serial}=="001535AB", SYMLINK+="ttyUSB_3SAT"
+
+# KSAT Platform (use the idVendor and idProduct that match your device)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="16c0", ATTRS{idProduct}=="0478", ATTRS{serial}=="00153ABC", SYMLINK+="ttyUSB_KSAT"
