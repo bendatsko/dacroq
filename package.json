@@ -1,0 +1,33 @@
+{
+  "name": "dacroq",
+  "version": "1.0.0",
+  "description": "Hardware test monitoring and management platform for LDPC research",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently --kill-others --names \"NEXT,API\" --prefix-colors \"cyan,yellow\" \"pnpm dev:frontend\" \"pnpm dev:backend\"",
+    "dev:frontend": "cd web && pnpm dev",
+    "dev:backend": "source .venv/bin/activate && cd daemon && python3 app.py",
+    "build": "cd web && pnpm build",
+    "start": "cd web && pnpm start",
+    "install:all": "pnpm install && cd web && pnpm install",
+    "clean": "cd web && pnpm clean && rm -rf .next",
+    "backend:install": "python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt",
+    "backend:test": "source .venv/bin/activate && cd daemon && python3 app_tests.py"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "python": ">=3.9.0"
+  },
+  "keywords": [
+    "ldpc",
+    "hardware-acceleration",
+    "analog-computing",
+    "vlsi",
+    "research"
+  ],
+  "author": "Benjamin Datsko",
+  "license": "MIT"
+} 

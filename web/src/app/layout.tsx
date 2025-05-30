@@ -1,13 +1,19 @@
 import './globals.css'
 import type { Metadata } from 'next'
 import { GeistSans } from "geist/font/sans"
-import { AnnouncementProvider } from "@/components/AnnouncementProvider"
+import { ThemeProvider } from "@/lib/theme"
 
+// =============================================================================
+// |                              METADATA                                     |
+// =============================================================================
 export const metadata: Metadata = {
   title: 'Dacroq - Hardware Test Platform',
   description: 'Hardware test monitoring and management platform',
 }
 
+// =============================================================================
+// |                            ROOT LAYOUT                                    |
+// =============================================================================
 export default function RootLayout({
   children,
 }: {
@@ -19,12 +25,12 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.ico" sizes="any" />
       </head>
       <body
-        className={`${GeistSans.className} min-h-full bg-white antialiased`}
+        className={`${GeistSans.className} min-h-full antialiased transition-colors duration-300`}
         suppressHydrationWarning
       >
-        <AnnouncementProvider>
+        <ThemeProvider defaultTheme="system" storageKey="dacroq-ui-theme">
           {children}
-        </AnnouncementProvider>
+        </ThemeProvider>
       </body>
     </html>
   )

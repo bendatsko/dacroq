@@ -86,11 +86,13 @@ export interface TestRun {
     processorType: string;
     testType: string;
     status: string;
-    created: any;
+    created?: string;
     created_at?: string;
+    createdAt?: string;
     environment?: string;
     testMode?: string;
     runtime?: number;
+    duration?: number;
     runsSolved?: number;
     runsAttempted?: number;
     metadata?: {

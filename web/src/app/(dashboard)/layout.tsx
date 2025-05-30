@@ -6,9 +6,9 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <div>
+    <div className="page-container">
       <Navigation />
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">{children}</div>
+      <div className="page-content">{children}</div>
     </div>
   )
 }

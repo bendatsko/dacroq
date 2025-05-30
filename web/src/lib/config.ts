@@ -1,12 +1,12 @@
 // API configuration for the application
 export const API_CONFIG = {
   // Base URL for the API endpoints
-  BASE_URL: "https://dacroq-api.bendatsko.com",
+  BASE_URL: "https://api.dacroq.net",
   
   // API endpoints
   ENDPOINTS: {
-    TESTS: "/api/tests",
-    SERVO: "/api/servo",
+    TESTS: "/tests",
+    SERVO: "/servo",
   },
   
   // Get the full URL for an API endpoint

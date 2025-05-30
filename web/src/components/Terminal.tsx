@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { RiLoader4Line, RiEyeLine, RiStopLine, RiPlayLine, RiRefreshLine } from "@remixicon/react";
 
 // API endpoint - using the same as in the main app
-const API_BASE = "https://dacroq-api.bendatsko.com";
+const API_BASE = "/api/proxy";
 
 // Terminal interface types
 interface TerminalHistoryItem {
@@ -61,7 +61,7 @@ export const Terminal = () => {
   // Fetch serial ports
   const fetchSerialPorts = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/admin/command`, {
+      const response = await fetch(`${API_BASE}/admin/command`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -92,7 +92,7 @@ export const Terminal = () => {
   // Fetch serial data from a specific port
   const fetchSerialData = async (port: string) => {
     try {
-      const response = await fetch(`${API_BASE}/api/admin/command`, {
+      const response = await fetch(`${API_BASE}/admin/command`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -115,7 +115,7 @@ export const Terminal = () => {
   // Check API status
   const checkApiStatus = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/health`);
+      const response = await fetch(`${API_BASE}/health`);
       const data = await response.json();
       setApiStatus(data.api_status || "unknown");
     } catch (error) {
@@ -127,7 +127,7 @@ export const Terminal = () => {
   // Fetch latest logs using the admin command endpoint
   const fetchLatestLogs = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/admin/command`, {
+      const response = await fetch(`${API_BASE}/admin/command`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -241,34 +241,7 @@ ${availableSerialPorts.map(port => `- ${port}`).join('\n')}`, false);
       }
       
       setIsExecuting(true);
-      try {
-        const response = await fetch(`${API_BASE}/api/announcements`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ 
-            message: message,
-            expires_in_seconds: 3600 // 1 hour default expiration
-          }),
-        });
-        
-        const result = await response.json();
-        
-        if (response.ok) {
-          addHistoryItem(`Announcement sent: "${message}"`, false);
-        } else {
-          addHistoryItem(`Failed to send announcement: ${result.error || 'Unknown error'}`, false, true);
-        }
-      } catch (error) {
-        console.error('Error sending announcement:', error);
-        addHistoryItem(`Failed to send announcement: ${error}`, false, true);
-      } finally {
-        setIsExecuting(false);
-      }
-      setCommand("");
-      return;
-    }
+
     
     if (command === 'toggle-polling') {
       setPollingActive(!pollingActive);
@@ -280,7 +253,7 @@ ${availableSerialPorts.map(port => `- ${port}`).join('\n')}`, false);
     if (command === 'freeze') {
       setIsExecuting(true);
       try {
-        const response = await fetch(`${API_BASE}/api/admin/command`, {
+        const response = await fetch(`${API_BASE}/admin/command`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -309,7 +282,7 @@ ${availableSerialPorts.map(port => `- ${port}`).join('\n')}`, false);
     if (command === 'unfreeze') {
       setIsExecuting(true);
       try {
-        const response = await fetch(`${API_BASE}/api/admin/command`, {
+        const response = await fetch(`${API_BASE}/admin/command`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -348,7 +321,7 @@ ${availableSerialPorts.map(port => `- ${port}`).join('\n')}`, false);
     // Execute command
     setIsExecuting(true);
     try {
-      const response = await fetch(`${API_BASE}/api/admin/command`, {
+      const response = await fetch(`${API_BASE}/admin/command`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
