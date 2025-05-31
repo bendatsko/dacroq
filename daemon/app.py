@@ -1226,8 +1226,12 @@ def handle_api_keys():
             cursor = conn.cursor()
             
             # For now, return empty list since we don't have user auth context
-            cursor.execute('SELECT id, name, created_at, last_used_at, expires_at FROM api_keys ORDER BY created_at DESC')
+            cursor.execute('SELECT id, name, key_hash, created_at as created, last_used_at as last_used FROM api_keys ORDER BY created_at DESC')
             keys = [dict_from_row(row) for row in cursor.fetchall()]
+            
+            # Add dummy key field since we don't store actual keys
+            for key in keys:
+                key['key'] = '••••••••'  # We don't return actual keys for security
             
             conn.close()
             return jsonify({'api_keys': keys})
@@ -1241,21 +1245,25 @@ def handle_api_keys():
             api_key = f"dacroq_{secrets.token_urlsafe(32)}"
             key_hash = secrets.token_hex(16)
             
+            # Generate ID once and reuse it
+            key_id = generate_id()
+            
             conn = get_db_connection()
             cursor = conn.cursor()
             
             cursor.execute('''
                 INSERT INTO api_keys (id, user_id, name, key_hash, created_at)
                 VALUES (?, ?, ?, ?, ?)
-            ''', (generate_id(), 'default-user', name, key_hash, datetime.utcnow().isoformat()))
+            ''', (key_id, 'default-user', name, key_hash, datetime.utcnow().isoformat()))
             
             conn.commit()
             conn.close()
             
             return jsonify({
-                'api_key': api_key,
+                'id': key_id,  # Use the same ID we used for the database
+                'key': api_key,
                 'name': name,
-                'created_at': datetime.utcnow().isoformat()
+                'created': datetime.utcnow().isoformat()
             }), 201
             
     except Exception as e:
