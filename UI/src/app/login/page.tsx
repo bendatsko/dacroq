@@ -7,12 +7,11 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 // Icons & UI Components
-import { RiGoogleFill, RiCpuLine } from "@remixicon/react";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { RiGoogleFill } from "@remixicon/react";
 
 // Authentication
 import { auth, User } from "@/lib/auth";
-import Navigation from "@/components/ui/Navigation";
+import Navigation from "@/components/Navigation";
 
 // =============================================================================
 // |                                TYPES                                      |
@@ -186,7 +185,6 @@ export default function LoginPage() {
         {/*  </div>*/}
         {/*</nav>*/}
 
-        <Navigation />
 
         {/* ─────────────────────────────────────────────────────────────────── */}
         {/* Main Content Area                                                     */}

@@ -7,8 +7,8 @@ import { ThemeProvider } from "@/lib/theme"
 // |                              METADATA                                     |
 // =============================================================================
 export const metadata: Metadata = {
-  title: 'Dacroq - Hardware Test Platform',
-  description: 'Hardware test monitoring and management platform',
+  title: 'Dacroq',
+  description: 'A web based telemetry framework for electronics research.',
 }
 
 // =============================================================================
