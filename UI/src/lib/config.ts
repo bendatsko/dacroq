@@ -1,7 +1,7 @@
 // API configuration for the application
 export const API_CONFIG = {
   // Base URL for the API endpoints
-  BASE_URL: "https://api.dacroq.net",
+  BASE_URL: process.env.NEXT_PUBLIC_API_BASE_URL || "https://api.dacroq.net",
   
   // API endpoints
   ENDPOINTS: {

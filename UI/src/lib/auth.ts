@@ -19,8 +19,8 @@ interface AuthResponse {
   user: User;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "https://api.dacroq.net";
-const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "your-google-client-id";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ;
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
 // Debug log to verify the client ID
 console.log("🔍 Google Client ID being used:", GOOGLE_CLIENT_ID);
