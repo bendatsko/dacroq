@@ -112,7 +112,7 @@ def auto_detect_boards():
 
 # --- CORS Configuration ---
 # Load allowed origins from environment variable, with fallback to defaults
-allowed_origins_env = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000,https://dacroq.eecs.umich.edu,https://dacroq-api.bendatsko.com,https://release.bendatsko.com,https://dacroq.net')
+allowed_origins_env = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000,https://dacroq.eecs.umich.edu,https://dacroq-api.bendatsko.com,https://release.bendatsko.com,https://dacroq.net, https://www.dacroq.net')
 ALLOWED_ORIGINS = set(origin.strip() for origin in allowed_origins_env.split(','))
 
 @app.after_request
