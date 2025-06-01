@@ -1,9 +1,10 @@
+// Navigation.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { RiCpuLine, RiShutDownLine } from "@remixicon/react";
+import { usePathname, useRouter } from "next/navigation";
+import { RiShutDownLine } from "@remixicon/react";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import AnnouncementBanner from "./AnnouncementBanner";
 import { ThemeToggle } from "./ThemeToggle";
 import { auth, User } from "@/lib/auth";
+import { DacroqLogo } from "@/components/DacroqLogo";
 
 /* -------------------------------------------------------------------------- */
 /*  CONSTANTS                                                                 */
@@ -49,6 +51,7 @@ const NAV_ITEMS = [
 export default function Navigation() {
   /* ----------------------------- state / refs ----------------------------- */
   const pathname = usePathname();
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -56,7 +59,10 @@ export default function Navigation() {
 
   /* -------------------------------- effect -------------------------------- */
   /* auth listener */
-  useEffect(() => auth.onAuthStateChanged(setUser), []);
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(setUser);
+    return () => unsubscribe();
+  }, []);
 
   /* navbar background on scroll */
   useEffect(() => {
@@ -83,9 +89,13 @@ export default function Navigation() {
   const handleSignOut = async () => {
     try {
       sessionStorage.setItem("intentionalLogout", "true");
+      setConfirmLogout(false); // Close dialog first
       await auth.signOut();
-    } finally {
-      window.location.href = "/login";
+      router.push("/login"); // Use Next.js router instead of window.location
+    } catch (error) {
+      console.error("Error during logout:", error);
+      // Still redirect on error
+      router.push("/login");
     }
   };
 
@@ -111,7 +121,7 @@ export default function Navigation() {
             <div className="flex h-full items-center">
               {/* brand */}
               <Link href="/dashboard" className="mr-8 flex h-[27px] items-center">
-                <RiCpuLine className="h-5 w-5 text-foreground/95" />
+                <DacroqLogo className="h-5 w-5 text-foreground/95" />
                 <span className="ml-1 hidden text-sm font-semibold text-foreground/95 sm:block ">
                 Dacroq
               </span>
@@ -160,7 +170,7 @@ export default function Navigation() {
                           Are you sure you want to log out?
                         </DialogTitle>
                         <DialogDescription className="text-muted-foreground">
-                          You’ll be redirected to the login page.
+                          You'll be redirected to the login page.
                         </DialogDescription>
                       </DialogHeader>
 

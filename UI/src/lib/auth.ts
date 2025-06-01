@@ -186,27 +186,18 @@ class AuthService {
   }
 
   public async signOut(): Promise<void> {
-    const userEmail = this.user?.email;
-    
     this.user = null;
     this.userInfoCache = {}; // Clear cache for security
     this.clearUserFromStorage();
     this.notifyListeners();
     
-    // Clear Google session more efficiently
+    // Disable auto-select to prevent automatic re-authentication
     if (typeof window !== 'undefined' && window.google) {
-      // Disable auto-select to prevent automatic re-authentication
-      window.google.accounts.id.disableAutoSelect();
-      
-      // Also revoke the current session if available
       try {
-        if (userEmail) {
-          window.google.accounts.id.revoke(userEmail, () => {
-            console.log('Google session revoked');
-          });
-        }
+        window.google.accounts.id.disableAutoSelect();
       } catch (error) {
         // Silent fail - not critical for sign out
+        console.debug('Google disableAutoSelect failed (non-critical):', error);
       }
     }
   }
@@ -215,21 +206,7 @@ class AuthService {
     return this.user;
   }
 
-  public async checkMaintenanceMode(): Promise<{ maintenanceMode: boolean; message?: string }> {
-    try {
-      const response = await fetch(`${API_BASE}/system/settings`);
-      if (response.ok) {
-        const data = await response.json();
-        return {
-          maintenanceMode: data.settings?.maintenanceMode === 'true',
-          message: data.settings?.maintenanceMessage
-        };
-      }
-    } catch (error) {
-      console.warn('Could not check maintenance mode:', error);
-    }
-    return { maintenanceMode: false };
-  }
+
 
   // API methods for user management (admin only)
   public async getUsers(): Promise<User[]> {

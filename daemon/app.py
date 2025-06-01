@@ -57,7 +57,7 @@ for directory in [DATA_DIR / 'database', LDPC_DATA_DIR, UPLOAD_DIR]:
 # CORS configuration
 ALLOWED_ORIGINS = set(
     origin.strip() for origin in
-    os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000,https://dacroq.net,https://www.dacroq.net').split(',')
+    os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000,https://dacroq.net,https://www.dacroq.net,https://test.dacroq.net').split(',')
 )
 
 
