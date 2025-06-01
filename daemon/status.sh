@@ -18,6 +18,7 @@ if tmux has-session -t dacroq 2>/dev/null; then
     else
         echo "Warning: Session exists but process not found"
     fi
+    
     echo
     echo "Commands:"
     echo "  View logs: tmux attach -t dacroq"
