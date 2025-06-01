@@ -76,7 +76,7 @@ const PARAMETER_OPTIONS = {
             { value: "random_string", label: "Random String" },
             { value: "ber_test", label: "BER Test" },
         ],
-        default: "custom_message",
+        default: "random_string",
         icon: <RiCodeSSlashLine className="h-4 w-4" />,
     },
     iterations: {

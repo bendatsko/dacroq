@@ -90,11 +90,13 @@ const PARAMETER_OPTIONS = {
         label: "Solver Type",
         type: "select",
         options: [
-            { value: "WalkSAT", label: "WalkSAT (Digital)" },
-            { value: "Daedalus", label: "Daedalus (Analog)" },
+            { value: "minisat", label: "MiniSAT", description: "Complete DPLL-based solver" },
+            { value: "walksat", label: "WalkSAT", description: "Stochastic local search" },
+            { value: "daedalus", label: "Daedalus", description: "Analog hardware accelerator" },
         ],
-        default: "WalkSAT",
+        default: "minisat",
         icon: <RiCodeSSlashLine className="h-4 w-4" />,
+        description: "Choose solver implementation"
     },
 
     input_mode: {
@@ -297,7 +299,7 @@ export default function SATTestingInterface() {
                         </CardDescription>
                     </CardHeader>
 
-                    <CardContent className="space-y-10 p-6">
+                    <CardContent className="space-y-3 p-6">
                         {/* --------------------- test name --------------------- */}
                         <div className="space-y-2">
                             <Label>Test Name</Label>

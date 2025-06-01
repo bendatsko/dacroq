@@ -663,127 +663,197 @@ export default function Dashboard() {
                                     <div className="overflow-x-auto">
                                         <table className="w-full">
                                             <thead className="border-b border-border bg-muted/50">
-                                                <tr>
-                                                    <Th>
-                                                        <Checkbox
-                                                            checked={selectedTests.length === currentTests.length && currentTests.length > 0}
-                                                            onCheckedChange={(checked) => setSelectedTests(checked ? currentTests.map((t) => t.id) : [])}
-                                                        />
-                                                    </Th>
-                                                    <Th>Test</Th>
-                                                    <Th>Platform</Th>
-                                                    <Th>Status</Th>
-                                                    <Th>Success Rate</Th>
-                                                    <Th>Created</Th>
-                                                </tr>
+                                            <tr>
+                                                <Th>
+                                                    <Checkbox
+                                                        checked={selectedTests.length === currentTests.length && currentTests.length > 0}
+                                                        onCheckedChange={(checked) => setSelectedTests(checked ? currentTests.map((t) => t.id) : [])}
+                                                    />
+                                                </Th>
+                                                <Th>Test Details</Th>
+                                                <Th>Hardware</Th>
+                                                <Th>Status</Th>
+                                                <Th>Date</Th>
+                                            </tr>
                                             </thead>
                                             <tbody className="divide-y divide-border">
-                                                {currentTests.map((test) => {
-                                                    const { fraction, percent } = getSuccessRate(test);
-                                                    const statusConfig = {
-                                                        completed: {
-                                                            icon: RiCheckLine,
-                                                            variant: "default",
-                                                        },
-                                                        running: {
-                                                            icon: RiTimeLine,
-                                                            variant: "secondary",
-                                                        },
-                                                        failed: {
-                                                            icon: RiCloseLine,
-                                                            variant: "destructive",
-                                                        },
-                                                        queued: {
-                                                            icon: RiTimeLine,
-                                                            variant: "outline",
-                                                        },
-                                                    } as const;
-                                                    const sc = statusConfig[test.status as keyof typeof statusConfig];
+                                            {currentTests.map((test) => {
+                                                const {fraction, percent} = getSuccessRate(test);
+                                                const statusConfig = {
+                                                    completed: {
+                                                        icon: RiCheckLine,
+                                                        variant: "default",
+                                                        color: "text-green-500",
+                                                        bg: "bg-green-500/10"
+                                                    },
+                                                    running: {
+                                                        icon: RiTimeLine,
+                                                        variant: "secondary",
+                                                        color: "text-blue-500",
+                                                        bg: "bg-blue-500/10"
+                                                    },
+                                                    failed: {
+                                                        icon: RiCloseLine,
+                                                        variant: "destructive",
+                                                        color: "text-red-500",
+                                                        bg: "bg-red-500/10"
+                                                    },
+                                                    queued: {
+                                                        icon: RiTimeLine,
+                                                        variant: "outline",
+                                                        color: "text-gray-500",
+                                                        bg: "bg-gray-500/10"
+                                                    },
+                                                } as const;
+                                                const sc = statusConfig[test.status as keyof typeof statusConfig];
 
-                                                    return (
-                                                        <tr
-                                                            key={test.id}
-                                                            className="cursor-pointer transition-colors hover:bg-muted/50"
-                                                            onClick={() => handleRowClick(test)}
-                                                        >
-                                                            <Td onClick={(e) => e.stopPropagation()}>
-                                                                <Checkbox
-                                                                    checked={selectedTests.includes(test.id)}
-                                                                    onCheckedChange={(checked) => {
-                                                                        setSelectedTests((prev) =>
-                                                                            checked
-                                                                                ? [...prev, test.id]
-                                                                                : prev.filter((id) => id !== test.id),
-                                                                        );
-                                                                    }}
-                                                                />
-                                                            </Td>
+                                                // Extract more meaningful data
+                                                const isLDPC = test.chipType === "LDPC";
+                                                const algorithmType = test.results?.algorithm_type || "unknown";
+                                                const noiseLevel = test.results?.noise_level;
+                                                const testMode = test.results?.test_mode;
 
-                                                            <Td>
-                                                                <div className="group">
-                                                                    <div className="font-medium text-foreground group-hover:text-blue-500 group-hover:underline">
+                                                // Get performance metrics for LDPC tests
+                                                let performanceInfo = null;
+                                                if (isLDPC && test.results?.results) {
+                                                    const metrics = calculateVLSIMetrics(
+                                                        test.results.results,
+                                                        algorithmType,
+                                                        test.id
+                                                    );
+                                                    if (metrics) {
+                                                        performanceInfo = {
+                                                            ber: metrics.bitErrorRate,
+                                                            fer: metrics.frameErrorRate,
+                                                            energy: metrics.energyPerBit,
+                                                            throughput: metrics.avgThroughput
+                                                        };
+                                                    }
+                                                }
+
+                                                return (
+                                                    <tr
+                                                        key={test.id}
+                                                        className="group cursor-pointer transition-colors hover:bg-muted/50"
+                                                        onClick={() => handleRowClick(test)}
+                                                    >
+                                                        <Td onClick={(e) => e.stopPropagation()}>
+                                                            <Checkbox
+                                                                checked={selectedTests.includes(test.id)}
+                                                                onCheckedChange={(checked) => {
+                                                                    setSelectedTests((prev) =>
+                                                                        checked
+                                                                            ? [...prev, test.id]
+                                                                            : prev.filter((id) => id !== test.id),
+                                                                    );
+                                                                }}
+                                                            />
+                                                        </Td>
+
+                                                        <Td>
+                                                            <div className="space-y-1">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div
+                                                                        className="font-medium text-foreground group-hover:text-blue-500 transition-colors">
                                                                         {test.name}
                                                                     </div>
-                                                                    <div className="text-xs text-muted-foreground sm:text-sm">
-                                                                        {test.testType}
+                                                                    {/* Algorithm type badge for LDPC */}
+                                                                    {isLDPC && algorithmType !== "unknown" && (
+                                                                        <Badge
+                                                                            variant={algorithmType === "analog_hardware" ? "default" : "secondary"}
+                                                                            className="text-xs"
+                                                                        >
+                                                                            {algorithmType === "analog_hardware" ? "Analog" : "Digital"}
+                                                                        </Badge>
+                                                                    )}
+                                                                </div>
+                                                                <div
+                                                                    className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                            <RiTestTubeLine className="h-3 w-3"/>
+                            {testMode || test.testType}
+                        </span>
+                                                                    {noiseLevel !== undefined && (
+                                                                        <span className="flex items-center gap-1">
+                                <RiFlashlightLine className="h-3 w-3"/>
+                                                                            {noiseLevel}% noise
+                            </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </Td>
+
+                                                        <Td>
+                                                            <div className="space-y-1">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className={cn(
+                                                                        "flex h-8 w-8 items-center justify-center rounded-lg",
+                                                                        isLDPC ? "bg-purple-500/10" : "bg-blue-500/10"
+                                                                    )}>
+                                                                        <RiCpuLine className={cn(
+                                                                            "h-4 w-4",
+                                                                            isLDPC ? "text-purple-500" : "text-blue-500"
+                                                                        )}/>
+                                                                    </div>
+                                                                    <div>
+                                                                        <div
+                                                                            className="font-medium text-foreground text-sm">
+                                                                            {test.chipType}
+                                                                        </div>
+                                                                        <div className="text-xs text-muted-foreground">
+                                                                            {test.processorType}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
-                                                            </Td>
+                                                            </div>
+                                                        </Td>
 
-                                                            <Td>
-                                                                <div className="text-xs sm:text-sm">
-                                                                    <div className="font-medium text-foreground">
-                                                                        {getPlatform(test)}
-                                                                    </div>
-                                                                    <div className="text-muted-foreground">
-                                                                        {test.processorType}
-                                                                    </div>
+                                                        <Td>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className={cn(
+                                                                    "flex h-8 w-8 items-center justify-center rounded-lg",
+                                                                    sc?.bg
+                                                                )}>
+                                                                    {sc &&
+                                                                        <sc.icon className={cn("h-4 w-4", sc.color)}/>}
                                                                 </div>
-                                                            </Td>
-
-                                                            <Td>
-                                                                <Badge
-                                                                    variant={sc?.variant as any}
-                                                                    className="flex w-fit items-center gap-1.5 text-xs sm:text-sm"
-                                                                >
-                                                                    {sc && <sc.icon className="h-3 w-3" />}
-                                                                    {test.status.charAt(0).toUpperCase() + test.status.slice(1)}
-                                                                </Badge>
-                                                            </Td>
-
-                                                            <Td>
-                                                                <div className="text-xs sm:text-sm">
-                                                                    <div className="font-medium text-foreground">
-                                                                        {fraction}
+                                                                <div>
+                                                                    <div className="font-medium text-sm">
+                                                                        {test.status.charAt(0).toUpperCase() + test.status.slice(1)}
                                                                     </div>
-                                                                    {percent && (
-                                                                        <div className="text-muted-foreground">
-                                                                            {percent}
+                                                                    {test.status === "completed" && test.duration && (
+                                                                        <div className="text-xs text-muted-foreground">
+                                                                            {test.duration}ms
                                                                         </div>
                                                                     )}
                                                                 </div>
-                                                            </Td>
+                                                            </div>
+                                                        </Td>
 
-                                                            <Td>
-                                                                <div className="text-xs sm:text-sm">
-                                                                    <div className="font-medium text-foreground">
-                                                                        {formatDate(test.createdAt)}
-                                                                    </div>
-                                                                    <div className="text-muted-foreground">
-                                                                        {formatTime(test.createdAt)}
-                                                                    </div>
+
+
+
+                                                        <Td>
+                                                            <div className="text-left">
+                                                                <div className="font-medium text-sm text-foreground">
+                                                                    {formatDate(test.createdAt)}
                                                                 </div>
-                                                            </Td>
-                                                        </tr>
-                                                    );
-                                                })}
+                                                                <div className="text-xs text-muted-foreground">
+                                                                    {formatTime(test.createdAt)}
+                                                                </div>
+                                                            </div>
+                                                        </Td>
+                                                    </tr>
+                                                );
+                                            })}
                                             </tbody>
                                         </table>
                                     </div>
 
                                     {/* Pagination */}
                                     {filteredTests.length > testsPerPage && (
-                                        <div className="flex items-center justify-between border-t border-border px-6 py-4">
+                                        <div
+                                            className="flex items-center justify-between border-t border-border px-6 py-4">
                                             <div className="text-sm text-muted-foreground">
                                                 Showing {indexOfFirstTest + 1}–
                                                 {Math.min(indexOfLastTest, filteredTests.length)} of{" "}
