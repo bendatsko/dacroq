@@ -176,6 +176,49 @@ const SATTestDetailsModal: React.FC<SATTestDetailsModalProps> = ({
                   </pre>
                                 </CardContent>
                             </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Solution Details</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    {/* DIMACS Output */}
+                                    <div>
+                                        <h4 className="font-medium mb-2">DIMACS Output</h4>
+                                        <pre className="bg-muted p-4 rounded-lg text-sm font-mono">
+                      {metadata.dimacs_output || `s ${metadata.satisfiable ? 'SATISFIABLE' : 'UNSATISFIABLE'}`}
+                    </pre>
+                                    </div>
+
+                                    {/* Variable Assignment */}
+                                    {metadata.solution && (
+                                        <div>
+                                            <h4 className="font-medium mb-2">Variable Assignment</h4>
+                                            <div className="bg-muted p-4 rounded-lg">
+                                                <div className="grid grid-cols-10 gap-2 text-sm font-mono">
+                                                    {metadata.solution.map((val: number, idx: number) => (
+                                                        <div key={idx} className={`text-center ${val > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                            {val}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Verification */}
+                                    <div className="flex items-center gap-2 p-4 bg-muted rounded-lg">
+                                        <Badge variant={metadata.satisfiable ? "default" : "secondary"}>
+                                            {metadata.satisfiable ? "✓ Solution Verified" : "✗ No Solution Exists"}
+                                        </Badge>
+                                        <span className="text-sm text-muted-foreground">
+                      Completed in {metadata.avg_solve_time_ms?.toFixed(3)} ms
+                    </span>
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+
                         </TabsContent>
 
                         {/* PERFORMANCE TAB */}
@@ -283,50 +326,6 @@ const SATTestDetailsModal: React.FC<SATTestDetailsModalProps> = ({
                                     </Card>
                                 </>
                             )}
-                        </TabsContent>
-
-                        {/* SOLUTION TAB */}
-                        <TabsContent value="solution" className="space-y-4">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Solution Details</CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    {/* DIMACS Output */}
-                                    <div>
-                                        <h4 className="font-medium mb-2">DIMACS Output</h4>
-                                        <pre className="bg-muted p-4 rounded-lg text-sm font-mono">
-                      {metadata.dimacs_output || `s ${metadata.satisfiable ? 'SATISFIABLE' : 'UNSATISFIABLE'}`}
-                    </pre>
-                                    </div>
-
-                                    {/* Variable Assignment */}
-                                    {metadata.solution && (
-                                        <div>
-                                            <h4 className="font-medium mb-2">Variable Assignment</h4>
-                                            <div className="bg-muted p-4 rounded-lg">
-                                                <div className="grid grid-cols-10 gap-2 text-sm font-mono">
-                                                    {metadata.solution.map((val: number, idx: number) => (
-                                                        <div key={idx} className={`text-center ${val > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                            {val}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Verification */}
-                                    <div className="flex items-center gap-2 p-4 bg-muted rounded-lg">
-                                        <Badge variant={metadata.satisfiable ? "default" : "secondary"}>
-                                            {metadata.satisfiable ? "✓ Solution Verified" : "✗ No Solution Exists"}
-                                        </Badge>
-                                        <span className="text-sm text-muted-foreground">
-                      Completed in {metadata.avg_solve_time_ms?.toFixed(3)} ms
-                    </span>
-                                    </div>
-                                </CardContent>
-                            </Card>
                         </TabsContent>
 
                         {/* COMPARISON TAB */}

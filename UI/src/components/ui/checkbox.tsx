@@ -18,9 +18,9 @@ const Checkbox = React.forwardRef<
         // base
         "relative inline-flex size-4 shrink-0 appearance-none items-center justify-center rounded shadow-sm outline-none ring-1 ring-inset transition duration-100 enabled:cursor-pointer",
         // text color
-        "text-white dark:text-gray-50",
+        "text-gray-50",
         // background color
-        "bg-white dark:bg-gray-950",
+        "",
         // ring color
         "ring-gray-300 dark:ring-gray-800",
         // disabled

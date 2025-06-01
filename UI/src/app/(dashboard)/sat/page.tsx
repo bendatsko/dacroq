@@ -275,14 +275,11 @@ export default function SATTestingInterface() {
         <div className="page-container">
             <div className="mx-auto max-w-4xl space-y-10 py-10 px-4">
                 {/* --------------------------- header --------------------------- */}
-                <div className="text-center">
-                    <div className="mb-6 inline-flex items-center justify-center rounded-2xl bg-muted p-3">
-                        <Sparkles className="h-8 w-8 text-muted-foreground" />
-                    </div>
+                <div className="text-left">
+
                     <h1 className="mb-4 text-4xl font-bold text-foreground">SAT Solver</h1>
-                    <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
-                        Solve Boolean satisfiability problems with advanced algorithms and
-                        hardware acceleration.
+                    <p className=" max-w-3xl text-lg text-muted-foreground">
+                        Solve boolean satisfiability problems using custom hardware and integrated software.
                     </p>
                 </div>
 
@@ -294,67 +291,21 @@ export default function SATTestingInterface() {
                             SAT Problem Configuration
                         </CardTitle>
                         <CardDescription>
-                            Paste CNF, pick an example, or auto-generate – then pick your
-                            solver.
+                            Pick your solver -> Then paste CNF, pick an example, or auto-generate to specify your input
                         </CardDescription>
                     </CardHeader>
 
-                    <CardContent className="space-y-3 p-6">
+                    <CardContent className="space-y-5 mt-4">
                         {/* --------------------- test name --------------------- */}
-                        <div className="space-y-2">
                             <Label>Test Name</Label>
                             <Input
                                 placeholder={`Auto: ${generateTestName()}`}
                                 value={testName}
                                 onChange={(e) => setTestName(e.target.value)}
-                                className="h-11"
+                                className="h-11 "
                             />
-                        </div>
-
+                        <Label>Solver Parameters</Label>
                         {/* ---------------- parameters header ---------------- */}
-                        <div className="flex items-center justify-between">
-                            <Label>Solver Parameters</Label>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="gap-2"
-                                onClick={() => setShowParameterSelector((s) => !s)}
-                            >
-                                <RiAddLine className="h-4 w-4" />
-                                Add Parameter
-                            </Button>
-                        </div>
-
-                        {/* ---------- parameter quick-add grid (hidden) --------- */}
-                        <AnimatePresence>
-                            {showParameterSelector && (
-                                <motion.div
-                                    initial={{ opacity: 0, height: 0 }}
-                                    animate={{ opacity: 1, height: "auto" }}
-                                    exit={{ opacity: 0, height: 0 }}
-                                    className="overflow-hidden"
-                                >
-                                    <div className="rounded-lg border-2 border-dashed border-border p-4">
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {Object.entries(PARAMETER_OPTIONS).map(([k, cfg]) =>
-                                                activeParameters[k] ? null : (
-                                                    <Button
-                                                        key={k}
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-auto justify-start gap-2 p-3"
-                                                        onClick={() => addParameter(k)}
-                                                    >
-                                                        {cfg.icon}
-                                                        <span>{cfg.label}</span>
-                                                    </Button>
-                                                ),
-                                            )}
-                                        </div>
-                                    </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
 
                         {/* ---------------- active parameter list --------------- */}
                         <div className="space-y-4">
@@ -460,8 +411,7 @@ export default function SATTestingInterface() {
                                     </>
                                 ) : (
                                     <>
-                                        <RiPlayLine className="h-5 w-5" />
-                                        Solve Problem
+                                        Run
                                         <ChevronRight className="ml-1 h-4 w-4" />
                                     </>
                                 )}

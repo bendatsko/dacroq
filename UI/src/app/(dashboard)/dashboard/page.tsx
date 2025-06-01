@@ -328,7 +328,6 @@ export default function Dashboard() {
                 id: t.id,
                 name: t.name,
                 chipType: t.chip_type || t.chipType || "LDPC",
-                processorType: t.processorType || "ARM (Teensy 4.1)",
                 testType: t.test_mode || t.testType || "Hardware Test",
                 status: t.status === "error" ? "failed" : t.status || "completed",
                 createdAt:
@@ -488,91 +487,17 @@ export default function Dashboard() {
     return (
         <div className="min-h-screen bg-background">
             <div className="flex-1 flex flex-col">
-                <main className="flex-1 py-4">
+                <main className="flex-1 py-1.5">
                     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+
                         {/* Header */}
-                        <div className="mb-4 flex items-center justify-between">
+                        <div className="mb-3 flex items-center justify-between">
                             <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-                            <div
-                                className={cn(
-                                    "flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
-                                    apiConnected
-                                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                        : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
-                                )}
-                            >
-                                {apiConnected ? (
-                                    <RiWifiLine className="h-4 w-4" />
-                                ) : (
-                                    <RiWifiOffLine className="h-4 w-4" />
-                                )}
-                                API {apiConnected ? "Online" : "Offline"}
-                            </div>
-                        </div>
 
-                        {/* Error banner */}
-                        {error && (
-                            <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800/50 dark:bg-red-900/20">
-                                <div className="flex items-start gap-3">
-                                    <div className="mt-0.5 flex-shrink-0 text-red-500">
-                                        <svg
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            viewBox="0 0 20 20"
-                                            fill="currentColor"
-                                            className="h-5 w-5"
-                                        >
-                                            <path
-                                                fillRule="evenodd"
-                                                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 002 0V6a1 1 0 00-1-1z"
-                                                clipRule="evenodd"
-                                            />
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <h3 className="mb-1 text-sm font-medium text-foreground">
-                                            Error
-                                        </h3>
-                                        <p className="text-sm text-red-600 dark:text-red-400">
-                                            {error}
-                                        </p>
-                                    </div>
-                                    <button
-                                        onClick={() => setError(null)}
-                                        className="text-muted-foreground hover:text-foreground"
-                                    >
-                                        <svg
-                                            className="h-4 w-4"
-                                            fill="none"
-                                            viewBox="0 0 24 24"
-                                            stroke="currentColor"
-                                        >
-                                            <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                strokeWidth={2}
-                                                d="M6 18L18 6M6 6l12 12"
-                                            />
-                                        </svg>
-                                        <span className="sr-only">Dismiss</span>
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Results intro */}
-                        <div className="mb-2 flex items-center justify-between">
-                            <div>
-                                <h2 className="text-lg font-semibold text-foreground">
-                                    Results
-                                </h2>
-                                <p className="text-sm text-muted-foreground">
-                                    View and manage your hardware test runs
-                                </p>
-                            </div>
                         </div>
 
                         {/* Search / filters */}
-                        <div className="mt-2 flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row">
+                        <div className="mt-2 flex flex-col gap-4 rounded-xl border border-border bg-card/50 p-2 sm:flex-row">
                             <div className="flex-1">
                                 <div className="relative">
                                     <RiSearchLine className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -713,24 +638,6 @@ export default function Dashboard() {
                                                 const noiseLevel = test.results?.noise_level;
                                                 const testMode = test.results?.test_mode;
 
-                                                // Get performance metrics for LDPC tests
-                                                let performanceInfo = null;
-                                                if (isLDPC && test.results?.results) {
-                                                    const metrics = calculateVLSIMetrics(
-                                                        test.results.results,
-                                                        algorithmType,
-                                                        test.id
-                                                    );
-                                                    if (metrics) {
-                                                        performanceInfo = {
-                                                            ber: metrics.bitErrorRate,
-                                                            fer: metrics.frameErrorRate,
-                                                            energy: metrics.energyPerBit,
-                                                            throughput: metrics.avgThroughput
-                                                        };
-                                                    }
-                                                }
-
                                                 return (
                                                     <tr
                                                         key={test.id}
@@ -799,9 +706,6 @@ export default function Dashboard() {
                                                                         <div
                                                                             className="font-medium text-foreground text-sm">
                                                                             {test.chipType}
-                                                                        </div>
-                                                                        <div className="text-xs text-muted-foreground">
-                                                                            {test.processorType}
                                                                         </div>
                                                                     </div>
                                                                 </div>

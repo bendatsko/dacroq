@@ -316,16 +316,11 @@ export default function LDPCTestingInterface() {
         <div className="page-container">
             <div className="mx-auto max-w-4xl space-y-10 py-10 px-4">
                 {/* --------------------------- header --------------------------- */}
-                <div className="text-center">
-                    <div className="mb-6 inline-flex items-center justify-center rounded-2xl bg-muted p-3">
-                        <Sparkles className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                    <h1 className="mb-4 text-4xl font-bold text-foreground">
-                        LDPC Error Correction
-                    </h1>
-                    <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
-                        Evaluate message-level error correction with analog/digital
-                        acceleration.
+                <div className="text-left">
+
+                    <h1 className="mb-4 text-4xl font-bold text-foreground">LDPC Solver</h1>
+                    <p className=" max-w-4xl text-lg text-muted-foreground">
+                        Decode binary low-density parity-check (LDPC) codes using high-efficiency analog compute cores.
                     </p>
                 </div>
 
@@ -333,7 +328,7 @@ export default function LDPCTestingInterface() {
                 <Card className="card-elevated">
                     <CardHeader className="border-b border-border">
                         <CardTitle className="flex items-center gap-2 text-xl">
-                            <RiSettings3Line className="h-5 w-5" />
+                            <RiSettings3Line className="h-5 w-5"/>
                             Test Configuration
                         </CardTitle>
                         <CardDescription>
@@ -362,7 +357,7 @@ export default function LDPCTestingInterface() {
                                 className="gap-2"
                                 onClick={() => setShowParameterSelector((s) => !s)}
                             >
-                                <RiAddLine className="h-4 w-4" />
+                                <RiAddLine className="h-4 w-4"/>
                                 Add Parameter
                             </Button>
                         </div>
@@ -371,9 +366,9 @@ export default function LDPCTestingInterface() {
                         <AnimatePresence>
                             {showParameterSelector && (
                                 <motion.div
-                                    initial={{ opacity: 0, height: 0 }}
-                                    animate={{ opacity: 1, height: "auto" }}
-                                    exit={{ opacity: 0, height: 0 }}
+                                    initial={{opacity: 0, height: 0}}
+                                    animate={{opacity: 1, height: "auto"}}
+                                    exit={{opacity: 0, height: 0}}
                                     className="overflow-hidden"
                                 >
                                     <div className="rounded-lg border-2 border-dashed border-border p-4">
@@ -408,8 +403,8 @@ export default function LDPCTestingInterface() {
                                 return (
                                     <motion.div
                                         key={key}
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{ opacity: 1, x: 0 }}
+                                        initial={{opacity: 0, x: -20}}
+                                        animate={{opacity: 1, x: 0}}
                                         className="space-y-3 rounded-lg bg-muted/50 p-4"
                                     >
                                         {/* header row */}
@@ -438,7 +433,7 @@ export default function LDPCTestingInterface() {
                                                     onClick={() => removeParameter(key)}
                                                     className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                                                 >
-                                                    <RiCloseLine className="h-4 w-4" />
+                                                    <RiCloseLine className="h-4 w-4"/>
                                                 </Button>
                                             )}
                                         </div>
@@ -454,8 +449,8 @@ export default function LDPCTestingInterface() {
                             {/* -------- custom / pre-written message controls -------- */}
                             {activeParameters.test_mode === "custom_message" && (
                                 <motion.div
-                                    initial={{ opacity: 0, x: -20 }}
-                                    animate={{ opacity: 1, x: 0 }}
+                                    initial={{opacity: 0, x: -20}}
+                                    animate={{opacity: 1, x: 0}}
                                     className="space-y-2 rounded-lg bg-muted/50 p-4 pl-12"
                                 >
                                     <Label>Custom Message</Label>
@@ -470,8 +465,8 @@ export default function LDPCTestingInterface() {
 
                             {activeParameters.test_mode === "pre_written" && (
                                 <motion.div
-                                    initial={{ opacity: 0, x: -20 }}
-                                    animate={{ opacity: 1, x: 0 }}
+                                    initial={{opacity: 0, x: -20}}
+                                    animate={{opacity: 1, x: 0}}
                                     className="space-y-4 rounded-lg bg-muted/50 p-4 pl-12"
                                 >
                                     <div className="space-y-2">
@@ -480,15 +475,17 @@ export default function LDPCTestingInterface() {
                                             value={selectedPreWritten}
                                             onValueChange={setSelectedPreWritten}
                                         >
-                                            <SelectTrigger className="h-11 w-full rounded-md border border-input bg-background focus:ring-2 focus:ring-ring">
-                                                <SelectValue placeholder="Choose…" />
+                                            <SelectTrigger
+                                                className="h-11 w-full rounded-md border border-input bg-background focus:ring-2 focus:ring-ring">
+                                                <SelectValue placeholder="Choose…"/>
                                             </SelectTrigger>
                                             <SelectContent>
                                                 {preWrittenMessages.map((m) => (
                                                     <SelectItem key={m.value} value={m.value}>
                                                         <div className="flex flex-col items-start">
                                                             <span className="font-medium">{m.label}</span>
-                                                            <span className="line-clamp-1 text-xs text-muted-foreground">
+                                                            <span
+                                                                className="line-clamp-1 text-xs text-muted-foreground">
                                 {m.content}
                               </span>
                                                         </div>
@@ -529,14 +526,14 @@ export default function LDPCTestingInterface() {
                             >
                                 {loading ? (
                                     <>
-                                        <RiLoader4Line className="h-5 w-5 animate-spin" />
+                                        <RiLoader4Line className="h-5 w-5 animate-spin"/>
                                         Running…
                                     </>
                                 ) : (
                                     <>
-                                        <RiPlayLine className="h-5 w-5" />
+                                        <RiPlayLine className="h-5 w-5"/>
                                         Run Test
-                                        <ChevronRight className="ml-1 h-4 w-4" />
+                                        <ChevronRight className="ml-1 h-4 w-4"/>
                                     </>
                                 )}
                             </Button>
