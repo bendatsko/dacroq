@@ -12,47 +12,42 @@ import {
 import { useTheme } from "@/lib/theme";
 
 export function ThemeToggle() {
-  const { setTheme } = useTheme();
-  const [open, setOpen] = React.useState(false);
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = React.useState(false);
 
-  // Prevent body scroll when dropdown is open
+  // Only show theme-specific icon after hydration to prevent SSR mismatch
   React.useEffect(() => {
-    if (open) {
-      // Save current scroll position
-      const scrollY = window.scrollY;
+    setMounted(true);
+  }, []);
 
-      // Add padding to compensate for scrollbar removal
-      const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-      document.body.style.paddingRight = `${scrollbarWidth}px`;
-      document.body.style.overflow = 'hidden';
-      document.body.style.position = 'fixed';
-      document.body.style.top = `-${scrollY}px`;
-      document.body.style.width = '100%';
-
-      return () => {
-        // Restore body scroll
-        document.body.style.paddingRight = '';
-        document.body.style.overflow = '';
-        document.body.style.position = '';
-        document.body.style.top = '';
-        document.body.style.width = '';
-
-        // Restore scroll position
-        window.scrollTo(0, scrollY);
-      };
+  // Get the appropriate icon based on current theme
+  const getIcon = () => {
+    if (!mounted) {
+      // Show a neutral icon during SSR/before hydration
+      return <RiSunLine className="h-[18px] w-[18px]" />;
     }
-  }, [open]);
+    
+    switch (theme) {
+      case "light":
+        return <RiSunLine className="h-[18px] w-[18px]" />;
+      case "dark":
+        return <RiMoonLine className="h-[18px] w-[18px]" />;
+      case "system":
+        return <RiComputerLine className="h-[18px] w-[18px]" />;
+      default:
+        return <RiSunLine className="h-[18px] w-[18px]" />;
+    }
+  };
 
   return (
-      <Dropdownmenu open={open} onOpenChange={setOpen}>
+      <Dropdownmenu modal={false}>
         <DropdownMenuTrigger asChild>
           <Button
               variant="ghost"
               size="sm"
-              className="h-[27px] px-2 text-muted-foreground hover:text-foreground "
+              className="h-[27px] px-2 text-muted-foreground hover:text-foreground"
           >
-            <RiSunLine className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-            <RiMoonLine className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            {getIcon()}
             <span className="sr-only">Toggle theme</span>
           </Button>
         </DropdownMenuTrigger>
@@ -63,21 +58,24 @@ export function ThemeToggle() {
         >
           <DropdownMenuItem
               onClick={() => setTheme("light")}
-              className="text-popover-foreground hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+              className="text-popover-foreground hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 [&:focus]:outline-none [&:focus]:ring-0 [&:focus-visible]:outline-none [&:focus-visible]:ring-0"
+              onMouseDown={(e) => e.preventDefault()}
           >
             <RiSunLine className="mr-2 h-4 w-4" />
             <span>Light</span>
           </DropdownMenuItem>
           <DropdownMenuItem
               onClick={() => setTheme("dark")}
-              className="text-popover-foreground hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+              className="text-popover-foreground hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 [&:focus]:outline-none [&:focus]:ring-0 [&:focus-visible]:outline-none [&:focus-visible]:ring-0"
+              onMouseDown={(e) => e.preventDefault()}
           >
             <RiMoonLine className="mr-2 h-4 w-4" />
             <span>Dark</span>
           </DropdownMenuItem>
           <DropdownMenuItem
               onClick={() => setTheme("system")}
-              className="text-popover-foreground hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+              className="text-popover-foreground hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 [&:focus]:outline-none [&:focus]:ring-0 [&:focus-visible]:outline-none [&:focus-visible]:ring-0"
+              onMouseDown={(e) => e.preventDefault()}
           >
             <RiComputerLine className="mr-2 h-4 w-4" />
             <span>System</span>

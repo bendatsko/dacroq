@@ -14,9 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
 import {
   LineChart,
   Line,
@@ -26,19 +24,17 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  ScatterChart,
-  Scatter,
-  ReferenceLine,
-  Area,
   AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  ReferenceLine,
 } from "recharts"
 import {
-  RiInformationLine,
-  RiBarChartLine,
   RiCpuLine,
-  RiFlashlightLine,
-  RiTimeLine,
+  RiBarChartLine,
   RiThunderstormsLine,
+  RiTimeLine,
   RiCheckboxCircleLine,
   RiCloseCircleLine,
 } from "@remixicon/react"
@@ -64,6 +60,37 @@ interface PerformanceMetrics {
   convergenceRate: number
 }
 
+/* -------------------------- formatting utilities ------------------------- */
+function formatEnergyPerBit(pJ: number): { value: number; unit: string } {
+  if (pJ >= 1e6) {
+    return { value: pJ / 1e6, unit: "μJ/bit" }
+  } else if (pJ >= 1e3) {
+    return { value: pJ / 1e3, unit: "nJ/bit" }
+  } else {
+    return { value: pJ, unit: "pJ/bit" }
+  }
+}
+
+function formatErrorRate(rate: number): string {
+  if (rate === 0) return "0%"
+  if (rate >= 0.01) return `${(rate * 100).toFixed(1)}%`
+  if (rate >= 0.001) return `${(rate * 100).toFixed(2)}%`
+  if (rate >= 1e-6) return `${(rate * 1e6).toFixed(1)} × 10⁻⁶`
+  return `${rate.toExponential(1)}`
+}
+
+function formatTime(microseconds: number): { value: number; unit: string } {
+  if (microseconds >= 1e6) {
+    return { value: microseconds / 1e6, unit: "s" }
+  } else if (microseconds >= 1e3) {
+    return { value: microseconds / 1e3, unit: "ms" }
+  } else if (microseconds >= 1) {
+    return { value: microseconds, unit: "μs" }
+  } else {
+    return { value: microseconds * 1e3, unit: "ns" }
+  }
+}
+
 /* -------------------------- performance analysis ------------------------- */
 function analyzePerformance(jobData: any): PerformanceMetrics | null {
   // First check if we have pre-calculated metrics from backend
@@ -79,7 +106,7 @@ function analyzePerformance(jobData: any): PerformanceMetrics | null {
         avgIterations: meta.avg_iterations || 1,
         energyPerBit: meta.energy_per_bit_pj || 0,
         avgPowerConsumption: meta.avg_power_consumption_mw || 0,
-        timeToSolution: meta.avg_execution_time_ms * 1e6, // Convert to ns
+        timeToSolution: meta.avg_execution_time_ms * 1e3, // Convert to μs
         convergenceRate: meta.convergence_rate || 0,
       }
     }
@@ -100,8 +127,8 @@ function analyzePerformance(jobData: any): PerformanceMetrics | null {
   const totalFrameErrors = results.reduce((sum: number, r: any) => sum + (r.frame_errors || 0), 0)
   const totalIterations = results.reduce((sum: number, r: any) => sum + (r.iterations || 0), 0)
 
-  const avgExecTime = execTimes.reduce((a, b) => a + b, 0) / execTimes.length || 0
-  const avgPower = powers.reduce((a, b) => a + b, 0) / powers.length || 0
+  const avgExecTime = execTimes.reduce((a: number, b: number) => a + b, 0) / execTimes.length || 0
+  const avgPower = powers.reduce((a: number, b: number) => a + b, 0) / powers.length || 0
 
   const codeLength = 96
   const infoBits = 48
@@ -115,7 +142,7 @@ function analyzePerformance(jobData: any): PerformanceMetrics | null {
     avgIterations: totalIterations / total,
     energyPerBit: avgPower && avgExecTime ? (avgPower * avgExecTime * 1e-3 / infoBits) * 1e12 : 0,
     avgPowerConsumption: avgPower,
-    timeToSolution: avgExecTime * 1e6, // ns
+    timeToSolution: avgExecTime * 1e3, // μs
     convergenceRate: successes.length / total,
   }
 }
@@ -156,11 +183,11 @@ function prepareChartData(results: any[]) {
 
 /* -------------------------------- component ------------------------------ */
 const LDPCJobDetailsModal: React.FC<LDPCJobDetailsModalProps> = ({
-                                                                   open,
-                                                                   onClose,
-                                                                   jobId,
-                                                                   jobData,
-                                                                 }) => {
+  open,
+  onClose,
+  jobId,
+  jobData,
+}) => {
   const metrics = useMemo(() => analyzePerformance(jobData), [jobData])
   const chartData = useMemo(() => prepareChartData(jobData?.results), [jobData?.results])
 
@@ -169,450 +196,274 @@ const LDPCJobDetailsModal: React.FC<LDPCJobDetailsModalProps> = ({
   const isAnalogHardware = jobData.algorithm_type === "analog_hardware"
   const config = jobData.config || {}
 
+  // Format energy with proper units
+  const energyFormatted = metrics ? formatEnergyPerBit(metrics.energyPerBit) : null
+  const timeFormatted = metrics ? formatTime(metrics.timeToSolution) : null
+
   return (
-      <Dialog open={open} onOpenChange={onClose}>
-        <DialogContent className="max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <DialogTitle className="text-2xl">LDPC Decoder Performance Analysis</DialogTitle>
-                <DialogDescription>
-                  {jobData.name} • Job ID: {jobId.slice(0, 8)}
-                </DialogDescription>
-              </div>
-              <Badge variant={jobData.status === "completed" ? "default" : "secondary"}>
-                {jobData.status}
-              </Badge>
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="w-full max-w-6xl h-[80vh] max-h-[80vh] overflow-hidden flex flex-col p-2 sm:p-6">
+        <DialogHeader className="space-y-1 shrink-0">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 sm:gap-2">
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="text-sm sm:text-xl lg:text-2xl font-semibold leading-tight">
+                {jobData.name}
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                ID: {jobId.slice(0, 8)}  •  Status: {jobData.status.charAt(0).toUpperCase() + jobData.status.slice(1)}
+                
+              </DialogDescription>
+              
             </div>
-          </DialogHeader>
+           
+          </div>
+        </DialogHeader>
 
-          <Tabs defaultValue="overview" className="flex-1 overflow-hidden">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="performance">Performance</TabsTrigger>
-              <TabsTrigger value="visualizations">Visualizations</TabsTrigger>
-              <TabsTrigger value="comparison">Comparison</TabsTrigger>
-            </TabsList>
+        <div className="flex-1 overflow-y-auto space-y-2 sm:space-y-4">
+          {/* Configuration & Key Metrics */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-4">
+            {/* Configuration Card */}
+            <Card>
+              <CardHeader className="pb-1 sm:pb-3">
+                <CardTitle className="text-xs sm:text-base flex items-center gap-1.5">
+                  <RiCpuLine className="h-3 w-3 sm:h-4 sm:w-4" />
+                  Configuration
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1 sm:space-y-2">
+                <InfoRow label="Algorithm" value={
+                  <Badge variant={isAnalogHardware ? "default" : "secondary"} className="text-xs px-1 py-0">
+                    {isAnalogHardware ? "Analog" : "Digital"}
+                  </Badge>
+                } />
+                <InfoRow label="Mode" value={jobData.test_mode || "N/A"} />
+                <InfoRow label="Code" value={`(${config.code_parameters?.n || 96}, ${config.code_parameters?.k || 48})`} />
+                <InfoRow label="Rate" value={`${(config.code_parameters?.rate || 0.5).toFixed(2)}`} />
+                <InfoRow label="SNR" value={`${config.snr_db?.toFixed(1) || "N/A"} dB`} />
+                <InfoRow label="Iterations" value={config.max_iterations || 10} />
+              </CardContent>
+            </Card>
 
-            <div className="overflow-y-auto max-h-[calc(90vh-180px)] mt-4">
-              {/* ----------------------- OVERVIEW TAB ----------------------- */}
-              <TabsContent value="overview" className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Configuration Card */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <RiCpuLine className="h-5 w-5" />
-                        Configuration
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <InfoRow label="Algorithm" value={
-                        <Badge variant={isAnalogHardware ? "default" : "secondary"}>
-                          {isAnalogHardware ? "Analog Hardware (Oscillator)" : "Digital Hardware (BP)"}
-                        </Badge>
-                      } />
-                      <InfoRow label="Test Mode" value={jobData.test_mode || "N/A"} />
-                      <InfoRow label="Code Parameters" value={`(${config.code_parameters?.n || 96}, ${config.code_parameters?.k || 48})`} />
-                      <InfoRow label="Code Rate" value={`${(config.code_parameters?.rate || 0.5).toFixed(2)}`} />
-                      <InfoRow label="Target SNR" value={`${config.snr_db?.toFixed(1) || "N/A"} dB`} />
-                      <InfoRow label="Max Iterations" value={config.max_iterations || 10} />
-                    </CardContent>
-                  </Card>
-
-                  {/* Quick Metrics Card */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <RiBarChartLine className="h-5 w-5" />
-                        Key Metrics
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {metrics && (
-                          <>
-                            <MetricRow
-                                label="Convergence Rate"
-                                value={`${(metrics.convergenceRate * 100).toFixed(2)}%`}
-                                highlight={metrics.convergenceRate > 0.99}
-                            />
-                            <MetricRow
-                                label="Frame Error Rate"
-                                value={metrics.frameErrorRate.toExponential(2)}
-                                highlight={metrics.frameErrorRate < 1e-4}
-                            />
-                            <MetricRow
-                                label="Bit Error Rate"
-                                value={metrics.bitErrorRate.toExponential(2)}
-                                highlight={metrics.bitErrorRate < 1e-5}
-                            />
-                            <MetricRow
-                                label="Time to Solution"
-                                value={`${(metrics.timeToSolution / 1000).toFixed(1)} μs`}
-                                highlight={isAnalogHardware && metrics.timeToSolution < 100000}
-                            />
-                            <MetricRow
-                                label="Energy Efficiency"
-                                value={`${metrics.energyPerBit.toFixed(2)} pJ/bit`}
-                                highlight={isAnalogHardware && metrics.energyPerBit < 10}
-                            />
-                          </>
-                      )}
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Message Recovery (if applicable) */}
-                {jobData.metadata?.original_message && (
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <RiInformationLine className="h-5 w-5" />
-                          Message Recovery
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        <div>
-                          <label className="text-sm font-medium text-muted-foreground">Original Message</label>
-                          <div className="font-mono bg-muted p-2 rounded mt-1">
-                            {jobData.metadata.original_message}
-                          </div>
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium text-muted-foreground">Decoded Message</label>
-                          <div className="font-mono bg-muted p-2 rounded mt-1 flex items-center gap-2">
-                            {jobData.metadata.decoded_message}
-                            {jobData.metadata.message_recovered ? (
-                                <RiCheckboxCircleLine className="h-5 w-5 text-green-500" />
-                            ) : (
-                                <RiCloseCircleLine className="h-5 w-5 text-red-500" />
-                            )}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                )}
-              </TabsContent>
-
-              {/* --------------------- PERFORMANCE TAB ---------------------- */}
-              <TabsContent value="performance" className="space-y-4">
+            {/* Key Metrics Card */}
+            <Card>
+              <CardHeader className="pb-1 sm:pb-3">
+                <CardTitle className="text-xs sm:text-base flex items-center gap-1.5">
+                  <RiBarChartLine className="h-3 w-3 sm:h-4 sm:w-4" />
+                  Key Metrics
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1 sm:space-y-2">
                 {metrics && (
-                    <>
-                      <div className="grid grid-cols-3 gap-4">
-                        <PerformanceCard
-                            title="Execution Performance"
-                            icon={<RiTimeLine />}
-                            metrics={[
-                              { label: "Avg Execution Time", value: `${metrics.avgExecutionTime.toFixed(2)} ms` },
-                              { label: "Time to Solution", value: `${(metrics.timeToSolution / 1000).toFixed(1)} μs` },
-                              { label: "Throughput", value: `${metrics.avgThroughput.toFixed(2)} Mbps` },
-                              { label: "Iterations", value: metrics.avgIterations.toFixed(1) },
-                            ]}
-                        />
-
-                        <PerformanceCard
-                            title="Error Performance"
-                            icon={<RiBarChartLine />}
-                            metrics={[
-                              { label: "FER", value: metrics.frameErrorRate.toExponential(2) },
-                              { label: "BER", value: metrics.bitErrorRate.toExponential(2) },
-                              { label: "Success Rate", value: `${(metrics.successRate * 100).toFixed(1)}%` },
-                              { label: "Convergence", value: `${(metrics.convergenceRate * 100).toFixed(2)}%` },
-                            ]}
-                        />
-
-                        <PerformanceCard
-                            title="Energy Performance"
-                            icon={<RiThunderstormsLine />}
-                            metrics={[
-                              { label: "Energy/bit", value: `${metrics.energyPerBit.toFixed(2)} pJ/bit` },
-                              { label: "Power", value: `${metrics.avgPowerConsumption.toFixed(1)} mW` },
-                              { label: "vs Digital BP", value: isAnalogHardware ? "11× better" : "Baseline" },
-                              { label: "vs State-of-Art", value: isAnalogHardware ? "3× better" : "—" },
-                            ]}
-                        />
-                      </div>
-
-                      {/* Detailed Statistics Table */}
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>Detailed Run Statistics</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                              <thead>
-                              <tr className="border-b">
-                                <th className="text-left p-2">Metric</th>
-                                <th className="text-right p-2">Min</th>
-                                <th className="text-right p-2">Mean</th>
-                                <th className="text-right p-2">Max</th>
-                                <th className="text-right p-2">Std Dev</th>
-                              </tr>
-                              </thead>
-                              <tbody>
-                              {jobData.results && calculateStatistics(jobData.results).map((stat: any) => (
-                                  <tr key={stat.metric} className="border-b">
-                                    <td className="p-2">{stat.metric}</td>
-                                    <td className="text-right p-2 font-mono">{stat.min}</td>
-                                    <td className="text-right p-2 font-mono font-medium">{stat.mean}</td>
-                                    <td className="text-right p-2 font-mono">{stat.max}</td>
-                                    <td className="text-right p-2 font-mono">{stat.stdDev}</td>
-                                  </tr>
-                              ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </>
+                  <>
+                    <MetricRow
+                      label="Convergence"
+                      value={formatErrorRate(metrics.convergenceRate)}
+                      highlight={metrics.convergenceRate > 0.99}
+                    />
+                    <MetricRow
+                      label="Frame Error"
+                      value={formatErrorRate(metrics.frameErrorRate)}
+                      highlight={metrics.frameErrorRate < 1e-4}
+                    />
+                    <MetricRow
+                      label="Bit Error"
+                      value={formatErrorRate(metrics.bitErrorRate)}
+                      highlight={metrics.bitErrorRate < 1e-5}
+                    />
+                    <MetricRow
+                      label="Time"
+                      value={timeFormatted ? `${timeFormatted.value.toFixed(1)} ${timeFormatted.unit}` : "N/A"}
+                      highlight={isAnalogHardware && metrics.timeToSolution < 100}
+                    />
+                    <MetricRow
+                      label="Energy"
+                      value={energyFormatted ? `${energyFormatted.value.toFixed(1)} ${energyFormatted.unit}` : "N/A"}
+                      highlight={isAnalogHardware && metrics.energyPerBit < 10}
+                    />
+                  </>
                 )}
-              </TabsContent>
+              </CardContent>
+            </Card>
+          </div>
 
-              {/* -------------------- VISUALIZATIONS TAB -------------------- */}
-              <TabsContent value="visualizations" className="space-y-4">
-                {/* SNR vs Error Rate Plot */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>SNR vs Error Rate Performance</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={chartData.scatter}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="snr" label={{ value: "SNR (dB)", position: "insideBottom", offset: -5 }} />
-                        <YAxis scale="log" domain={[1e-8, 1]} tickFormatter={(v) => v.toExponential(0)} />
-                        <Tooltip formatter={(v: any) => v.toExponential(2)} />
-                        <Legend />
-                        <Line type="monotone" dataKey="fer" stroke="#ef4444" name="FER" strokeWidth={2} />
-                        <Line type="monotone" dataKey="ber" stroke="#3b82f6" name="BER" strokeWidth={2} />
-                        <ReferenceLine y={1e-5} stroke="#666" strokeDasharray="5 5" label="Target BER" />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
+          {/* Performance Metrics Grid - Hide on small mobile */}
+          {metrics && (
+            <div className="hidden sm:grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+              <PerformanceCard
+                title="Execution Performance"
+                icon={<RiTimeLine className="h-3 w-3 sm:h-4 sm:w-4" />}
+                metrics={[
+                  { label: "Avg Execution Time", value: `${metrics.avgExecutionTime.toFixed(2)} ms` },
+                  { label: "Time to Solution", value: timeFormatted ? `${timeFormatted.value.toFixed(1)} ${timeFormatted.unit}` : "N/A" },
+                  { label: "Throughput", value: `${metrics.avgThroughput.toFixed(2)} Mbps` },
+                  { label: "Iterations", value: metrics.avgIterations.toFixed(1) },
+                ]}
+              />
 
-                {/* Execution Time Distribution */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Execution Time & Power Consumption</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <AreaChart data={chartData.histogram}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="run" label={{ value: "Test Run", position: "insideBottom", offset: -5 }} />
-                        <YAxis yAxisId="left" label={{ value: "Time (ms)", angle: -90, position: "insideLeft" }} />
-                        <YAxis yAxisId="right" orientation="right" label={{ value: "Power (mW)", angle: 90, position: "insideRight" }} />
-                        <Tooltip />
-                        <Legend />
-                        <Area yAxisId="left" type="monotone" dataKey="time" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.6} name="Execution Time" />
-                        <Area yAxisId="right" type="monotone" dataKey="power" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.6} name="Power" />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
+              <PerformanceCard
+                title="Error Performance"
+                icon={<RiBarChartLine className="h-3 w-3 sm:h-4 sm:w-4" />}
+                metrics={[
+                  { label: "FER", value: formatErrorRate(metrics.frameErrorRate) },
+                  { label: "BER", value: formatErrorRate(metrics.bitErrorRate) },
+                  { label: "Success Rate", value: `${(metrics.successRate * 100).toFixed(1)}%` },
+                  { label: "Convergence", value: `${(metrics.convergenceRate * 100).toFixed(1)}%` },
+                ]}
+              />
 
-                {/* Success Rate Progress */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Convergence Analysis</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <LineChart data={chartData.histogram}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="run" />
-                        <YAxis domain={[0, 1]} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
-                        <Tooltip formatter={(v: any) => v ? "Success" : "Failed"} />
-                        <Line type="stepAfter" dataKey="success" stroke="#10b981" strokeWidth={2} name="Decode Success" />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              {/* --------------------- COMPARISON TAB ----------------------- */}
-              <TabsContent value="comparison" className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Performance Comparison vs State-of-the-Art</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    {/* Analog vs Digital Comparison */}
-                    <div>
-                      <h4 className="font-medium mb-3">Analog Hardware vs Digital Baseline</h4>
-                      <div className="grid grid-cols-2 gap-4">
-                        <ComparisonMetric
-                            label="Energy Efficiency"
-                            analogValue="5.47 pJ/bit"
-                            digitalValue="60.91 pJ/bit"
-                            improvement="11.1×"
-                            better={isAnalogHardware}
-                        />
-                        <ComparisonMetric
-                            label="Time to Solution"
-                            analogValue="89 ns"
-                            digitalValue="5 ms"
-                            improvement="56×"
-                            better={isAnalogHardware}
-                        />
-                        <ComparisonMetric
-                            label="Power Consumption"
-                            analogValue="5.9 mW"
-                            digitalValue="500 mW"
-                            improvement="85×"
-                            better={isAnalogHardware}
-                        />
-                        <ComparisonMetric
-                            label="Low SNR Performance"
-                            analogValue="3 OOM better"
-                            digitalValue="Baseline"
-                            improvement="1000×"
-                            better={isAnalogHardware}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Reference Implementations */}
-                    <div>
-                      <h4 className="font-medium mb-3">Published Results Comparison</h4>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                          <tr className="border-b">
-                            <th className="text-left p-2">Implementation</th>
-                            <th className="text-right p-2">Energy/bit</th>
-                            <th className="text-right p-2">Throughput</th>
-                            <th className="text-right p-2">Technology</th>
-                            <th className="text-right p-2">Year</th>
-                          </tr>
-                          </thead>
-                          <tbody>
-                          <tr className="border-b font-medium bg-primary/5">
-                            <td className="p-2">This Work (Analog)</td>
-                            <td className="text-right p-2">5.47 pJ/bit</td>
-                            <td className="text-right p-2">539 Mbps</td>
-                            <td className="text-right p-2">28nm CMOS</td>
-                            <td className="text-right p-2">2024</td>
-                          </tr>
-                          <tr className="border-b">
-                            <td className="p-2">SSC-L 2022 [1]</td>
-                            <td className="text-right p-2">60.91 pJ/bit</td>
-                            <td className="text-right p-2">1.78 Gbps</td>
-                            <td className="text-right p-2">40nm CMOS</td>
-                            <td className="text-right p-2">2022</td>
-                          </tr>
-                          <tr className="border-b">
-                            <td className="p-2">A-SSCC 2015 [2]</td>
-                            <td className="text-right p-2">18 pJ/bit</td>
-                            <td className="text-right p-2">18 Gbps</td>
-                            <td className="text-right p-2">28nm CMOS</td>
-                            <td className="text-right p-2">2015</td>
-                          </tr>
-                          <tr className="border-b">
-                            <td className="p-2">ISSCC 2014 [3]</td>
-                            <td className="text-right p-2">8.2 pJ/bit</td>
-                            <td className="text-right p-2">6 Gbps</td>
-                            <td className="text-right p-2">28nm FDSOI</td>
-                            <td className="text-right p-2">2014</td>
-                          </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-
-                    {/* Visual Comparison Chart */}
-                    <div>
-                      <h4 className="font-medium mb-3">Energy Efficiency Comparison</h4>
-                      <ResponsiveContainer width="100%" height={200}>
-                        <BarChart data={[
-                          { name: "This Work", energy: 5.47 },
-                          { name: "ISSCC'14", energy: 8.2 },
-                          { name: "A-SSCC'15", energy: 18 },
-                          { name: "SSC-L'22", energy: 60.91 },
-                        ]}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="name" />
-                          <YAxis label={{ value: "Energy (pJ/bit)", angle: -90, position: "insideLeft" }} />
-                          <Tooltip />
-                          <Bar dataKey="energy" fill="#3b82f6" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
+              <PerformanceCard
+                title="Energy Performance"
+                icon={<RiThunderstormsLine className="h-3 w-3 sm:h-4 sm:w-4" />}
+                metrics={[
+                  { label: "Energy/bit", value: energyFormatted ? `${energyFormatted.value.toFixed(1)} ${energyFormatted.unit}` : "N/A" },
+                  { label: "Power", value: `${metrics.avgPowerConsumption.toFixed(1)} mW` },
+                  { label: "vs Digital BP", value: isAnalogHardware ? "Baseline" : "Baseline" },
+                  { label: "vs State-of-Art", value: isAnalogHardware ? "85× improvement" : "—" },
+                ]}
+              />
             </div>
-          </Tabs>
-        </DialogContent>
-      </Dialog>
+          )}
+
+          {/* Message Recovery - Only show if exists */}
+          {jobData.metadata?.original_message && (
+            <Card className="sm:block">
+              <CardHeader className="pb-1 sm:pb-3">
+                <CardTitle className="text-xs sm:text-base">Message Recovery</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1.5 sm:space-y-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Original</label>
+                  <div className="font-mono bg-muted p-1.5 sm:p-2 rounded-md mt-0.5 text-xs break-all">
+                    {jobData.metadata.original_message}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Decoded</label>
+                  <div className="font-mono bg-muted p-1.5 sm:p-2 rounded-md mt-0.5 text-xs break-all flex items-center gap-1.5">
+                    <span className="flex-1">{jobData.metadata.decoded_message}</span>
+                    {jobData.metadata.message_recovered ? (
+                      <RiCheckboxCircleLine className="h-3 w-3 text-green-500 shrink-0" />
+                    ) : (
+                      <RiCloseCircleLine className="h-3 w-3 text-red-500 shrink-0" />
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Charts - Hide on small mobile */}
+          {chartData.scatter.length > 0 && (
+            <Card className="hidden sm:block">
+              <CardHeader className="pb-1 sm:pb-3">
+                <CardTitle className="text-xs sm:text-base">Performance vs SNR</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={150}>
+                  <LineChart data={chartData.scatter}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="snr" />
+                    <YAxis scale="log" domain={[1e-8, 1]} tickFormatter={(v) => v.toExponential(0)} />
+                    <Tooltip formatter={(v: any) => formatErrorRate(v)} />
+                    <Line type="monotone" dataKey="fer" stroke="#ef4444" name="FER" strokeWidth={2} />
+                    <Line type="monotone" dataKey="ber" stroke="#3b82f6" name="BER" strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Comparison - Simplified on mobile */}
+          <Card>
+            <CardHeader className="pb-1 sm:pb-3">
+              <CardTitle className="text-xs sm:text-base">Performance vs Literature</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 sm:space-y-4">
+              {/* Power Comparison */}
+              <div>
+                <h4 className="text-xs font-medium mb-1.5">Power Consumption</h4>
+                <div className="flex justify-between items-center p-2 bg-primary/5 rounded-lg">
+                  <span className="text-xs">Analog: 5.9 mW</span>
+                  <Badge variant="default" className="text-xs px-1.5 py-0.5">85× better</Badge>
+                  <span className="text-xs">Digital: 500 mW</span>
+                </div>
+              </div>
+
+              {/* Table - Hide detailed columns on mobile */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left p-1 font-medium">Work</th>
+                      <th className="text-right p-1 font-medium">Energy</th>
+                      <th className="text-right p-1 font-medium hidden sm:table-cell">Speed</th>
+                      <th className="text-right p-1 font-medium">Year</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b font-medium bg-primary/5">
+                      <td className="p-1">This Work</td>
+                      <td className="text-right p-1">5.5 pJ/bit</td>
+                      <td className="text-right p-1 hidden sm:table-cell">539 Mbps</td>
+                      <td className="text-right p-1">2024</td>
+                    </tr>
+                    <tr className="border-b">
+                      <td className="p-1">SSC-L'22</td>
+                      <td className="text-right p-1">60.9 pJ/bit</td>
+                      <td className="text-right p-1 hidden sm:table-cell">1.78 Gbps</td>
+                      <td className="text-right p-1">2022</td>
+                    </tr>
+                    <tr className="border-b">
+                      <td className="p-1">ISSCC'14</td>
+                      <td className="text-right p-1">8.2 pJ/bit</td>
+                      <td className="text-right p-1 hidden sm:table-cell">6 Gbps</td>
+                      <td className="text-right p-1">2014</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
 /* ----------------------------- helper components ------------------------ */
 const InfoRow = ({ label, value }: { label: string; value: React.ReactNode }) => (
-    <div className="flex justify-between items-center">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="font-medium">{value}</span>
-    </div>
+  <div className="flex justify-between items-center min-h-[16px] sm:min-h-[18px]">
+    <span className="text-xs text-muted-foreground">{label}</span>
+    <span className="font-medium text-xs text-right">{value}</span>
+  </div>
 )
 
 const MetricRow = ({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) => (
-    <div className="flex justify-between items-center">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className={`font-medium ${highlight ? "text-green-600 dark:text-green-400" : ""}`}>
+  <div className="flex justify-between items-center min-h-[16px] sm:min-h-[18px]">
+    <span className="text-xs text-muted-foreground">{label}</span>
+    <span className={`font-medium text-xs text-right ${highlight ? "text-green-600 dark:text-green-400" : ""}`}>
       {value}
     </span>
-    </div>
+  </div>
 )
 
 const PerformanceCard = ({ title, icon, metrics }: { title: string; icon: React.ReactNode; metrics: Array<{ label: string; value: string }> }) => (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center gap-2">
-          {icon}
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {metrics.map((m, i) => (
-            <div key={i} className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">{m.label}</span>
-              <span className="font-mono text-sm font-medium">{m.value}</span>
-            </div>
-        ))}
-      </CardContent>
-    </Card>
-)
-
-const ComparisonMetric = ({
-                            label,
-                            analogValue,
-                            digitalValue,
-                            improvement,
-                            better
-                          }: {
-  label: string;
-  analogValue: string;
-  digitalValue: string;
-  improvement: string;
-  better: boolean;
-}) => (
-    <div className="p-4 border rounded-lg">
-      <div className="text-sm text-muted-foreground mb-2">{label}</div>
-      <div className="grid grid-cols-2 gap-2 text-sm">
-        <div className={better ? "font-medium text-green-600 dark:text-green-400" : ""}>
-          Analog: {analogValue}
+  <Card>
+    <CardHeader className="pb-1 sm:pb-2">
+      <CardTitle className="text-xs sm:text-base flex items-center gap-1.5">
+        {icon}
+        {title}
+      </CardTitle>
+    </CardHeader>
+    <CardContent className="space-y-1 sm:space-y-1.5">
+      {metrics.map((m, i) => (
+        <div key={i} className="flex justify-between items-center min-h-[16px] sm:min-h-[18px]">
+          <span className="text-xs text-muted-foreground">{m.label}</span>
+          <span className="font-mono text-xs font-medium text-right">{m.value}</span>
         </div>
-        <div className={!better ? "font-medium" : "text-muted-foreground"}>
-          Digital: {digitalValue}
-        </div>
-      </div>
-      <div className="mt-2 text-xs text-center">
-        <Badge variant={better ? "default" : "secondary"}>{improvement} improvement</Badge>
-      </div>
-    </div>
+      ))}
+    </CardContent>
+  </Card>
 )
 
 /* ----------------------------- utility functions ------------------------ */
@@ -653,8 +504,5 @@ function formatValue(value: number, key: string): string {
     return value.toFixed(1)
   }
 }
-
-/* Missing import for BarChart */
-import { BarChart, Bar } from "recharts"
 
 export default LDPCJobDetailsModal

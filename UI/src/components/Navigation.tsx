@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { RiShutDownLine } from "@remixicon/react";
+import { RiShutDownLine, RiMenuLine } from "@remixicon/react";
 import {
   Dialog,
   DialogContent,
@@ -122,7 +122,7 @@ export default function Navigation() {
               {/* brand */}
               <Link href="/dashboard" className="mr-8 flex h-[27px] items-center">
                 <DacroqLogo className="h-5 w-5 text-foreground/95" />
-                <span className="ml-1 hidden text-sm font-semibold text-foreground/95 sm:block ">
+                <span className="ml-1 mt-0.5 md:mt-0 text-sm font-semibold text-foreground/95 leading-none flex items-center">
                 Dacroq
               </span>
               </Link>
@@ -145,13 +145,17 @@ export default function Navigation() {
               </div>
             </div>
 
+
             {/* mobile menu button */}
-            <button
-                onClick={() => setMobileOpen(true)}
-                className="md:hidden inline-flex items-center h-[27px] px-3 text-sm font-medium text-muted-foreground hover:text-foreground rounded-md hover:bg-accent"
-            >
-              Menu
-            </button>
+            <div className="flex h-full items-center gap-2 md:hidden">
+              <ThemeToggle />
+              <button
+                  onClick={() => setMobileOpen(true)}
+                  className="inline-flex items-center h-[27px] px-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-md hover:bg-accent"
+              >
+                <RiMenuLine className="h-4 w-4" />
+              </button>
+            </div>
 
             {/* theme + sign-out */}
             <div className="hidden h-full items-center gap-2 md:flex">
@@ -198,52 +202,87 @@ export default function Navigation() {
 
         {/* mobile sheet */}
         {mobileOpen && (
-            <div className="fixed inset-0 z-[70] bg-background">
-              <div className="mx-auto flex h-full max-w-5xl flex-col p-4">
-                {/* header */}
-                <div className="mb-6 flex items-center justify-between border-b border-border pb-4">
-                  <span className="text-base font-medium text-foreground">Menu</span>
-                  <div className="flex items-center gap-2">
-                    <ThemeToggle />
-                    <button
-                        onClick={() => setMobileOpen(false)}
-                        className="text-sm font-medium text-muted-foreground hover:text-foreground"
+            <>
+              {/* backdrop */}
+              <div 
+                className="fixed inset-0 z-[60] bg-black/20 backdrop-blur-sm animate-in fade-in duration-200"
+                onClick={() => setMobileOpen(false)}
+              />
+              
+              {/* mobile menu panel */}
+              <div className="fixed inset-x-0 top-0 z-[70] bg-background/95 backdrop-blur-md border-b border-border shadow-lg animate-in slide-in-from-top duration-300 ease-out">
+                {/* Gradient effects matching navbar */}
+                <div className="pointer-events-none absolute inset-0">
+                  <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-foreground/10 to-transparent" />
+                  <div className="absolute inset-x-0 bottom-0 h-[2px] bg-gradient-to-t from-foreground/5 to-transparent" />
+                </div>
+                
+                <div className="relative mx-auto max-w-7xl">
+                  {/* Mobile menu header - matches navbar structure */}
+                  <div className="flex h-11 items-center justify-between px-6 border-b border-border/50">
+                    {/* Logo section - matches navbar */}
+                    <Link 
+                      href="/dashboard" 
+                      className="flex h-[27px] items-center transition-colors hover:opacity-80"
+                      onClick={() => setMobileOpen(false)}
                     >
-                      Back
+                      <DacroqLogo className="h-5 w-5 text-foreground/95" />
+                      <span className="ml-1 mt-0.5 text-sm font-semibold text-foreground/95 leading-none flex items-center">
+                        Dacroq
+                      </span>
+                    </Link>
+
+                    {/* Close button - matches navbar button styling */}
+                    <button
+                      onClick={() => setMobileOpen(false)}
+                      className="inline-flex items-center h-[27px] px-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-md hover:bg-accent transition-all duration-200"
+                    >
+                      ✕
                     </button>
                   </div>
-                </div>
 
-
-                {/* nav links */}
-                <nav className="flex-1 space-y-2">
-                  {user &&
-                      NAV_ITEMS.map((item) => (
-                          <Link
-                              key={item.href}
-                              href={item.href}
-                              onClick={() => setMobileOpen(false)}
-                              className={linkClasses(
-                                  isActive(item),
-                                  "block rounded-md px-3 py-2 text-base font-medium"
-                              )}
-                          >
-                            {item.mobileLabel}
-                          </Link>
+                  {/* Navigation links */}
+                  <div className="px-6 py-4 space-y-1">
+                    {user &&
+                      NAV_ITEMS.map((item, index) => (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          onClick={() => setMobileOpen(false)}
+                          className={linkClasses(
+                            isActive(item),
+                            "flex items-center h-10 px-3 text-sm font-medium rounded-md transition-all duration-200 animate-in slide-in-from-left"
+                          )}
+                          style={{
+                            animationDelay: `${(index + 1) * 50}ms`,
+                            animationFillMode: 'both'
+                          }}
+                        >
+                          {item.mobileLabel}
+                        </Link>
                       ))}
-                </nav>
 
-                {/* sign-out */}
-                <div className="border-t border-border py-4">
-                  <button
-                      onClick={handleSignOut}
-                      className="w-full rounded-md px-3 py-2 text-left text-base text-destructive hover:bg-destructive/10"
-                  >
-                    Sign Out
-                  </button>
+                    {/* Sign out button - matches other navigation styling */}
+                    {user && (
+                      <button
+                        onClick={() => {
+                          setMobileOpen(false);
+                          handleSignOut();
+                        }}
+                        className="flex items-center h-10 px-3 w-full text-left text-sm font-medium text-red-500 hover:text-red-600 hover:bg-red-500/10 rounded-md transition-all duration-200 animate-in slide-in-from-left"
+                        style={{
+                          animationDelay: `${(NAV_ITEMS.length + 1) * 50}ms`,
+                          animationFillMode: 'both'
+                        }}
+                      >
+                        <RiShutDownLine className="h-4 w-4 mr-2" />
+                        Sign Out
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+            </>
         )}
 
         {/* spacer */}

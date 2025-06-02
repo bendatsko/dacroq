@@ -1,68 +1,55 @@
 #!/usr/bin/env python3
-"""
-Dacroq API Server - Backend for quantum-caliber LDPC decoder ASIC control
-Runs on Raspberry Pi 5 connected to Teensy 4.1 via USB3
-"""
-
-import os
-import sys
 import json
+import logging
+import os
+import sqlite3
+import struct
+import sys
+import threading
 import time
 import uuid
-import sqlite3
-import logging
-import threading
-from pathlib import Path
-from datetime import datetime, timedelta
 from contextlib import contextmanager
-
+from datetime import datetime
+from pathlib import Path
 import numpy as np
 import psutil
-from flask import Flask, jsonify, request, send_file
-from werkzeug.utils import secure_filename
-from google.auth.transport import requests as google_requests
-from google.oauth2 import id_token
-from pysat.formula import CNF
-from pysat.solvers import Solver
+import serial
+import serial.tools.list_ports
 
 # Environment setup
 from dotenv import load_dotenv
+from flask import Flask, jsonify, request
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token
 
-env_path = Path(__file__).parent.parent / '.env'
+env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(env_path)
-
-# App configuration
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
-
-# Logging
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB max file size
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    stream=sys.stdout
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    stream=sys.stdout,
 )
 logger = logging.getLogger(__name__)
-
-# Directory structure
 BASE_DIR = Path(__file__).parent.parent
-DATA_DIR = BASE_DIR / 'daemon' / 'data'
-DB_PATH = DATA_DIR / 'database' / 'dacroq.db'
-LDPC_DATA_DIR = DATA_DIR / 'ldpc'
-UPLOAD_DIR = BASE_DIR / 'uploads'
-
-# Ensure directories exist
-for directory in [DATA_DIR / 'database', LDPC_DATA_DIR, UPLOAD_DIR]:
+DATA_DIR = BASE_DIR / "daemon" / "data"
+DB_PATH = DATA_DIR / "database" / "dacroq.db"
+LDPC_DATA_DIR = DATA_DIR / "ldpc"
+UPLOAD_DIR = BASE_DIR / "uploads"
+for directory in [DATA_DIR / "database", LDPC_DATA_DIR, UPLOAD_DIR]:
     directory.mkdir(parents=True, exist_ok=True)
-
 # CORS configuration
 ALLOWED_ORIGINS = set(
-    origin.strip() for origin in
-    os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000,https://dacroq.net,https://www.dacroq.net,https://test.dacroq.net').split(',')
+    origin.strip()
+    for origin in os.getenv(
+        "ALLOWED_ORIGINS",
+        "http://localhost:3000,https://dacroq.net,https://www.dacroq.net,https://test.dacroq.net",
+    ).split(",")
 )
 
 
-# --- Database ---
-
+# --- Database -----------------------------------------------------------------
 @contextmanager
 def get_db():
     """Database connection context manager"""
@@ -77,7 +64,8 @@ def get_db():
 def init_db():
     """Initialize database schema"""
     with get_db() as conn:
-        conn.executescript('''
+        conn.executescript(
+            """
             -- Core tables
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY,
@@ -147,12 +135,12 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub);
             CREATE INDEX IF NOT EXISTS idx_tests_created ON tests(created);
             CREATE INDEX IF NOT EXISTS idx_ldpc_jobs_created ON ldpc_jobs(created);
-        ''')
+        """
+        )
         conn.commit()
 
 
-# --- Middleware ---
-
+# --- Middleware ---------------------------------------------------------------
 @app.before_request
 def start_timer():
     request.start_time = time.time()
@@ -161,202 +149,212 @@ def start_timer():
 @app.after_request
 def after_request(response):
     """Add CORS headers and log slow requests"""
-    # CORS
-    origin = request.headers.get('Origin')
+    origin = request.headers.get("Origin")
     if origin in ALLOWED_ORIGINS:
-        response.headers['Access-Control-Allow-Origin'] = origin
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
-        response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+        response.headers["Access-Control-Allow-Methods"] = "GET,PUT,POST,DELETE,OPTIONS"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
 
-    # Log slow requests
-    if hasattr(request, 'start_time'):
+    if hasattr(request, "start_time"):
         duration = time.time() - request.start_time
         if duration > 1.0:
-            logger.warning(f"Slow request: {request.method} {request.path} took {duration:.2f}s")
-
+            logger.warning(
+                f"Slow request: {request.method} {request.path} took {duration:.2f}s"
+            )
     return response
 
 
 @app.before_request
 def handle_preflight():
-    """Handle CORS preflight requests"""
     if request.method == "OPTIONS":
         return "", 200
 
 
-# --- Utilities ---
-
-def generate_id():
-    """Generate unique ID"""
+# --- Utilities ----------------------------------------------------------------
+def generate_id() -> str:
     return str(uuid.uuid4())
 
 
 def dict_from_row(row):
-    """Convert sqlite3.Row to dictionary"""
     return {key: row[key] for key in row.keys()} if row else None
 
 
 def collect_system_metrics():
-    """Collect and store system metrics"""
     try:
-        cpu_percent = psutil.cpu_percent(interval=1)
-        memory = psutil.virtual_memory()
-        disk = psutil.disk_usage('/')
-
-        # Try to get temperature (platform-specific)
-        temperature = None
+        cpu = psutil.cpu_percent(interval=1)
+        mem = psutil.virtual_memory()
+        disk = psutil.disk_usage("/")
+        temp = None
         if hasattr(psutil, "sensors_temperatures"):
             temps = psutil.sensors_temperatures()
             for name, entries in temps.items():
-                if entries and 'cpu' in name.lower():
-                    temperature = entries[0].current
+                if entries and "cpu" in name.lower():
+                    temp = entries[0].current
                     break
-
         with get_db() as conn:
-            conn.execute('''
-                INSERT INTO system_metrics (id, timestamp, cpu_percent, memory_percent, disk_percent, temperature)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (generate_id(), datetime.utcnow().isoformat(), cpu_percent, memory.percent, disk.percent, temperature))
+            conn.execute(
+                """
+                INSERT INTO system_metrics
+                (id,timestamp,cpu_percent,memory_percent,disk_percent,temperature)
+                VALUES (?,?,?,?,?,?)
+            """,
+                (
+                    generate_id(),
+                    datetime.utcnow().isoformat(),
+                    cpu,
+                    mem.percent,
+                    disk.percent,
+                    temp,
+                ),
+            )
             conn.commit()
-
     except Exception as e:
-        logger.error(f"Error collecting system metrics: {e}")
+        logger.error(f"Metric collection error: {e}")
 
 
-# --- Authentication ---
-
-@app.route('/auth/google', methods=['POST'])
+# ------------------------------ Authentication -------------------------------
+@app.route("/auth/google", methods=["POST"])
 def google_auth():
     """Authenticate with Google OAuth"""
     try:
         data = request.get_json()
-        token = data.get('credential') or data.get('token')
-
+        token = data.get("credential") or data.get("token")
         if not token:
-            return jsonify({'error': 'No credential provided'}), 400
+            return jsonify({"error": "No credential provided"}), 400
 
-        google_client_id = os.getenv('GOOGLE_CLIENT_ID')
+        google_client_id = os.getenv("GOOGLE_CLIENT_ID")
         if not google_client_id:
-            return jsonify({'error': 'Server configuration error'}), 500
+            return jsonify({"error": "Server configuration error"}), 500
 
-        # Verify token with Google
         try:
-            idinfo = id_token.verify_oauth2_token(token, google_requests.Request(), google_client_id)
-            user_id = idinfo['sub']
-            email = idinfo['email']
-            name = idinfo.get('name', '')
+            idinfo = id_token.verify_oauth2_token(
+                token, google_requests.Request(), google_client_id
+            )
+            user_id = idinfo["sub"]
+            email = idinfo["email"]
+            name = idinfo.get("name", "")
         except ValueError:
-            # Development fallback - decode without verification
-            import base64
+            import base64, binascii
+
             try:
                 padded = token + "=" * (-len(token) % 4)
                 decoded = json.loads(base64.b64decode(padded))
-                user_id = decoded.get('sub', decoded.get('id'))
-                email = decoded.get('email')
-                name = decoded.get('name', '')
+                user_id = decoded.get("sub", decoded.get("id"))
+                email = decoded.get("email")
+                name = decoded.get("name", "")
                 logger.warning("Using unverified token (dev mode)")
-            except:
-                return jsonify({'error': 'Invalid token'}), 401
+            except (binascii.Error, json.JSONDecodeError):
+                return jsonify({"error": "Invalid token"}), 401
 
-        # Create or update user
         with get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT * FROM users WHERE google_sub = ? OR email = ?', (user_id, email))
-            user = cursor.fetchone()
-
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT * FROM users WHERE google_sub=? OR email=?", (user_id, email)
+            )
+            user = cur.fetchone()
             if user:
-                cursor.execute('UPDATE users SET last_login = ? WHERE id = ?',
-                               (datetime.utcnow().isoformat(), user['id']))
+                cur.execute(
+                    "UPDATE users SET last_login=? WHERE id=?",
+                    (datetime.utcnow().isoformat(), user["id"]),
+                )
                 user_data = dict_from_row(user)
             else:
-                new_user_id = generate_id()
-                cursor.execute('''
-                    INSERT INTO users (id, email, name, role, created_at, last_login, google_sub)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', (new_user_id, email, name, 'user',
-                      datetime.utcnow().isoformat(), datetime.utcnow().isoformat(), user_id))
+                new_uid = generate_id()
+                cur.execute(
+                    """
+                    INSERT INTO users (id,email,name,role,created_at,last_login,google_sub)
+                    VALUES (?,?,?,?,?,?,?)
+                """,
+                    (
+                        new_uid,
+                        email,
+                        name,
+                        "user",
+                        datetime.utcnow().isoformat(),
+                        datetime.utcnow().isoformat(),
+                        user_id,
+                    ),
+                )
                 user_data = {
-                    'id': new_user_id,
-                    'email': email,
-                    'name': name,
-                    'role': 'user'
+                    "id": new_uid,
+                    "email": email,
+                    "name": name,
+                    "role": "user",
                 }
             conn.commit()
-
-        return jsonify({'success': True, 'user': user_data})
-
+        return jsonify({"success": True, "user": user_data})
     except Exception as e:
         logger.error(f"Authentication error: {e}")
-        return jsonify({'error': 'Authentication failed'}), 500
+        return jsonify({"error": "Authentication failed"}), 500
 
 
-# --- Core API Endpoints ---
-
-@app.route('/')
+# ------------------------------ Root / Health --------------------------------
+@app.route("/")
 def index():
-    """API root endpoint"""
-    return jsonify({
-        'name': 'Dacroq API',
-        'version': '2.0',
-        'status': 'operational',
-        'endpoints': {
-            '/health': 'System health check',
-            '/tests': 'Test management',
-            '/ldpc/jobs': 'LDPC job management',
-            '/sat/solve': 'SAT solver',
-            '/users': 'User management',
-            '/announcements': 'System announcements'
+    return jsonify(
+        {
+            "name": "Dacroq API",
+            "version": "2.0",
+            "status": "operational",
+            "endpoints": {
+                "/health": "System health check",
+                "/tests": "Test management",
+                "/ldpc/jobs": "LDPC job management",
+                "/sat/solve": "SAT solver",
+                "/users": "User management",
+                "/announcements": "System announcements",
+                "/ldpc/deploy": "Deploy batch to Teensy console",
+                "/ldpc/command": "Send raw command to Teensy console",
+            },
         }
-    })
+    )
 
 
-@app.route('/health')
+@app.route("/health")
 def health():
-    """Health check endpoint"""
     try:
-        # Test database connection
         with get_db() as conn:
             conn.execute("SELECT 1")
-
-        return jsonify({
-            'status': 'healthy',
-            'timestamp': datetime.utcnow().isoformat(),
-            'uptime': time.time() - app.start_time if hasattr(app, 'start_time') else 0
-        })
+        return jsonify(
+            {
+                "status": "healthy",
+                "timestamp": datetime.utcnow().isoformat(),
+                "uptime": time.time() - app.start_time,
+            }
+        )
     except Exception as e:
-        return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
+        return jsonify({"status": "unhealthy", "error": str(e)}), 500
 
 
-# --- Test Management ---
-
-@app.route('/tests', methods=['GET', 'POST'])
+# ------------------------------ Tests API ------------------------------------
+@app.route("/tests", methods=["GET", "POST"])
 def handle_tests():
     """List tests or create new test"""
-    if request.method == 'GET':
+    if request.method == "GET":
         try:
-            chip_type = request.args.get('chip_type')
-            status = request.args.get('status')
-            limit = int(request.args.get('limit', 50))
-            offset = int(request.args.get('offset', 0))
+            chip_type = request.args.get("chip_type")
+            status = request.args.get("status")
+            limit = int(request.args.get("limit", 50))
+            offset = int(request.args.get("offset", 0))
 
             with get_db() as conn:
                 # Build query
-                query = 'SELECT * FROM tests'
+                query = "SELECT * FROM tests"
                 params = []
                 conditions = []
 
                 if chip_type:
-                    conditions.append('chip_type = ?')
+                    conditions.append("chip_type = ?")
                     params.append(chip_type)
                 if status:
-                    conditions.append('status = ?')
+                    conditions.append("status = ?")
                     params.append(status)
 
                 if conditions:
-                    query += ' WHERE ' + ' AND '.join(conditions)
+                    query += " WHERE " + " AND ".join(conditions)
 
-                query += ' ORDER BY created DESC LIMIT ? OFFSET ?'
+                query += " ORDER BY created DESC LIMIT ? OFFSET ?"
                 params.extend([limit, offset])
 
                 cursor = conn.execute(query, params)
@@ -364,7 +362,7 @@ def handle_tests():
 
                 # Parse JSON fields
                 for test in tests:
-                    for field in ['config', 'metadata']:
+                    for field in ["config", "metadata"]:
                         if test.get(field):
                             try:
                                 test[field] = json.loads(test[field])
@@ -372,74 +370,82 @@ def handle_tests():
                                 test[field] = {}
 
                 # Get total count
-                count_query = 'SELECT COUNT(*) as count FROM tests'
+                count_query = "SELECT COUNT(*) as count FROM tests"
                 if conditions:
-                    count_query += ' WHERE ' + ' AND '.join(conditions)
-                    count = conn.execute(count_query, params[:-2]).fetchone()['count']
+                    count_query += " WHERE " + " AND ".join(conditions)
+                    count = conn.execute(count_query, params[:-2]).fetchone()["count"]
                 else:
-                    count = conn.execute(count_query).fetchone()['count']
+                    count = conn.execute(count_query).fetchone()["count"]
 
-                return jsonify({
-                    'tests': tests,
-                    'total_count': count,
-                    'limit': limit,
-                    'offset': offset
-                })
+                return jsonify(
+                    {
+                        "tests": tests,
+                        "total_count": count,
+                        "limit": limit,
+                        "offset": offset,
+                    }
+                )
 
         except Exception as e:
             logger.error(f"Error listing tests: {e}")
-            return jsonify({'error': str(e)}), 500
+            return jsonify({"error": str(e)}), 500
 
     else:  # POST
         try:
             data = request.get_json()
 
             # Validate required fields
-            if not data.get('name') or not data.get('chip_type'):
-                return jsonify({'error': 'Missing required fields: name, chip_type'}), 400
+            if not data.get("name") or not data.get("chip_type"):
+                return (
+                    jsonify({"error": "Missing required fields: name, chip_type"}),
+                    400,
+                )
 
             test_id = generate_id()
 
             with get_db() as conn:
-                conn.execute('''
+                conn.execute(
+                    """
                     INSERT INTO tests (id, name, chip_type, test_mode, environment, config, status, created, metadata)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    test_id,
-                    data['name'],
-                    data['chip_type'],
-                    data.get('test_mode', 'standard'),
-                    data.get('environment', 'lab'),
-                    json.dumps(data.get('config', {})),
-                    'created',
-                    datetime.utcnow().isoformat(),
-                    json.dumps(data.get('metadata', {}))
-                ))
+                """,
+                    (
+                        test_id,
+                        data["name"],
+                        data["chip_type"],
+                        data.get("test_mode", "standard"),
+                        data.get("environment", "lab"),
+                        json.dumps(data.get("config", {})),
+                        "created",
+                        datetime.utcnow().isoformat(),
+                        json.dumps(data.get("metadata", {})),
+                    ),
+                )
                 conn.commit()
 
-            return jsonify({'id': test_id, 'message': 'Test created successfully'}), 201
+            return jsonify({"id": test_id, "message": "Test created successfully"}), 201
 
         except Exception as e:
             logger.error(f"Error creating test: {e}")
-            return jsonify({'error': str(e)}), 500
+            return jsonify({"error": str(e)}), 500
 
 
-@app.route('/tests/<test_id>', methods=['GET', 'DELETE'])
+@app.route("/tests/<test_id>", methods=["GET", "DELETE"])
 def handle_test_detail(test_id):
     """Get or delete test details"""
     try:
         with get_db() as conn:
-            if request.method == 'GET':
-                cursor = conn.execute('SELECT * FROM tests WHERE id = ?', (test_id,))
+            if request.method == "GET":
+                cursor = conn.execute("SELECT * FROM tests WHERE id = ?", (test_id,))
                 test = cursor.fetchone()
 
                 if not test:
-                    return jsonify({'error': 'Test not found'}), 404
+                    return jsonify({"error": "Test not found"}), 404
 
                 test_data = dict_from_row(test)
 
                 # Parse JSON fields
-                for field in ['config', 'metadata']:
+                for field in ["config", "metadata"]:
                     if test_data.get(field):
                         try:
                             test_data[field] = json.loads(test_data[field])
@@ -447,38 +453,39 @@ def handle_test_detail(test_id):
                             test_data[field] = {}
 
                 # Get test results
-                cursor = conn.execute('SELECT * FROM test_results WHERE test_id = ? ORDER BY timestamp DESC',
-                                      (test_id,))
+                cursor = conn.execute(
+                    "SELECT * FROM test_results WHERE test_id = ? ORDER BY timestamp DESC",
+                    (test_id,),
+                )
                 results = [dict_from_row(row) for row in cursor]
 
                 for result in results:
-                    if result.get('results'):
+                    if result.get("results"):
                         try:
-                            result['results'] = json.loads(result['results'])
+                            result["results"] = json.loads(result["results"])
                         except:
-                            result['results'] = {}
+                            result["results"] = {}
 
-                test_data['results'] = results
+                test_data["results"] = results
                 return jsonify(test_data)
 
             else:  # DELETE
-                cursor = conn.execute('DELETE FROM tests WHERE id = ?', (test_id,))
+                cursor = conn.execute("DELETE FROM tests WHERE id = ?", (test_id,))
                 if cursor.rowcount == 0:
-                    return jsonify({'error': 'Test not found'}), 404
+                    return jsonify({"error": "Test not found"}), 404
 
                 conn.commit()
-                return jsonify({'message': 'Test deleted successfully'})
+                return jsonify({"message": "Test deleted successfully"})
 
     except Exception as e:
         logger.error(f"Error handling test {test_id}: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-# --- LDPC Management ---
-
+# ------------------------------ LDPC models ----------------------------------
 class SimpleLDPCCodec:
     """
-      Research-grade LDPC codec matching the paper's (96,48) code
+    Research-grade LDPC codec matching the paper's (96,48) code
     """
 
     def __init__(self):
@@ -512,17 +519,17 @@ class SimpleLDPCCodec:
         received_bits = ((np.sign(received) - 1) / -2).astype(int)
 
         # LLRs for soft decoding
-        llrs = 2 * received / (noise_std ** 2)
+        llrs = 2 * received / (noise_std**2)
 
         return received_bits, llrs
 
-    def decode(self, llrs, algorithm='digital'):
+    def decode(self, llrs, algorithm="digital"):
         """Simplified decoder"""
         # For demo: just use hard decisions
         decoded_bits = (llrs < 0).astype(int)
 
         # Simulate algorithm-specific performance
-        if algorithm == 'analog_hardware':
+        if algorithm == "analog_hardware":
             success_rate = 0.98
             decode_time_ms = 0.089  # 89ns from paper
             power_mw = 5.47  # From paper
@@ -533,7 +540,7 @@ class SimpleLDPCCodec:
 
         success = np.random.random() < success_rate
 
-        return decoded_bits[:self.k], success, decode_time_ms, power_mw
+        return decoded_bits[: self.k], success, decode_time_ms, power_mw
 
     def _generate_regular_ldpc_matrix(self):
         """Generate regular (3,6) LDPC code parity check matrix"""
@@ -696,19 +703,32 @@ class LDPCDataGenerator:
     def __init__(self, n=96, k=48):
         self.n = n  # Codeword length
         self.k = k  # Information bits
-        self.snr_points = ["1dB", "2dB", "3dB", "4dB", "5dB", "6dB", "7dB", "8dB", "9dB", "10dB"]
+        self.snr_points = [
+            "1dB",
+            "2dB",
+            "3dB",
+            "4dB",
+            "5dB",
+            "6dB",
+            "7dB",
+            "8dB",
+            "9dB",
+            "10dB",
+        ]
         self.data_types = ["SOFT_INFO", "HARD_INFO"]
 
-    def generate_test_vectors(self, num_vectors=1000, snr_db=5.0, info_type="SOFT_INFO"):
+    def generate_test_vectors(
+        self, num_vectors=1000, snr_db=5.0, info_type="SOFT_INFO"
+    ):
         """Generate test vectors for a specific SNR point"""
         # Generate random information bits
         info_bits = np.random.randint(0, 2, (num_vectors, self.k))
 
         # Encode using systematic encoding (matching paper's implementation)
         codewords = np.zeros((num_vectors, self.n))
-        codewords[:, :self.k] = info_bits  # Systematic part
+        codewords[:, : self.k] = info_bits  # Systematic part
         # Note: In real implementation, would use proper LDPC encoding
-        codewords[:, self.k:] = np.random.randint(0, 2, (num_vectors, self.n - self.k))
+        codewords[:, self.k :] = np.random.randint(0, 2, (num_vectors, self.n - self.k))
 
         # BPSK modulation: 0 -> +1, 1 -> -1
         modulated = 1 - 2 * codewords
@@ -721,7 +741,7 @@ class LDPCDataGenerator:
 
         if info_type == "SOFT_INFO":
             # LLR computation for soft information
-            llrs = 2 * received / (noise_std ** 2)
+            llrs = 2 * received / (noise_std**2)
             # Quantize to match hardware (assuming 4-bit quantization from paper)
             max_llr = 8.0  # Maximum LLR value
             quantized = np.clip(llrs, -max_llr, max_llr)
@@ -746,46 +766,45 @@ class LDPCDataGenerator:
         num_vectors = len(vectors)
         for i in range(num_vectors):
             vector_path = info_dir / f"info{i + 1}.csv"
-            np.savetxt(str(vector_path), vectors[i], delimiter=',', fmt='%.6f')
+            np.savetxt(str(vector_path), vectors[i], delimiter=",", fmt="%.6f")
 
         return info_dir
 
 
-
+# ------------------------------ SAT models ----------------------------------
 class SATSolverBenchmark:
     """Benchmark different SAT solver implementations"""
 
     def __init__(self):
         self.solver_configs = {
-            'minisat': {
-                'type': 'digital',
-                'base_power_mw': 100,
-                'energy_per_clause_pj': 50
+            "minisat": {
+                "type": "digital",
+                "base_power_mw": 100,
+                "energy_per_clause_pj": 50,
             },
-            'walksat': {
-                'type': 'digital',
-                'base_power_mw': 80,
-                'energy_per_clause_pj': 30
+            "walksat": {
+                "type": "digital",
+                "base_power_mw": 80,
+                "energy_per_clause_pj": 30,
             },
-            'daedalus': {
-                'type': 'analog',
-                'base_power_mw': 10,
-                'energy_per_clause_pj': 5
-            }
+            "daedalus": {
+                "type": "analog",
+                "base_power_mw": 10,
+                "energy_per_clause_pj": 5,
+            },
         }
 
-    def solve_with_metrics(self, dimacs_str, solver_type='minisat'):
+    def solve_with_metrics(self, dimacs_str, solver_type="minisat"):
         """Solve SAT problem with performance metrics"""
-        import io
         from pysat.formula import CNF
         from pysat.solvers import Minisat22, Solver
 
         # Parse problem size
-        lines = dimacs_str.strip().split('\n')
+        lines = dimacs_str.strip().split("\n")
         num_vars = 0
         num_clauses = 0
         for line in lines:
-            if line.startswith('p cnf'):
+            if line.startswith("p cnf"):
                 parts = line.split()
                 num_vars = int(parts[2])
                 num_clauses = int(parts[3])
@@ -794,15 +813,19 @@ class SATSolverBenchmark:
         # Solve with timing
         start_time = time.perf_counter()
 
-        if solver_type in ['minisat', 'daedalus']:
+        if solver_type in ["minisat", "daedalus"]:
             # Use MiniSAT for both (simulate Daedalus performance)
             cnf = CNF(from_string=dimacs_str)
             with Minisat22(bootstrap_with=cnf.clauses) as solver:
                 sat = solver.solve()
                 solution = solver.get_model() if sat else []
-                propagations = solver.nof_clauses() if hasattr(solver, 'nof_clauses') else num_clauses * 10
+                propagations = (
+                    solver.nof_clauses()
+                    if hasattr(solver, "nof_clauses")
+                    else num_clauses * 10
+                )
 
-        elif solver_type == 'walksat':
+        elif solver_type == "walksat":
             # Simulate WalkSAT (stochastic local search)
             cnf = CNF(from_string=dimacs_str)
             # For demo, use regular solver but add randomness to metrics
@@ -816,73 +839,76 @@ class SATSolverBenchmark:
         # Calculate metrics based on solver type
         config = self.solver_configs[solver_type]
 
-        if solver_type == 'daedalus':
+        if solver_type == "daedalus":
             # Analog solver: much faster and more efficient
             solve_time_ms = solve_time * 1000 * 0.01  # 100x speedup
-            energy_pj = num_clauses * config['energy_per_clause_pj']
-            power_mw = config['base_power_mw']
+            energy_pj = num_clauses * config["energy_per_clause_pj"]
+            power_mw = config["base_power_mw"]
         else:
             # Digital solvers
             solve_time_ms = solve_time * 1000
-            energy_pj = propagations * config['energy_per_clause_pj']
-            power_mw = config['base_power_mw'] * (1 + num_vars / 100)
+            energy_pj = propagations * config["energy_per_clause_pj"]
+            power_mw = config["base_power_mw"] * (1 + num_vars / 100)
 
         # Energy metrics
         total_energy_nj = (power_mw * solve_time_ms) / 1000
         energy_per_var_pj = (total_energy_nj * 1000) / num_vars if num_vars > 0 else 0
 
         return {
-            'satisfiable': sat,
-            'solution': solution,
-            'solve_time_ms': solve_time_ms,
-            'power_consumption_mw': power_mw,
-            'energy_per_variable_pj': energy_per_var_pj,
-            'total_energy_nj': total_energy_nj,
-            'propagations': propagations,
-            'num_variables': num_vars,
-            'num_clauses': num_clauses,
-            'solver_type': solver_type
+            "satisfiable": sat,
+            "solution": solution,
+            "solve_time_ms": solve_time_ms,
+            "power_consumption_mw": power_mw,
+            "energy_per_variable_pj": energy_per_var_pj,
+            "total_energy_nj": total_energy_nj,
+            "propagations": propagations,
+            "num_variables": num_vars,
+            "num_clauses": num_clauses,
+            "solver_type": solver_type,
         }
 
 
+# ------------------------------ Teensy Interface -----------------------------
 class TeensyInterface:
     """Interface for communicating with Teensy 4.1 running AMORGOS LDPC decoder"""
 
-    def __init__(self, port=None, baudrate=2000000):
+    def __init__(self, port=None, baudrate=2_000_000):
         self.port = port
         self.baudrate = baudrate
         self.serial = None
         self.connected = False
         self.last_heartbeat = time.time()
-
-        # Protocol constants
         self.START_MARKER = 0xDEADBEEF
         self.END_MARKER = 0xFFFFFFFF
         self.PROTOCOL_VERSION = 0x00010000
-
-        # Hardware specs from paper
         self.NUM_OSCILLATORS = 96
         self.BITS_PER_VECTOR = 96
         self.ENERGY_PER_BIT_PJ = 5.47
-
         if not self.connect():
             raise RuntimeError("Failed to connect to LDPC decoder hardware")
 
     def find_teensy_port(self):
         """Auto-detect Teensy port"""
-        import serial.tools.list_ports
-
         for port in serial.tools.list_ports.comports():
             # Check various identifiers
-            if any(id in port.description.lower() for id in ['teensy', 'usb serial', 'usbmodem', 'ttyacm']):
-                logger.info(f"Found potential Teensy at {port.device}: {port.description}")
+            port_desc = port.description.lower()
+            if any(
+                id in port_desc for id in ["teensy", "usb serial", "usbmodem", "ttyacm"]
+            ):
+                logger.info(
+                    f"Found potential Teensy at {port.device}: {port.description}"
+                )
                 return port.device
+
+            # Also check VID/PID for Teensy
+            if port.vid == 0x16C0:  # PJRC vendor ID
+                logger.info(f"Found Teensy by VID/PID at {port.device}")
+                return port.device
+
         return None
 
     def connect(self):
         """Establish connection to Teensy"""
-        import serial
-
         try:
             # Find port if not specified
             if not self.port:
@@ -896,73 +922,75 @@ class TeensyInterface:
             self.serial = serial.Serial(
                 port=self.port,
                 baudrate=self.baudrate,
-                timeout=5,  # Increased timeout for initialization
+                timeout=5,
                 write_timeout=2,
-                exclusive=True
+                exclusive=True,
             )
 
             # Clear buffers
             self.serial.reset_input_buffer()
             self.serial.reset_output_buffer()
 
-            # Wait for device to initialize (important!)
+            # Wait for device to initialize
             logger.info("Waiting for device initialization...")
-            time.sleep(3)  # Give firmware time to fully initialize
+            time.sleep(3)
 
             # Clear any startup messages
             while self.serial.in_waiting:
-                line = self.serial.readline().decode().strip()
+                line = self.serial.readline().decode("utf-8", errors="ignore").strip()
                 logger.info(f"Startup message: {line}")
 
             # Send identification command
-            self.serial.write(b'I\n')
+            self.serial.write(b"I\n")
             self.serial.flush()
 
             # Wait for response
             start_time = time.time()
             while time.time() - start_time < 5:
                 if self.serial.in_waiting:
-                    response = self.serial.readline().decode().strip()
+                    response = (
+                        self.serial.readline().decode("utf-8", errors="ignore").strip()
+                    )
                     logger.info(f"Device response: {response}")
 
                     if response == "DACROQ_BOARD:LDPC":
-                        # Device identified, now check if it's ready
+                        # Device identified, check status
                         time.sleep(0.5)
 
-                        # Check status
-                        self.serial.write(b'STATUS\n')
+                        self.serial.write(b"STATUS\n")
                         self.serial.flush()
 
                         status_start = time.time()
                         while time.time() - status_start < 2:
                             if self.serial.in_waiting:
-                                status = self.serial.readline().decode().strip()
+                                status = (
+                                    self.serial.readline()
+                                    .decode("utf-8", errors="ignore")
+                                    .strip()
+                                )
                                 logger.info(f"Device status: {status}")
 
                                 if "STATUS:READY" in status:
                                     self.connected = True
-                                    logger.info("Successfully connected to LDPC decoder")
+                                    self.last_heartbeat = time.time()
+                                    logger.info(
+                                        "Successfully connected to LDPC decoder"
+                                    )
                                     return True
                                 elif "STATUS:ERROR" in status:
                                     logger.error("Device reported error status")
-                                    # Try to get more info
-                                    self.serial.write(b'HEALTH_CHECK\n')
-                                    self.serial.flush()
-                                    time.sleep(1)
-                                    while self.serial.in_waiting:
-                                        health = self.serial.readline().decode().strip()
-                                        logger.error(f"Health check: {health}")
                                     return False
 
                 time.sleep(0.1)
 
             logger.error("Device did not respond correctly within timeout")
-            self.serial.close()
+            if self.serial and self.serial.is_open:
+                self.serial.close()
             return False
 
         except Exception as e:
             logger.error(f"Connection error: {e}")
-            if hasattr(self, 'serial') and self.serial and self.serial.is_open:
+            if hasattr(self, "serial") and self.serial and self.serial.is_open:
                 self.serial.close()
             return False
 
@@ -974,45 +1002,54 @@ class TeensyInterface:
         try:
             # Check for heartbeats in buffer
             while self.serial.in_waiting:
-                line = self.serial.readline().decode().strip()
+                line = self.serial.readline().decode("utf-8", errors="ignore").strip()
                 if line.startswith("DACROQ_BOARD:LDPC:HEARTBEAT"):
                     self.last_heartbeat = time.time()
 
-            # If no heartbeat for 5 seconds, check explicitly
-            if time.time() - self.last_heartbeat > 5:
-                self.serial.write(b'STATUS\n')
+            # If no heartbeat for 10 seconds, check explicitly
+            if time.time() - self.last_heartbeat > 10:
+                self.serial.write(b"STATUS\n")
                 self.serial.flush()
 
                 # Wait for response
                 start_time = time.time()
                 while time.time() - start_time < 1:
                     if self.serial.in_waiting:
-                        response = self.serial.readline().decode().strip()
+                        response = (
+                            self.serial.readline()
+                            .decode("utf-8", errors="ignore")
+                            .strip()
+                        )
                         if response.startswith("STATUS:"):
                             self.last_heartbeat = time.time()
-                            return True
+                            return "READY" in response
 
                 # No response, try reconnecting
                 logger.warning("No heartbeat, reconnecting...")
                 self.serial.close()
+                self.connected = False
                 return self.connect()
 
             return True
 
         except Exception as e:
             logger.error(f"Connection check failed: {e}")
+            self.connected = False
             return False
 
     def check_chip_health(self):
         """Run comprehensive health check"""
+        if not self.check_connection():
+            return {"status": "error", "details": "Not connected"}
+
         try:
-            self.serial.write(b'HEALTH_CHECK\n')
+            self.serial.write(b"HEALTH_CHECK\n")
             self.serial.flush()
 
             # Wait for acknowledgment
-            response = self.serial.readline().decode().strip()
+            response = self.serial.readline().decode("utf-8", errors="ignore").strip()
             if response != "ACK:HEALTH_CHECK":
-                return {'status': 'error', 'details': f'Invalid response: {response}'}
+                return {"status": "error", "details": f"Invalid response: {response}"}
 
             # Collect health check results
             health_results = []
@@ -1020,11 +1057,13 @@ class TeensyInterface:
 
             while time.time() - start_time < 5:
                 if self.serial.in_waiting:
-                    line = self.serial.readline().decode().strip()
+                    line = (
+                        self.serial.readline().decode("utf-8", errors="ignore").strip()
+                    )
                     health_results.append(line)
 
                     if line.startswith("HEALTH_CHECK_COMPLETE"):
-                        status = 'healthy' if line.endswith(":OK") else 'error'
+                        status = "healthy" if line.endswith(":OK") else "error"
 
                         # Parse individual test results
                         power_ok = any("POWER_OK" in r for r in health_results)
@@ -1033,74 +1072,138 @@ class TeensyInterface:
                         osc_ok = any("OSCILLATORS_OK" in r for r in health_results)
 
                         return {
-                            'status': status,
-                            'details': {
-                                'power': power_ok,
-                                'clock': clock_ok,
-                                'memory': memory_ok,
-                                'oscillators': osc_ok,
-                                'raw_results': health_results
-                            }
+                            "status": status,
+                            "details": {
+                                "power": power_ok,
+                                "clock": clock_ok,
+                                "memory": memory_ok,
+                                "oscillators": osc_ok,
+                                "raw_results": health_results,
+                            },
                         }
 
-            return {'status': 'error', 'details': 'Health check timeout'}
+            return {"status": "error", "details": "Health check timeout"}
 
         except Exception as e:
-            return {'status': 'error', 'details': str(e)}
+            return {"status": "error", "details": str(e)}
 
-    def process_batch(self, vectors, info_type="SOFT_INFO"):
-        """Process batch of test vectors using binary protocol"""
+    def execute_command(self, cmd: str, timeout: int = 60) -> str:
+        """
+        Send one console command string (e.g. 'status' or 'run') and
+        capture everything until the Teensy sketch prints the next '> ' prompt.
+        """
+        if not self.check_connection():
+            raise RuntimeError("Serial link not ready")
+
+        self.serial.write((cmd.strip() + "\n").encode())
+        self.serial.flush()
+
+        buf = []
+        start = time.time()
+        while time.time() - start < timeout:
+            if self.serial.in_waiting:
+                line = self.serial.readline().decode(errors="ignore")
+                buf.append(line)
+                if line.rstrip().endswith(">"):
+                    break
+        return "".join(buf)
+
+    def deploy_batch(
+        self, snr_runs: dict[str, int], info_type: str = "SOFT_INFO", mode: str = "run"
+    ) -> str:
+        """
+        Mirror Luke Wormald sketch workflow:
+          • set SNR-run counts  (snr X Y)
+          • set info soft/hard
+          • issue mode (run|test|detail|patterns …)
+        Returns full console log.
+        """
+        if info_type.upper() not in ("SOFT_INFO", "HARD_INFO"):
+            raise ValueError("info_type must be SOFT_INFO or HARD_INFO")
+
+        log = [self.execute_command("status")]
+
+        # Configure each SNR
+        for snr_db, runs in snr_runs.items():
+            snr_num = int(snr_db.replace("dB", ""))
+            log.append(self.execute_command(f"snr {snr_num} {runs}"))
+
+        # Info type
+        log.append(
+            self.execute_command(
+                "info soft" if info_type.upper() == "SOFT_INFO" else "info hard"
+            )
+        )
+
+        # Kick off chosen mode
+        log.append(self.execute_command(mode))
+        return "\n".join(log)
+
+    def process_vectors_hardware(self, vectors):
+        """Process test vectors on actual hardware"""
         if not self.check_connection():
             raise RuntimeError("Device not connected")
 
-        results = []
         num_vectors = len(vectors)
+        results = []
 
         try:
             # Send RUN_TEST command
-            self.serial.write(b'RUN_TEST\n')
+            self.serial.write(b"RUN_TEST\n")
             self.serial.flush()
 
             # Wait for acknowledgment
-            ack = self.serial.readline().decode().strip()
+            ack = self.serial.readline().decode("utf-8", errors="ignore").strip()
             if ack != "ACK:RUN_TEST":
                 raise RuntimeError(f"Expected ACK:RUN_TEST, got: {ack}")
 
             # Send protocol header
-            self.serial.write(self.START_MARKER.to_bytes(4, byteorder='little'))
-            self.serial.write(num_vectors.to_bytes(4, byteorder='little'))
+            self.serial.write(self.START_MARKER.to_bytes(4, byteorder="little"))
+            self.serial.write(num_vectors.to_bytes(4, byteorder="little"))
 
             # Wait for count acknowledgment
             ack_bytes = self.serial.read(4)
             if len(ack_bytes) != 4:
                 raise RuntimeError("Timeout waiting for acknowledgment")
 
-            ack_count = int.from_bytes(ack_bytes, byteorder='little')
+            ack_count = int.from_bytes(ack_bytes, byteorder="little")
             if ack_count != num_vectors:
-                raise RuntimeError(f"Count mismatch: sent {num_vectors}, ack {ack_count}")
+                raise RuntimeError(
+                    f"Count mismatch: sent {num_vectors}, ack {ack_count}"
+                )
 
             # Process each vector
             for i, vector in enumerate(vectors):
-                # Prepare vector data (96 values)
-                if info_type == "SOFT_INFO":
-                    # Convert LLRs to 8-bit signed integers
-                    vector_data = np.clip(vector[:96], -15, 15)
-                    vector_data = (vector_data * 8).astype(np.int8)
-                else:
-                    # Hard decisions
-                    vector_data = vector[:96].astype(np.int8)
+                # Prepare vector data - convert LLRs to hardware format
+                vector_data = np.zeros(24, dtype=np.uint32)
 
-                # Send vector
+                # For SOFT_INFO: convert float LLRs to fixed-point representation
+                # The hardware expects 32-bit values where MSB indicates sign
+                for j in range(min(24, len(vector))):
+                    # Convert LLR to fixed-point with appropriate scaling
+                    llr_value = vector[j]
+                    # Scale and quantize to match hardware expectations
+                    scaled = int(llr_value * 128)  # Scale factor for fixed-point
+                    scaled = max(-32768, min(32767, scaled))  # Clip to 16-bit range
+
+                    # Pack into 32-bit format expected by hardware
+                    if scaled < 0:
+                        vector_data[j] = (1 << 31) | (abs(scaled) & 0x7FFFFFFF)
+                    else:
+                        vector_data[j] = scaled & 0x7FFFFFFF
+
+                # Send vector (96 bytes = 24 * 4)
                 self.serial.write(vector_data.tobytes())
 
-                # Read response (struct size = 140 bytes)
+                # Read response (140 bytes)
                 response_data = self.serial.read(140)
                 if len(response_data) != 140:
-                    raise RuntimeError(f"Invalid response size: {len(response_data)}")
+                    raise RuntimeError(
+                        f"Invalid response size: {len(response_data)} bytes"
+                    )
 
                 # Parse response
-                import struct
-                fmt = '<III' + 'I' * 25 + 'fffBBBB'  # Proper struct format
+                fmt = "<III" + "I" * 25 + "fffBBBB"
                 unpacked = struct.unpack(fmt, response_data)
 
                 # Extract fields
@@ -1115,344 +1218,314 @@ class TeensyInterface:
 
                 # Store result
                 result = {
-                    'vector_index': vector_index,
-                    'execution': {
-                        'time_us': exec_time_us,
-                        'time_ns': exec_time_us * 1000,
-                        'cycles': total_cycles,
-                        'success': bool(success)
+                    "vector_index": vector_index,
+                    "execution": {
+                        "time_us": exec_time_us,
+                        "time_ns": exec_time_us * 1000,
+                        "cycles": total_cycles,
+                        "success": bool(success),
                     },
-                    'power': {
-                        'energy_per_bit_pj': energy_per_bit,
-                        'total_energy_pj': total_energy,
-                        'avg_power_mw': avg_power
+                    "power": {
+                        "energy_per_bit_pj": energy_per_bit,
+                        "total_energy_pj": total_energy,
+                        "avg_power_mw": avg_power,
                     },
-                    'results': {
-                        'samples': list(samples[:24]),
-                        'error_count': samples[24]
-                    }
+                    "results": {
+                        "samples": list(samples[:24]),  # Decoded bits
+                        "error_count": samples[24] if len(samples) > 24 else 0,
+                    },
                 }
 
                 results.append(result)
 
                 # Progress update
                 if (i + 1) % 10 == 0 or (i + 1) == num_vectors:
-                    logger.info(f"Processed {i+1}/{num_vectors} vectors")
+                    logger.info(f"Processed {i + 1}/{num_vectors} vectors")
 
             # Wait for completion marker
             marker_bytes = self.serial.read(4)
             if len(marker_bytes) != 4:
                 raise RuntimeError("Timeout waiting for completion marker")
 
-            marker = int.from_bytes(marker_bytes, byteorder='little')
+            marker = int.from_bytes(marker_bytes, byteorder="little")
             if marker != self.END_MARKER:
                 raise RuntimeError(f"Invalid completion marker: 0x{marker:08x}")
 
             # Read final status
-            while self.serial.in_waiting:
-                line = self.serial.readline().decode().strip()
-                if line.startswith("TEST_COMPLETE"):
-                    logger.info(line)
+            completion_msg = (
+                self.serial.readline().decode("utf-8", errors="ignore").strip()
+            )
+            logger.info(f"Test completion: {completion_msg}")
 
-            # Calculate aggregate metrics
-            successful_runs = sum(1 for r in results if r['execution']['success'])
-            total_time_us = sum(r['execution']['time_us'] for r in results)
-            total_energy_pj = sum(r['power']['total_energy_pj'] for r in results)
-
-            return {
-                'individual_results': results,
-                'aggregate_metrics': {
-                    'total_vectors': num_vectors,
-                    'successful_runs': successful_runs,
-                    'success_rate': successful_runs / num_vectors if num_vectors > 0 else 0,
-                    'total_time_us': total_time_us,
-                    'avg_time_per_vector_us': total_time_us / num_vectors if num_vectors > 0 else 0,
-                    'total_energy_pj': total_energy_pj,
-                    'avg_energy_per_vector_pj': total_energy_pj / num_vectors if num_vectors > 0 else 0,
-                    'throughput_vectors_per_sec': (num_vectors * 1e6) / total_time_us if total_time_us > 0 else 0
-                }
-            }
+            return results
 
         except Exception as e:
-            logger.error(f"Batch processing error: {e}")
-            # Try to recover
-            self.serial.write(b'LED:ERROR\n')
+            logger.error(f"Hardware processing error: {e}")
+            # Send error LED command if possible
+            try:
+                self.serial.write(b"LED:ERROR\n")
+            except:
+                pass
             raise
 
     def close(self):
         """Clean shutdown"""
         if self.serial and self.serial.is_open:
             try:
-                self.serial.write(b'LED:IDLE\n')
+                self.serial.write(b"LED:IDLE\n")
                 self.serial.close()
+                logger.info("Teensy connection closed")
             except:
                 pass
+            finally:
+                self.connected = False
 
 
-# Global codec instance
+# ------------------------------ Global objects -------------------------------
 ldpc_codec = SimpleLDPCCodec()
-
-# Global solver instance
 sat_benchmark = SATSolverBenchmark()
 
-@app.route('/ldpc/jobs', methods=['GET', 'POST'])
+
+# ------------------------------ LDPC Routes (jobs / generate / process) ------------------------------
+@app.route("/ldpc/deploy", methods=["POST"])
+def ldpc_deploy():
+    """
+    Deploy a batch-test configuration to the Teensy console.
+
+    JSON body:
+    {
+      "snr_runs": { "6dB": 10, "3dB": 5 },
+      "info_type": "SOFT_INFO",
+      "mode": "run"          // or "test", "detail", "patterns", …
+    }
+    """
+    teensy = None
+    try:
+        data = request.get_json()
+        snr_runs = data.get("snr_runs", {})
+        info_type = data.get("info_type", "SOFT_INFO")
+        mode = data.get("mode", "run")
+
+        if not snr_runs:
+            return jsonify({"error": "snr_runs cannot be empty"}), 400
+
+        teensy = TeensyInterface()
+        start_ts = datetime.utcnow().isoformat()
+        console_log = teensy.deploy_batch(snr_runs, info_type, mode)
+        end_ts = datetime.utcnow().isoformat()
+
+        return jsonify(
+            {
+                "status": "success",
+                "started": start_ts,
+                "completed": end_ts,
+                "log": console_log,
+            }
+        )
+    except Exception as e:
+        logger.error(f"Deploy error: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if teensy:
+            teensy.close()
+
+
+@app.route("/ldpc/command", methods=["POST"])
+def ldpc_command():
+    """
+    Send an arbitrary single command to the Teensy console.
+    JSON body: { "command": "status" }
+    """
+    teensy = None
+    try:
+        cmd = request.get_json().get("command", "").strip()
+        if not cmd:
+            return jsonify({"error": "command cannot be empty"}), 400
+        teensy = TeensyInterface()
+        output = teensy.execute_command(cmd)
+        return jsonify({"output": output})
+    except Exception as e:
+        logger.error(f"Command error: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if teensy:
+            teensy.close()
+
+
+@app.route("/ldpc/jobs", methods=["GET", "POST"])
 def handle_ldpc_jobs():
     """List LDPC jobs or create new job"""
-    if request.method == 'GET':
+    if request.method == "GET":
         try:
             with get_db() as conn:
-                cursor = conn.execute('SELECT * FROM ldpc_jobs ORDER BY created DESC')
+                cursor = conn.execute("SELECT * FROM ldpc_jobs ORDER BY created DESC")
                 jobs = [dict_from_row(row) for row in cursor]
 
                 # Parse JSON fields
                 for job in jobs:
-                    for field in ['config', 'results', 'metadata']:
+                    for field in ["config", "results", "metadata"]:
                         if job.get(field):
                             try:
                                 job[field] = json.loads(job[field])
                             except:
                                 job[field] = {}
 
-                return jsonify({'jobs': jobs})
+                return jsonify({"jobs": jobs})
 
         except Exception as e:
             logger.error(f"Error listing LDPC jobs: {e}")
-            return jsonify({'error': str(e)}), 500
+            return jsonify({"error": str(e)}), 500
     else:  # POST
         try:
             data = request.get_json()
             job_id = generate_id()
 
             # Job configuration
-            algorithm_type = data.get('algorithm_type', 'digital_hardware')
-            test_mode = data.get('test_mode', 'custom_message')
-            message_content = data.get('message_content', 'Hello LDPC!')
-            noise_level = data.get('noise_level', 10)
-            num_iterations = data.get('iterations', 10)
-            snr_variation = data.get('snr_variation', 1.0)
+            algorithm_type = data.get("algorithm_type", "analog_hardware")
+            test_mode = data.get("test_mode", "ber_test")
+            snr_db = data.get("snr_db", 7.0)
+            num_vectors = min(data.get("num_vectors", 100), 1000)
 
-            # Convert noise percentage to SNR dB
-            snr_db = max(0, 15 - (noise_level * 0.3))
+            # Only process hardware tests if algorithm_type is analog_hardware
+            if algorithm_type != "analog_hardware":
+                return jsonify({"error": "Only analog_hardware testing supported"}), 400
 
-            # Prepare message bits
-            if test_mode == 'custom_message':
-                message_bytes = message_content.encode('utf-8')[:6]
-                message_bytes = message_bytes.ljust(6, b'\x00')
-                info_bits = np.unpackbits(np.frombuffer(message_bytes, dtype=np.uint8))[:ldpc_codec.k]
-            elif test_mode == 'pre_written':
-                # Handle pre-written messages same as custom
-                message_bytes = message_content.encode('utf-8')[:6]
-                message_bytes = message_bytes.ljust(6, b'\x00')
-                info_bits = np.unpackbits(np.frombuffer(message_bytes, dtype=np.uint8))[:ldpc_codec.k]
-            elif test_mode == 'random_string':
-                np.random.seed(sum(ord(c) for c in job_id[:8]))
-                info_bits = np.random.randint(0, 2, ldpc_codec.k)
-            else:  # ber_test
-                info_bits = np.zeros(ldpc_codec.k, dtype=int)
+            # Try to connect to hardware
+            teensy = None
+            try:
+                teensy = TeensyInterface()
+                if not teensy.connect():
+                    raise RuntimeError("Failed to connect to hardware")
 
-            # Run multiple test iterations for statistical validity
-            test_runs = []
-            successful_decodes = 0
-            total_bit_errors = 0
-            total_frame_errors = 0
-            execution_times = []
-            power_measurements = []
-            iterations_used = []
+                # Health check
+                health_status = teensy.check_chip_health()
+                if health_status["status"] != "healthy":
+                    raise RuntimeError(f"Hardware health check failed: {health_status}")
 
-            # Number of test runs for statistical significance
-            num_test_runs = 100  # Matches paper's methodology
+                # Generate test vectors (real data for hardware)
+                generator = LDPCDataGenerator()
+                vectors = generator.generate_test_vectors(
+                    num_vectors=num_vectors, snr_db=snr_db, info_type="SOFT_INFO"
+                )
 
-            for run_idx in range(num_test_runs):
-                # Apply SNR variation for realistic channel conditions
-                run_snr = snr_db + np.random.normal(0, snr_variation)
+                # Process on hardware
+                hardware_results = teensy.process_vectors_hardware(vectors)
 
-                # Encode and add noise
-                codeword = ldpc_codec.encode(info_bits)
-                received_bits, llrs = ldpc_codec.add_noise(codeword, run_snr)
+                # Calculate metrics
+                successful_runs = sum(
+                    1 for r in hardware_results if r["execution"]["success"]
+                )
+                total_time_us = sum(r["execution"]["time_us"] for r in hardware_results)
+                total_energy_pj = sum(
+                    r["power"]["total_energy_pj"] for r in hardware_results
+                )
 
-                # Time the decoding process
-                start_time = time.perf_counter()
+                # Calculate error rates
+                bit_errors = 0
+                frame_errors = 0
+                for result in hardware_results:
+                    error_count = result["results"]["error_count"]
+                    if error_count > 0:
+                        frame_errors += 1
+                        bit_errors += error_count
 
-                if algorithm_type == 'analog_hardware':
-                    # Simulate analog decoder performance
-                    decoded_bits, success, decode_time_ns, energy_pj = ldpc_codec.simulate_oscillator_decoder(
-                        llrs, f"{job_id}_{run_idx}"
-                    )
-                    decode_time_ms = decode_time_ns / 1e6
-                    power_mw = energy_pj / (decode_time_ns / 1e9) / 1e12 * 1e3
-                    iter_count = 1  # Analog is one-shot
-                else:
-                    # Digital belief propagation
-                    decoded_bits, success, iter_count, syndrome_weight = ldpc_codec.decode_belief_propagation(
-                        llrs, max_iterations=num_iterations
-                    )
-                    decode_time_ms = (time.perf_counter() - start_time) * 1000
-                    # Power model for digital decoder
-                    power_mw = 500 * (iter_count / num_iterations)  # Scale with iterations
+                fer = frame_errors / num_vectors if num_vectors > 0 else 0
+                ber = (
+                    bit_errors / (num_vectors * 48) if num_vectors > 0 else 0
+                )  # 48 info bits
 
-                # Calculate errors
-                bit_errors = np.sum(info_bits != decoded_bits[:ldpc_codec.k])
-                frame_error = 1 if bit_errors > 0 else 0
-
-                # Store run results
-                test_runs.append({
-                    'run': run_idx + 1,
-                    'snr': float(run_snr),
-                    'success': bool(success),
-                    'execution_time': float(decode_time_ms),
-                    'iterations': int(iter_count),
-                    'bit_errors': int(bit_errors),
-                    'frame_errors': int(frame_error),
-                    'power_consumption': float(power_mw),
-                    'syndrome_weight': int(syndrome_weight) if algorithm_type == 'digital_hardware' else 0
-                })
-
-                # Accumulate statistics
-                if success:
-                    successful_decodes += 1
-                total_bit_errors += bit_errors
-                total_frame_errors += frame_error
-                execution_times.append(decode_time_ms)
-                power_measurements.append(power_mw)
-                iterations_used.append(iter_count)
-
-            # Calculate comprehensive metrics
-            fer = total_frame_errors / num_test_runs
-            ber = total_bit_errors / (num_test_runs * ldpc_codec.k)
-            avg_execution_time = np.mean(execution_times)
-            avg_power = np.mean(power_measurements)
-            avg_iterations = np.mean(iterations_used)
-
-            # Throughput calculation
-            throughput_mbps = (ldpc_codec.k / avg_execution_time) / 1000  # Mbps
-
-            # Energy efficiency
-            energy_per_bit_pj = (avg_power * avg_execution_time * 1e-3) / ldpc_codec.k * 1e12
-
-            # Store complete job data
-            job_results = {
-                'summary': {
-                    'total_runs': num_test_runs,
-                    'successful_decodes': successful_decodes,
-                    'convergence_rate': successful_decodes / num_test_runs,
-                    'frame_error_rate': fer,
-                    'bit_error_rate': ber,
-                    'avg_execution_time_ms': avg_execution_time,
-                    'avg_power_consumption_mw': avg_power,
-                    'avg_iterations': avg_iterations,
-                    'throughput_mbps': throughput_mbps,
-                    'energy_per_bit_pj': energy_per_bit_pj,
-                    'code_rate': ldpc_codec.rate,
-                    'code_length': ldpc_codec.n,
-                    'info_bits': ldpc_codec.k
-                },
-                'runs': test_runs,
-                'performance_comparison': {
-                    'vs_belief_propagation': {
-                        'speedup': 56.18 if algorithm_type == 'analog_hardware' else 1.0,
-                        'energy_reduction': 11.14 if algorithm_type == 'analog_hardware' else 1.0
+                # Store results
+                job_results = {
+                    "summary": {
+                        "test_type": "hardware_analog",
+                        "total_vectors": num_vectors,
+                        "successful_decodes": successful_runs,
+                        "convergence_rate": successful_runs / num_vectors,
+                        "frame_error_rate": fer,
+                        "bit_error_rate": ber,
+                        "avg_execution_time_us": total_time_us / num_vectors,
+                        "avg_energy_per_vector_pj": total_energy_pj / num_vectors,
+                        "throughput_vectors_per_sec": (
+                            (num_vectors * 1e6) / total_time_us
+                            if total_time_us > 0
+                            else 0
+                        ),
+                        "snr_db": snr_db,
+                        "hardware": "AMORGOS 28nm CMOS",
                     },
-                    'vs_state_of_art': {
-                        'energy_efficiency_improvement': 11.0 if algorithm_type == 'analog_hardware' else 1.0
-                    }
-                }
-            }
-
-            # Message recovery info for display
-            if test_mode in ['custom_message', 'pre_written']:
-                # Decode a clean version for comparison
-                clean_codeword = ldpc_codec.encode(info_bits)
-                _, clean_llrs = ldpc_codec.add_noise(clean_codeword, 30)  # High SNR
-                if algorithm_type == 'analog_hardware':
-                    decoded_clean, _, _, _ = ldpc_codec.simulate_oscillator_decoder(clean_llrs, f"{job_id}_clean")
-                else:
-                    decoded_clean, _, _, _ = ldpc_codec.decode_belief_propagation(clean_llrs)
-
-                try:
-                    decoded_bytes = np.packbits(decoded_clean[:ldpc_codec.k]).tobytes()
-                    decoded_message = decoded_bytes.decode('utf-8', errors='ignore').rstrip('\x00')
-                except:
-                    decoded_message = "Decoding error"
-
-                message_info = {
-                    'original_message': message_content,
-                    'decoded_message': decoded_message,
-                    'message_recovered': decoded_message == message_content
-                }
-            else:
-                message_info = {
-                    'test_type': test_mode,
-                    'description': 'BER/FER characterization test'
+                    "individual_results": hardware_results,
+                    "health_check": health_status,
                 }
 
-            # Save to database
-            with get_db() as conn:
-                conn.execute('''
-                    INSERT INTO ldpc_jobs 
-                    (id, name, job_type, config, status, created, started, completed, results, progress, metadata)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    job_id,
-                    data.get('name', f'LDPC_{job_id[:8]}'),
-                    'ldpc_decoder_evaluation',
-                    json.dumps({
-                        'algorithm_type': algorithm_type,
-                        'test_mode': test_mode,
-                        'message_content': message_content if test_mode in ['custom_message', 'pre_written'] else None,
-                        'noise_level': noise_level,
-                        'snr_db': snr_db,
-                        'snr_variation': snr_variation,
-                        'max_iterations': num_iterations,
-                        'num_test_runs': num_test_runs,
-                        'code_parameters': {
-                            'n': ldpc_codec.n,
-                            'k': ldpc_codec.k,
-                            'rate': ldpc_codec.rate
+                # Save to database
+                with get_db() as conn:
+                    conn.execute(
+                        """
+                        INSERT INTO ldpc_jobs 
+                        (id, name, job_type, config, status, created, started, completed, results, progress, metadata)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                        (
+                            job_id,
+                            data.get("name", f"LDPC_HW_{job_id[:8]}"),
+                            "ldpc_hardware_test",
+                            json.dumps(
+                                {
+                                    "algorithm_type": algorithm_type,
+                                    "test_mode": test_mode,
+                                    "snr_db": snr_db,
+                                    "num_vectors": num_vectors,
+                                    "hardware_type": "AMORGOS_LDPC",
+                                }
+                            ),
+                            "completed",
+                            datetime.utcnow().isoformat(),
+                            datetime.utcnow().isoformat(),
+                            datetime.utcnow().isoformat(),
+                            json.dumps(hardware_results),
+                            100.0,
+                            json.dumps(job_results["summary"]),
+                        ),
+                    )
+                    conn.commit()
+
+                return (
+                    jsonify(
+                        {
+                            "job_id": job_id,
+                            "status": "completed",
+                            "results": job_results,
+                            "message": f"Hardware test completed: {num_vectors} vectors, FER={fer:.2e}, BER={ber:.2e}",
                         }
-                    }),
-                    'completed',
-                    datetime.utcnow().isoformat(),
-                    datetime.utcnow().isoformat(),
-                    (datetime.utcnow() + timedelta(seconds=avg_execution_time * num_test_runs / 1000)).isoformat(),
-                    json.dumps(job_results['runs']),  # Store individual runs
-                    100.0,
-                    json.dumps({
-                        **job_results['summary'],
-                        **message_info,
-                        'performance_comparison': job_results['performance_comparison']
-                    })
-                ))
-                conn.commit()
+                    ),
+                    201,
+                )
 
-            # Return comprehensive response
-            return jsonify({
-                'job_id': job_id,
-                'status': 'completed',
-                'results': job_results,
-                'message': f'LDPC evaluation completed: {num_test_runs} runs, FER={fer:.2e}, BER={ber:.2e}'
-            }), 201
+            finally:
+                if teensy:
+                    teensy.close()
 
         except Exception as e:
-            logger.error(f"Error creating LDPC job: {e}")
-            return jsonify({'error': str(e)}), 500
+            logger.error(f"Error creating hardware LDPC job: {e}")
+            return jsonify({"error": str(e)}), 500
 
 
-@app.route('/ldpc/jobs/<job_id>', methods=['GET', 'DELETE'])
+@app.route("/ldpc/jobs/<job_id>", methods=["GET", "DELETE"])
 def handle_ldpc_job_detail(job_id):
     """Get or delete LDPC job details"""
     try:
         with get_db() as conn:
-            if request.method == 'GET':
-                cursor = conn.execute('SELECT * FROM ldpc_jobs WHERE id = ?', (job_id,))
+            if request.method == "GET":
+                cursor = conn.execute("SELECT * FROM ldpc_jobs WHERE id = ?", (job_id,))
                 job = cursor.fetchone()
 
                 if not job:
-                    return jsonify({'error': 'Job not found'}), 404
+                    return jsonify({"error": "Job not found"}), 404
 
                 job_data = dict_from_row(job)
 
                 # Parse JSON fields
-                for field in ['config', 'results', 'metadata']:
+                for field in ["config", "results", "metadata"]:
                     if job_data.get(field):
                         try:
                             job_data[field] = json.loads(job_data[field])
@@ -1462,65 +1535,65 @@ def handle_ldpc_job_detail(job_id):
                 return jsonify(job_data)
 
             else:  # DELETE
-                cursor = conn.execute('DELETE FROM ldpc_jobs WHERE id = ?', (job_id,))
+                cursor = conn.execute("DELETE FROM ldpc_jobs WHERE id = ?", (job_id,))
                 if cursor.rowcount == 0:
-                    return jsonify({'error': 'Job not found'}), 404
+                    return jsonify({"error": "Job not found"}), 404
 
                 conn.commit()
-                return jsonify({'message': 'Job deleted successfully'})
+                return jsonify({"message": "Job deleted successfully"})
 
     except Exception as e:
         logger.error(f"Error handling LDPC job {job_id}: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-@app.route('/ldpc/generate', methods=['POST'])
+@app.route("/ldpc/generate", methods=["POST"])
 def generate_ldpc_data():
     """Generate LDPC test data with specified parameters"""
     try:
         data = request.get_json()
 
         # Parse parameters
-        num_vectors = data.get('num_vectors', 1000)
-        snr_points = data.get('snr_points', ["1dB", "2dB", "5dB"])
-        generate_types = data.get('types', ["SOFT_INFO", "HARD_INFO"])
+        num_vectors = data.get("num_vectors", 1000)
+        snr_points = data.get("snr_points", ["1dB", "2dB", "5dB"])
+        generate_types = data.get("types", ["SOFT_INFO", "HARD_INFO"])
 
         generator = LDPCDataGenerator()
         results = {}
 
         for snr in snr_points:
-            snr_db = float(snr.replace('dB', ''))
+            snr_db = float(snr.replace("dB", ""))
             results[snr] = {}
 
             for info_type in generate_types:
                 # Generate vectors
                 vectors = generator.generate_test_vectors(
-                    num_vectors=num_vectors,
-                    snr_db=snr_db,
-                    info_type=info_type
+                    num_vectors=num_vectors, snr_db=snr_db, info_type=info_type
                 )
 
                 # Save vectors
                 output_dir = generator.save_vectors(vectors, snr, info_type)
 
                 results[snr][info_type] = {
-                    'num_vectors': num_vectors,
-                    'directory': str(output_dir),
-                    'snr_db': snr_db
+                    "num_vectors": num_vectors,
+                    "directory": str(output_dir),
+                    "snr_db": snr_db,
                 }
 
-        return jsonify({
-            'status': 'success',
-            'message': f'Generated {num_vectors} vectors for each specified SNR point and type',
-            'results': results
-        })
+        return jsonify(
+            {
+                "status": "success",
+                "message": f"Generated {num_vectors} vectors for each specified SNR point and type",
+                "results": results,
+            }
+        )
 
     except Exception as e:
         logger.error(f"Error generating LDPC data: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-@app.route('/ldpc/process', methods=['POST'])
+@app.route("/ldpc/process", methods=["POST"])
 def process_ldpc_data():
     """Run LDPC test workflow with hardware acceleration"""
     teensy = None
@@ -1528,9 +1601,9 @@ def process_ldpc_data():
         data = request.get_json()
 
         # Parse parameters
-        num_vectors = min(data.get('num_vectors', 100), 1000)  # Limit for safety
-        snr_points = data.get('snr_points', ["7dB"])
-        info_type = data.get('type', "SOFT_INFO")
+        num_vectors = min(data.get("num_vectors", 100), 1000)  # Limit for safety
+        snr_points = data.get("snr_points", ["7dB"])
+        info_type = data.get("type", "SOFT_INFO")
 
         # Try to connect to hardware
         max_retries = 3
@@ -1540,108 +1613,146 @@ def process_ldpc_data():
                 break
             except Exception as e:
                 if retry < max_retries - 1:
-                    logger.warning(f"Connection attempt {retry + 1} failed, retrying...")
+                    logger.warning(
+                        f"Connection attempt {retry + 1} failed, retrying..."
+                    )
                     time.sleep(2)
                 else:
-                    return jsonify({
-                        'error': f'Hardware connection failed after {max_retries} attempts: {str(e)}',
-                        'status': 'error',
-                        'suggestion': 'Please check that the Teensy is connected and the firmware is loaded'
-                    }), 500
+                    return (
+                        jsonify(
+                            {
+                                "error": f"Hardware connection failed after {max_retries} attempts: {str(e)}",
+                                "status": "error",
+                                "suggestion": "Please check that the Teensy is connected and the firmware is loaded",
+                            }
+                        ),
+                        500,
+                    )
 
         # Run health check
         logger.info("Running hardware health check...")
         health_status = teensy.check_chip_health()
 
-        if health_status['status'] != 'healthy':
-            return jsonify({
-                'error': 'Hardware health check failed',
-                'health_status': health_status,
-                'status': 'error'
-            }), 500
+        if health_status["status"] != "healthy":
+            return (
+                jsonify(
+                    {
+                        "error": "Hardware health check failed",
+                        "health_status": health_status,
+                        "status": "error",
+                    }
+                ),
+                500,
+            )
 
         logger.info("Hardware health check passed")
         workflow_results = {
-            'health_check': health_status,
-            'test_parameters': {
-                'num_vectors': num_vectors,
-                'snr_points': snr_points,
-                'info_type': info_type,
-                'hardware': 'AMORGOS 28nm CMOS',
-                'code': '(96,48) LDPC'
+            "health_check": health_status,
+            "test_parameters": {
+                "num_vectors": num_vectors,
+                "snr_points": snr_points,
+                "info_type": info_type,
+                "hardware": "AMORGOS 28nm CMOS",
+                "code": "(96,48) LDPC",
             },
-            'results': {}
+            "results": {},
         }
 
         # Process each SNR point
         for snr in snr_points:
             logger.info(f"Processing SNR point: {snr}")
-            snr_db = float(snr.replace('dB', ''))
+            snr_db = float(snr.replace("dB", ""))
 
             # Generate test vectors
             generator = LDPCDataGenerator()
             vectors = generator.generate_test_vectors(
-                num_vectors=num_vectors,
-                snr_db=snr_db,
-                info_type=info_type
+                num_vectors=num_vectors, snr_db=snr_db, info_type=info_type
             )
 
             # Process through hardware
             try:
-                hardware_results = teensy.process_batch(vectors, info_type)
+                hardware_results = teensy.process_vectors_hardware(vectors)
 
                 # Calculate error statistics
                 bit_errors = 0
                 frame_errors = 0
                 total_bits = num_vectors * 96
 
-                for result in hardware_results['individual_results']:
-                    error_count = result['results']['error_count']
+                for result in hardware_results:
+                    error_count = result["results"]["error_count"]
                     if error_count > 0:
                         frame_errors += 1
                         bit_errors += error_count
 
                 # Store results
-                workflow_results['results'][snr] = {
-                    'snr_db': snr_db,
-                    'hardware_metrics': hardware_results['aggregate_metrics'],
-                    'error_analysis': {
-                        'bit_error_rate': bit_errors / total_bits if total_bits > 0 else 0,
-                        'frame_error_rate': frame_errors / num_vectors if num_vectors > 0 else 0,
-                        'total_bit_errors': bit_errors,
-                        'total_frame_errors': frame_errors
+                workflow_results["results"][snr] = {
+                    "snr_db": snr_db,
+                    "hardware_metrics": {
+                        "total_vectors": num_vectors,
+                        "successful_runs": len(hardware_results),
+                        "success_rate": len(hardware_results) / num_vectors,
+                        "frame_error_rate": frame_errors / num_vectors,
+                        "bit_error_rate": bit_errors / total_bits,
+                        "avg_execution_time_us": sum(
+                            r["execution"]["time_us"] for r in hardware_results
+                        )
+                        / num_vectors,
+                        "avg_energy_per_vector_pj": sum(
+                            r["power"]["energy_per_bit_pj"] for r in hardware_results
+                        )
+                        / num_vectors,
+                        "throughput_vectors_per_sec": (
+                            (num_vectors * 1e6)
+                            / sum(r["execution"]["time_us"] for r in hardware_results)
+                            if sum(r["execution"]["time_us"] for r in hardware_results)
+                            > 0
+                            else 0
+                        ),
                     },
-                    'performance': {
-                        'avg_time_to_solution_ns': hardware_results['aggregate_metrics'][
-                                                       'avg_time_per_vector_us'] * 1000,
-                        'energy_efficiency_pj_per_bit': 5.47,  # From paper
-                        'throughput_mbps': (96 * 1e6) / hardware_results['aggregate_metrics'][
-                            'avg_time_per_vector_us'] if hardware_results['aggregate_metrics'][
-                                                             'avg_time_per_vector_us'] > 0 else 0
-                    }
+                    "error_analysis": {
+                        "bit_error_rate": bit_errors / total_bits,
+                        "frame_error_rate": frame_errors / num_vectors,
+                        "total_bit_errors": bit_errors,
+                        "total_frame_errors": frame_errors,
+                    },
+                    "performance": {
+                        "avg_time_to_solution_us": sum(
+                            r["execution"]["time_us"] for r in hardware_results
+                        )
+                        / num_vectors,
+                        "energy_efficiency_pj_per_bit": sum(
+                            r["power"]["energy_per_bit_pj"] for r in hardware_results
+                        )
+                        / num_vectors,
+                        "throughput_mbps": (
+                            (num_vectors * 1e6)
+                            / sum(r["execution"]["time_us"] for r in hardware_results)
+                            if sum(r["execution"]["time_us"] for r in hardware_results)
+                            > 0
+                            else 0
+                        ),
+                    },
                 }
 
-                logger.info(f"SNR {snr}: FER={frame_errors / num_vectors:.2e}, BER={bit_errors / total_bits:.2e}")
+                logger.info(
+                    f"SNR {snr}: FER={frame_errors / num_vectors:.2e}, BER={bit_errors / total_bits:.2e}"
+                )
 
             except Exception as e:
                 logger.error(f"Error processing SNR {snr}: {e}")
-                workflow_results['results'][snr] = {
-                    'error': str(e),
-                    'status': 'failed'
-                }
+                workflow_results["results"][snr] = {"error": str(e), "status": "failed"}
 
-        return jsonify({
-            'status': 'success',
-            'message': 'LDPC hardware test completed successfully',
-            'results': workflow_results
-        })
+        return jsonify(
+            {
+                "status": "success",
+                "message": "LDPC hardware test completed successfully",
+                "results": workflow_results,
+            }
+        )
 
     except Exception as e:
         logger.error(f"LDPC workflow error: {e}")
-        return jsonify({
-            'error': str(e),
-            'status': 'error'
-        }), 500
+        return jsonify({"error": str(e), "status": "error"}), 500
 
     finally:
         if teensy:
@@ -1651,25 +1762,23 @@ def process_ldpc_data():
                 pass
 
 
-# --- SAT Solver ---
-
-# Update the SAT solver endpoint
-@app.route('/sat/solve', methods=['POST'])
+# ------------------------------ SAT Solver Routes ----------------------------
+@app.route("/sat/solve", methods=["POST"])
 def solve_sat():
     """Solve SAT problem with multiple solver support"""
     try:
         data = request.get_json()
-        dimacs_str = data.get('dimacs', '')
-        solver_type = data.get('solver_type', 'minisat').lower()
+        dimacs_str = data.get("dimacs", "")
+        solver_type = data.get("solver_type", "minisat").lower()
 
         if not dimacs_str.strip():
-            return jsonify({'error': 'No DIMACS input provided'}), 400
+            return jsonify({"error": "No DIMACS input provided"}), 400
 
-        if solver_type not in ['minisat', 'walksat', 'daedalus']:
-            solver_type = 'minisat'
+        if solver_type not in ["minisat", "walksat", "daedalus"]:
+            solver_type = "minisat"
 
         test_id = generate_id()
-        test_name = data.get('name', f'SAT_{test_id[:8]}')
+        test_name = data.get("name", f"SAT_{test_id[:8]}")
 
         # Run multiple iterations for statistical validity
         num_runs = 10
@@ -1680,18 +1789,20 @@ def solve_sat():
 
         for i in range(num_runs):
             result = sat_benchmark.solve_with_metrics(dimacs_str, solver_type)
-            all_results.append({
-                'run': i + 1,
-                'satisfiable': result['satisfiable'],
-                'solve_time_ms': result['solve_time_ms'],
-                'energy_nj': result['total_energy_nj'],
-                'propagations': result['propagations']
-            })
+            all_results.append(
+                {
+                    "run": i + 1,
+                    "satisfiable": result["satisfiable"],
+                    "solve_time_ms": result["solve_time_ms"],
+                    "energy_nj": result["total_energy_nj"],
+                    "propagations": result["propagations"],
+                }
+            )
 
-            if result['satisfiable']:
+            if result["satisfiable"]:
                 success_count += 1
-            total_time += result['solve_time_ms']
-            total_energy += result['total_energy_nj']
+            total_time += result["solve_time_ms"]
+            total_energy += result["total_energy_nj"]
 
         # Calculate aggregate metrics
         avg_time = total_time / num_runs
@@ -1699,215 +1810,185 @@ def solve_sat():
 
         # Format output
         first_result = sat_benchmark.solve_with_metrics(dimacs_str, solver_type)
-        if first_result['satisfiable']:
-            output = f"s SATISFIABLE\nv {' '.join(map(str, first_result['solution']))} 0\n"
+        if first_result["satisfiable"]:
+            output = (
+                f"s SATISFIABLE\nv {' '.join(map(str, first_result['solution']))} 0\n"
+            )
         else:
             output = "s UNSATISFIABLE\n"
 
         # Store in database
         with get_db() as conn:
             # Store in tests table
-            conn.execute('''
+            conn.execute(
+                """
                 INSERT INTO tests (id, name, chip_type, test_mode, environment, config, status, created, metadata)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                test_id,
-                test_name,
-                '3SAT',
-                solver_type.upper(),
-                'hardware' if solver_type == 'daedalus' else 'software',
-                json.dumps({
-                    'dimacs_input': dimacs_str,
-                    'solver_type': solver_type,
-                    'num_variables': first_result['num_variables'],
-                    'num_clauses': first_result['num_clauses']
-                }),
-                'completed',
-                datetime.utcnow().isoformat(),
-                json.dumps({
-                    'satisfiable': first_result['satisfiable'],
-                    'dimacs_output': output,
-                    'avg_solve_time_ms': avg_time,
-                    'avg_energy_nj': avg_energy,
-                    'energy_per_variable_pj': first_result['energy_per_variable_pj'],
-                    'power_consumption_mw': first_result['power_consumption_mw'],
-                    'success_rate': success_count / num_runs,
-                    'solution': first_result['solution'] if first_result['satisfiable'] else None
-                })
-            ))
+            """,
+                (
+                    test_id,
+                    test_name,
+                    "3SAT",
+                    solver_type.upper(),
+                    "hardware" if solver_type == "daedalus" else "software",
+                    json.dumps(
+                        {
+                            "dimacs_input": dimacs_str,
+                            "solver_type": solver_type,
+                            "num_variables": first_result["num_variables"],
+                            "num_clauses": first_result["num_clauses"],
+                        }
+                    ),
+                    "completed",
+                    datetime.utcnow().isoformat(),
+                    json.dumps(
+                        {
+                            "satisfiable": first_result["satisfiable"],
+                            "dimacs_output": output,
+                            "avg_solve_time_ms": avg_time,
+                            "avg_energy_nj": avg_energy,
+                            "energy_per_variable_pj": first_result[
+                                "energy_per_variable_pj"
+                            ],
+                            "power_consumption_mw": first_result[
+                                "power_consumption_mw"
+                            ],
+                            "success_rate": success_count / num_runs,
+                            "solution": (
+                                first_result["solution"]
+                                if first_result["satisfiable"]
+                                else None
+                            ),
+                        }
+                    ),
+                ),
+            )
 
             # Store detailed results
-            conn.execute('''
+            conn.execute(
+                """
                 INSERT INTO test_results (id, test_id, iteration, timestamp, results)
                 VALUES (?, ?, ?, ?, ?)
-            ''', (
-                generate_id(),
-                test_id,
-                1,
-                datetime.utcnow().isoformat(),
-                json.dumps({
-                    'runs': all_results,
-                    'summary': {
-                        'avg_solve_time_ms': avg_time,
-                        'avg_energy_nj': avg_energy,
-                        'min_time_ms': min(r['solve_time_ms'] for r in all_results),
-                        'max_time_ms': max(r['solve_time_ms'] for r in all_results),
-                        'success_rate': success_count / num_runs
-                    }
-                })
-            ))
+            """,
+                (
+                    generate_id(),
+                    test_id,
+                    1,
+                    datetime.utcnow().isoformat(),
+                    json.dumps(
+                        {
+                            "runs": all_results,
+                            "summary": {
+                                "avg_solve_time_ms": avg_time,
+                                "avg_energy_nj": avg_energy,
+                                "min_time_ms": min(
+                                    r["solve_time_ms"] for r in all_results
+                                ),
+                                "max_time_ms": max(
+                                    r["solve_time_ms"] for r in all_results
+                                ),
+                                "success_rate": success_count / num_runs,
+                            },
+                        }
+                    ),
+                ),
+            )
 
             conn.commit()
 
-        return jsonify({
-            'test_id': test_id,
-            'output': output,
-            'satisfiable': first_result['satisfiable'],
-            'metrics': {
-                'avg_solve_time_ms': avg_time,
-                'avg_energy_nj': avg_energy,
-                'energy_per_variable_pj': first_result['energy_per_variable_pj'],
-                'power_consumption_mw': first_result['power_consumption_mw']
+        return jsonify(
+            {
+                "test_id": test_id,
+                "output": output,
+                "satisfiable": first_result["satisfiable"],
+                "metrics": {
+                    "avg_solve_time_ms": avg_time,
+                    "avg_energy_nj": avg_energy,
+                    "energy_per_variable_pj": first_result["energy_per_variable_pj"],
+                    "power_consumption_mw": first_result["power_consumption_mw"],
+                },
             }
-        })
+        )
 
     except Exception as e:
         logger.error(f"Error solving SAT: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-# --- User Management ---
-
-@app.route('/users', methods=['GET'])
+# ------------------------------ Admin Routes -------------------
+@app.route("/users", methods=["GET"])
 def get_users():
     """List all users"""
     try:
         with get_db() as conn:
             cursor = conn.execute(
-                'SELECT id, email, name, role, created_at, last_login FROM users ORDER BY created_at DESC')
+                "SELECT id, email, name, role, created_at, last_login FROM users ORDER BY created_at DESC"
+            )
             users = [dict_from_row(row) for row in cursor]
-            return jsonify({'users': users})
+            return jsonify({"users": users})
     except Exception as e:
         logger.error(f"Error listing users: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-@app.route('/users/<user_id>', methods=['PUT', 'DELETE'])
+@app.route("/users/<user_id>", methods=["PUT", "DELETE"])
 def manage_user(user_id):
     """Update or delete user"""
     try:
         with get_db() as conn:
-            if request.method == 'PUT':
+            if request.method == "PUT":
                 data = request.get_json()
-                role = data.get('role')
+                role = data.get("role")
 
-                if role not in ['user', 'admin', 'moderator']:
-                    return jsonify({'error': 'Invalid role'}), 400
+                if role not in ["user", "admin", "moderator"]:
+                    return jsonify({"error": "Invalid role"}), 400
 
-                cursor = conn.execute('UPDATE users SET role = ? WHERE id = ?', (role, user_id))
+                cursor = conn.execute(
+                    "UPDATE users SET role = ? WHERE id = ?", (role, user_id)
+                )
                 if cursor.rowcount == 0:
-                    return jsonify({'error': 'User not found'}), 404
+                    return jsonify({"error": "User not found"}), 404
 
                 conn.commit()
-                return jsonify({'message': 'User updated successfully'})
+                return jsonify({"message": "User updated successfully"})
 
             else:  # DELETE
-                cursor = conn.execute('DELETE FROM users WHERE id = ?', (user_id,))
+                cursor = conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
                 if cursor.rowcount == 0:
-                    return jsonify({'error': 'User not found'}), 404
+                    return jsonify({"error": "User not found"}), 404
 
                 conn.commit()
-                return jsonify({'message': 'User deleted successfully'})
+                return jsonify({"message": "User deleted successfully"})
 
     except Exception as e:
         logger.error(f"Error managing user {user_id}: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
-# --- Announcements ---
-
-@app.route('/announcements', methods=['GET', 'POST'])
-def handle_announcements():
-    """Get active announcements or create new ones"""
-    if request.method == 'GET':
-        try:
-            with get_db() as conn:
-                cursor = conn.execute('''
-                    SELECT * FROM announcements 
-                    WHERE active = 1 AND (expires_at IS NULL OR expires_at > ?)
-                    ORDER BY created_at DESC
-                ''', (datetime.utcnow().isoformat(),))
-
-                announcements = [dict_from_row(row) for row in cursor]
-                return jsonify({'announcements': announcements})
-
-        except Exception as e:
-            logger.error(f"Error getting announcements: {e}")
-            return jsonify({'error': str(e)}), 500
-
-    else:  # POST
-        try:
-            data = request.get_json()
-            message = data.get('message')
-
-            if not message:
-                return jsonify({'error': 'Message is required'}), 400
-
-            with get_db() as conn:
-                conn.execute('''
-                    INSERT INTO announcements (id, message, type, expires_at, created_at, created_by, active)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    generate_id(),
-                    message,
-                    data.get('type', 'info'),
-                    data.get('expires_at'),
-                    datetime.utcnow().isoformat(),
-                    data.get('created_by', 'system'),
-                    1
-                ))
-                conn.commit()
-
-            return jsonify({'message': 'Announcement created successfully'}), 201
-
-        except Exception as e:
-            logger.error(f"Error creating announcement: {e}")
-            return jsonify({'error': str(e)}), 500
-
-
-# --- Background Tasks ---
-
+# ------------------------------ Background Tasks -----------------------------
 def start_background_tasks():
-    """Start background metric collection"""
-
     def collect_metrics():
         while True:
             try:
                 collect_system_metrics()
-                time.sleep(300)  # Every 5 minutes
+                time.sleep(300)
             except Exception as e:
                 logger.error(f"Metrics collection error: {e}")
                 time.sleep(60)
 
-    thread = threading.Thread(target=collect_metrics, daemon=True)
-    thread.start()
+    threading.Thread(target=collect_metrics, daemon=True).start()
 
 
-# --- Main ---
-
-if __name__ == '__main__':
-    # Initialize
+# ------------------------------ Main -----------------------------------------
+if __name__ == "__main__":
     init_db()
     app.start_time = time.time()
     start_background_tasks()
-
-    # Log startup info
-    logger.info(f"Dacroq API starting...")
+    logger.info("Dacroq API starting…")
     logger.info(f"Database: {DB_PATH}")
     logger.info(f"Data directory: {DATA_DIR}")
-
-    # Run server
     app.run(
-        host='0.0.0.0',port=int(os.getenv('PORT', 8000)),
-       debug=os.getenv('FLASK_ENV') == 'development'
-   )
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", 8000)),
+        debug=os.getenv("FLASK_ENV") == "development",
+    )

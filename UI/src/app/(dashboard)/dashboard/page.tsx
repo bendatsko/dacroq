@@ -21,6 +21,7 @@ import {
     RiWifiOffLine,
     RiWifiLine,
     RiDeleteBinLine,
+    RiSoundModuleLine,
 } from "@remixicon/react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -246,7 +247,8 @@ export default function Dashboard() {
 
     const [selectedTests, setSelectedTests] = useState<string[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
-    const testsPerPage = 10;
+    const [itemsPerPage, setItemsPerPage] = useState("auto");
+    const [calculatedItemsPerPage, setCalculatedItemsPerPage] = useState(10);
 
     const [apiConnected, setApiConnected] = useState(true);
 
@@ -360,6 +362,67 @@ export default function Dashboard() {
         fetchTests();
     }, [fetchTests]);
 
+    /* Calculate optimal items per page based on viewport height */
+    useEffect(() => {
+        const calculateOptimalItemsPerPage = () => {
+            if (itemsPerPage !== "auto") {
+                setCalculatedItemsPerPage(parseInt(itemsPerPage));
+                return;
+            }
+
+            // Wait for DOM to be ready
+            const timer = setTimeout(() => {
+                const viewportHeight = window.innerHeight;
+                
+                // More precise measurements
+                const navbar = document.querySelector('nav') as HTMLElement;
+                const headerTitle = document.querySelector('h1') as HTMLElement;
+                const filtersSection = document.querySelector('[class*="rounded-xl"][class*="border"]') as HTMLElement;
+                const tableHeader = document.querySelector('thead') as HTMLElement;
+                
+                // Calculate used height more precisely
+                const navbarHeight = navbar?.offsetHeight || 60;
+                const titleHeight = headerTitle?.offsetHeight || 48;
+                const titleMargins = 40; // pt-6 + mt-4 spacing
+                const filtersHeight = filtersSection?.offsetHeight || 88;
+                const filtersMargin = 16; // mt-4
+                const tableHeaderHeight = tableHeader?.offsetHeight || 48;
+                const tableMargins = 16; // mt-4
+                const paginationHeight = 80; // Estimated pagination height
+                const safetyBuffer = 20; // Extra buffer to ensure no scroll
+                
+                const usedHeight = navbarHeight + titleHeight + titleMargins + 
+                                 filtersHeight + filtersMargin + tableHeaderHeight + 
+                                 tableMargins + paginationHeight + safetyBuffer;
+                
+                const availableHeight = viewportHeight - usedHeight;
+                
+                // Row heights based on actual rendering
+                const isMobile = window.innerWidth < 768;
+                const rowHeight = isMobile ? 74 : 64; // Slightly more accurate measurements
+                
+                const calculatedItems = Math.floor(availableHeight / rowHeight);
+                
+                // Set reasonable bounds: minimum 3, maximum 50
+                const boundedItems = Math.max(3, Math.min(50, calculatedItems));
+                
+                setCalculatedItemsPerPage(boundedItems);
+            }, 100); // Small delay to ensure DOM is rendered
+
+            return () => clearTimeout(timer);
+        };
+
+        calculateOptimalItemsPerPage();
+
+        // Recalculate on window resize
+        const handleResize = () => {
+            calculateOptimalItemsPerPage();
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [itemsPerPage]);
+
     /* periodic API health check */
     useEffect(() => {
         const checkHealth = async () => {
@@ -470,8 +533,8 @@ export default function Dashboard() {
                 .some((f) => f!.toLowerCase().includes(q));
         });
 
-    const indexOfLastTest = currentPage * testsPerPage;
-    const indexOfFirstTest = indexOfLastTest - testsPerPage;
+    const indexOfLastTest = currentPage * calculatedItemsPerPage;
+    const indexOfFirstTest = indexOfLastTest - calculatedItemsPerPage;
     const currentTests = filteredTests.slice(indexOfFirstTest, indexOfLastTest);
 
     const counts = {
@@ -487,18 +550,19 @@ export default function Dashboard() {
     return (
         <div className="min-h-screen bg-background">
             <div className="flex-1 flex flex-col">
-                <main className="flex-1 py-1.5">
+                <main className="flex-1">
                     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 
                         {/* Header */}
-                        <div className="mb-3 flex items-center justify-between">
+                        <div className="pt-0 md:pt-1 flex items-center justify-between">
                             <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
 
                         </div>
 
                         {/* Search / filters */}
-                        <div className="mt-2 flex flex-col gap-4 rounded-xl border border-border bg-card/50 p-2 sm:flex-row">
-                            <div className="flex-1">
+                        <div className="mt-3 md:mt-4 rounded-xl border border-border bg-card/50 p-3 space-y-3">
+                            {/* Search Row - For Finding Things */}
+                            <div className="w-full">
                                 <div className="relative">
                                     <RiSearchLine className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                                     <input
@@ -511,50 +575,70 @@ export default function Dashboard() {
                                 </div>
                             </div>
 
-                            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                                <SelectTrigger className="w-48">
-                                    <RiFilterLine className="mr-2 h-4 w-4" />
-                                    <SelectValue placeholder="Category" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Tests ({tests.length})</SelectItem>
-                                    <SelectItem value="ldpc">LDPC ({counts.ldpc})</SelectItem>
-                                    <SelectItem value="3sat">3-SAT ({counts.sat})</SelectItem>
-                                    <SelectItem value="ksat">K-SAT ({counts.ksat})</SelectItem>
-                                    <SelectItem value="completed">Completed</SelectItem>
-                                    <SelectItem value="running">Running</SelectItem>
-                                    <SelectItem value="failed">Failed</SelectItem>
-                                    <SelectItem value="queued">Queued</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            {/* Action Row - For Doing Things */}
+                            <div className="flex items-center gap-2 sm:gap-3">
+                                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                                    <SelectTrigger className="w-36 sm:w-48">
+                                        <RiFilterLine className="mr-1 h-4 w-4 sm:mr-2" />
+                                        <SelectValue placeholder="Category" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Tests ({tests.length})</SelectItem>
+                                        <SelectItem value="ldpc">LDPC ({counts.ldpc})</SelectItem>
+                                        <SelectItem value="3sat">3-SAT ({counts.sat})</SelectItem>
+                                        <SelectItem value="ksat">K-SAT ({counts.ksat})</SelectItem>
+                                        <SelectItem value="completed">Completed</SelectItem>
+                                        <SelectItem value="running">Running</SelectItem>
+                                        <SelectItem value="failed">Failed</SelectItem>
+                                        <SelectItem value="queued">Queued</SelectItem>
+                                    </SelectContent>
+                                </Select>
 
-                            <Select value={chipTypeFilter} onValueChange={setChipTypeFilter}>
-                                <SelectTrigger className="w-40">
-                                    <RiCpuLine className="mr-2 h-4 w-4" />
-                                    <SelectValue placeholder="Chip Type" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Chips</SelectItem>
-                                    <SelectItem value="LDPC">LDPC</SelectItem>
-                                    <SelectItem value="3SAT">3-SAT</SelectItem>
-                                    <SelectItem value="KSAT">K-SAT</SelectItem>
-                                </SelectContent>
-                            </Select>
+                                <Select value={chipTypeFilter} onValueChange={setChipTypeFilter}>
+                                    <SelectTrigger className="w-32 sm:w-40">
+                                        <RiCpuLine className="mr-1 h-4 w-4 sm:mr-2" />
+                                        <SelectValue placeholder="Chip Type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Chips</SelectItem>
+                                        <SelectItem value="LDPC">LDPC</SelectItem>
+                                        <SelectItem value="3SAT">3-SAT</SelectItem>
+                                        <SelectItem value="KSAT">K-SAT</SelectItem>
+                                    </SelectContent>
+                                </Select>
 
-                            {selectedTests.length > 0 && (
-                                <Button
-                                    variant="destructive"
-                                    size="icon"
-                                    onClick={() => handleDelete(selectedTests, tests)}
-                                    className="flex-shrink-0"
-                                >
-                                    <RiDeleteBinLine className="h-4 w-4" />
-                                </Button>
-                            )}
+                                <Select value={itemsPerPage} onValueChange={(value) => {
+                                    setItemsPerPage(value);
+                                    setCurrentPage(1); // Reset to first page when changing page size
+                                }}>
+                                    <SelectTrigger className="w-20 sm:w-24">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="auto">Auto</SelectItem>
+                                        <SelectItem value="5">5</SelectItem>
+                                        <SelectItem value="10">10</SelectItem>
+                                        <SelectItem value="15">15</SelectItem>
+                                        <SelectItem value="25">25</SelectItem>
+                                        <SelectItem value="50">50</SelectItem>
+                                    </SelectContent>
+                                </Select>
+
+                                {selectedTests.length > 0 && (
+                                    <Button
+                                        variant="destructive"
+                                        size="icon"
+                                        onClick={() => handleDelete(selectedTests, tests)}
+                                        className="flex-shrink-0 bg-red-500 hover:bg-red-600 text-white"
+                                    >
+                                        <RiDeleteBinLine className="h-4 w-4" />
+                                    </Button>
+                                )}
+                            </div>
                         </div>
 
                         {/* Table / empty / offline states */}
-                        <div className="mt-2 overflow-hidden rounded-xl border border-border bg-card">
+                        <div className="mt-4 overflow-hidden rounded-xl border border-border bg-card">
                             {!apiConnected ? (
                                 <EmptyState
                                     icon={<RiWifiOffLine className="h-full w-full" />}
@@ -584,8 +668,121 @@ export default function Dashboard() {
                                 />
                             ) : (
                                 <>
-                                    {/* Table */}
-                                    <div className="overflow-x-auto">
+                                    {/* Mobile Card Layout */}
+                                    <div className="block md:hidden p-1.5 space-y-1.5">
+                                        {currentTests.map((test) => {
+                                            const statusConfig = {
+                                                completed: {
+                                                    icon: RiCheckLine,
+                                                    color: "text-green-500",
+                                                    bg: "bg-green-500/10"
+                                                },
+                                                running: {
+                                                    icon: RiTimeLine,
+                                                    color: "text-blue-500",
+                                                    bg: "bg-blue-500/10"
+                                                },
+                                                failed: {
+                                                    icon: RiCloseLine,
+                                                    color: "text-red-500",
+                                                    bg: "bg-red-500/10"
+                                                },
+                                                queued: {
+                                                    icon: RiTimeLine,
+                                                    color: "text-gray-500",
+                                                    bg: "bg-gray-500/10"
+                                                },
+                                            } as const;
+                                            const sc = statusConfig[test.status as keyof typeof statusConfig];
+                                            
+                                            const isLDPC = test.chipType === "LDPC";
+                                            const algorithmType = test.results?.algorithm_type || "unknown";
+                                            const noiseLevel = test.results?.noise_level;
+                                            const testMode = test.results?.test_mode;
+                                            
+                                            return (
+                                                <div
+                                                    key={test.id}
+                                                    className="bg-background border border-border rounded-lg p-2.5 cursor-pointer hover:bg-muted/50 transition-colors"
+                                                    onClick={() => handleRowClick(test)}
+                                                >
+                                                    <div className="flex items-start gap-2.5">
+                                                        {/* Left: Selection checkbox */}
+                                                        <Checkbox
+                                                            checked={selectedTests.includes(test.id)}
+                                                            onCheckedChange={(checked) => {
+                                                                setSelectedTests((prev) =>
+                                                                    checked
+                                                                        ? [...prev, test.id]
+                                                                        : prev.filter((id) => id !== test.id),
+                                                                );
+                                                            }}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="flex-shrink-0 mt-0.5"
+                                                        />
+                                                        
+                                                        {/* Center: Test details */}
+                                                        <div className="flex-1 min-w-0">
+                                                            {/* Test name row */}
+                                                            <div className="flex items-center gap-1.5 mb-1.5">
+                                                                <span className="font-medium text-sm text-foreground truncate">{test.name}</span>
+                                                                <Badge 
+                                                                    variant={isLDPC ? "default" : "secondary"}
+                                                                    className={cn(
+                                                                        "text-xs px-1.5 py-0.5 h-auto flex-shrink-0",
+                                                                        isLDPC ? "bg-purple-500/10 text-purple-500 border-purple-500/20" : "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                                                                    )}
+                                                                >
+                                                                    {test.chipType}
+                                                                </Badge>
+                                                                {isLDPC && algorithmType !== "unknown" && (
+                                                                    <Badge
+                                                                        variant="outline"
+                                                                        className="text-xs px-1.5 py-0.5 h-auto flex-shrink-0"
+                                                                    >
+                                                                        {algorithmType === "analog_hardware" ? "A" : "D"}
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                            
+                                                            {/* Test details row */}
+                                                            <div className="flex items-center gap-2.5 text-xs text-muted-foreground mb-1">
+                                                                <span className="flex items-center gap-1">
+                                                                    <RiTestTubeLine className="h-3 w-3"/>
+                                                                    {testMode || test.testType}
+                                                                </span>
+                                                                {noiseLevel !== undefined && (
+                                                                    <span className="flex items-center gap-1">
+                                                                        <RiSoundModuleLine className="h-3 w-3"/>
+                                                                        {noiseLevel}% noise
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            
+                                                            {/* Status row */}
+                                                            <div className="flex items-center gap-1.5">
+                                                                <div className={cn(
+                                                                    "flex h-4 w-4 items-center justify-center rounded flex-shrink-0",
+                                                                    sc?.bg
+                                                                )}>
+                                                                    {sc && <sc.icon className={cn("h-2.5 w-2.5", sc.color)} />}
+                                                                </div>
+                                                                <span className="text-xs text-muted-foreground capitalize">{test.status}</span>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        {/* Right: Date */}
+                                                        <div className="text-xs text-muted-foreground text-right flex-shrink-0 mt-0.5">
+                                                            {formatDate(test.createdAt)}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Desktop Table */}
+                                    <div className="hidden md:block overflow-x-auto">
                                         <table className="w-full">
                                             <thead className="border-b border-border bg-muted/50">
                                             <tr>
@@ -603,7 +800,6 @@ export default function Dashboard() {
                                             </thead>
                                             <tbody className="divide-y divide-border">
                                             {currentTests.map((test) => {
-                                                const {fraction, percent} = getSuccessRate(test);
                                                 const statusConfig = {
                                                     completed: {
                                                         icon: RiCheckLine,
@@ -658,55 +854,33 @@ export default function Dashboard() {
                                                         </Td>
 
                                                         <Td>
-                                                            <div className="space-y-1">
-                                                                <div className="flex items-center gap-2">
-                                                                    <div
-                                                                        className="font-medium text-foreground group-hover:text-blue-500 transition-colors">
-                                                                        {test.name}
-                                                                    </div>
-                                                                    {/* Algorithm type badge for LDPC */}
-                                                                    {isLDPC && algorithmType !== "unknown" && (
-                                                                        <Badge
-                                                                            variant={algorithmType === "analog_hardware" ? "default" : "secondary"}
-                                                                            className="text-xs"
-                                                                        >
-                                                                            {algorithmType === "analog_hardware" ? "Analog" : "Digital"}
-                                                                        </Badge>
-                                                                    )}
-                                                                </div>
-                                                                <div
-                                                                    className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                            <RiTestTubeLine className="h-3 w-3"/>
-                            {testMode || test.testType}
-                        </span>
-                                                                    {noiseLevel !== undefined && (
-                                                                        <span className="flex items-center gap-1">
-                                <RiFlashlightLine className="h-3 w-3"/>
-                                                                            {noiseLevel}% noise
-                            </span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </Td>
-
-                                                        <Td>
-                                                            <div className="space-y-1">
-                                                                <div className="flex items-center gap-2">
-                                                                    <div className={cn(
-                                                                        "flex h-8 w-8 items-center justify-center rounded-lg",
-                                                                        isLDPC ? "bg-purple-500/10" : "bg-blue-500/10"
-                                                                    )}>
-                                                                        <RiCpuLine className={cn(
-                                                                            "h-4 w-4",
-                                                                            isLDPC ? "text-purple-500" : "text-blue-500"
-                                                                        )}/>
-                                                                    </div>
-                                                                    <div>
-                                                                        <div
-                                                                            className="font-medium text-foreground text-sm">
-                                                                            {test.chipType}
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="flex items-center gap-2 mb-1">
+                                                                        <div className="font-medium text-foreground group-hover:text-blue-500 transition-colors truncate">
+                                                                            {test.name}
                                                                         </div>
+                                                                        {/* Algorithm type badge for LDPC */}
+                                                                        {isLDPC && algorithmType !== "unknown" && (
+                                                                            <Badge
+                                                                                variant={algorithmType === "analog_hardware" ? "default" : "secondary"}
+                                                                                className="text-xs px-1.5 py-0.5 h-auto"
+                                                                            >
+                                                                                {algorithmType === "analog_hardware" ? "Analog" : "Digital"}
+                                                                            </Badge>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                                                        <span className="flex items-center gap-1">
+                                                                            <RiTestTubeLine className="h-3 w-3"/>
+                                                                            {testMode || test.testType}
+                                                                        </span>
+                                                                        {noiseLevel !== undefined && (
+                                                                            <span className="flex items-center gap-1">
+                                                                                <RiSoundModuleLine className="h-3 w-3"/>
+                                                                                {noiseLevel}% noise
+                                                                            </span>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -715,11 +889,27 @@ export default function Dashboard() {
                                                         <Td>
                                                             <div className="flex items-center gap-2">
                                                                 <div className={cn(
-                                                                    "flex h-8 w-8 items-center justify-center rounded-lg",
+                                                                    "flex h-6 w-6 items-center justify-center rounded",
+                                                                    isLDPC ? "bg-purple-500/10" : "bg-blue-500/10"
+                                                                )}>
+                                                                    <RiCpuLine className={cn(
+                                                                        "h-3.5 w-3.5",
+                                                                        isLDPC ? "text-purple-500" : "text-blue-500"
+                                                                    )}/>
+                                                                </div>
+                                                                <div className="font-medium text-foreground text-sm">
+                                                                    {test.chipType}
+                                                                </div>
+                                                            </div>
+                                                        </Td>
+
+                                                        <Td>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className={cn(
+                                                                    "flex h-6 w-6 items-center justify-center rounded",
                                                                     sc?.bg
                                                                 )}>
-                                                                    {sc &&
-                                                                        <sc.icon className={cn("h-4 w-4", sc.color)}/>}
+                                                                    {sc && <sc.icon className={cn("h-3.5 w-3.5", sc.color)}/>}
                                                                 </div>
                                                                 <div>
                                                                     <div className="font-medium text-sm">
@@ -733,9 +923,6 @@ export default function Dashboard() {
                                                                 </div>
                                                             </div>
                                                         </Td>
-
-
-
 
                                                         <Td>
                                                             <div className="text-left">
@@ -755,49 +942,95 @@ export default function Dashboard() {
                                     </div>
 
                                     {/* Pagination */}
-                                    {filteredTests.length > testsPerPage && (
-                                        <div
-                                            className="flex items-center justify-between border-t border-border px-6 py-4">
-                                            <div className="text-sm text-muted-foreground">
-                                                Showing {indexOfFirstTest + 1}–
-                                                {Math.min(indexOfLastTest, filteredTests.length)} of{" "}
-                                                {filteredTests.length} results
+                                    {filteredTests.length > calculatedItemsPerPage && (
+                                        <div className="border-t border-border px-4 py-4 sm:px-6">
+                                            {/* Mobile Pagination */}
+                                            <div className="block sm:hidden">
+                                                <div className="flex gap-2 mb-3">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                                        disabled={currentPage === 1}
+                                                        className="flex-1"
+                                                    >
+                                                        <RiArrowLeftSLine className="h-4 w-4 mr-1" />
+                                                        Previous
+                                                    </Button>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            setCurrentPage((p) =>
+                                                                Math.min(
+                                                                    Math.ceil(filteredTests.length / calculatedItemsPerPage),
+                                                                    p + 1,
+                                                                ),
+                                                            )
+                                                        }
+                                                        disabled={
+                                                            currentPage >=
+                                                            Math.ceil(filteredTests.length / calculatedItemsPerPage)
+                                                        }
+                                                        className="flex-1"
+                                                    >
+                                                        Next
+                                                        <RiArrowRightSLine className="h-4 w-4 ml-1" />
+                                                    </Button>
+                                                </div>
+                                                <div className="flex items-center justify-between">
+                                                    <div className="text-sm text-muted-foreground">
+                                                        {indexOfFirstTest + 1}–{Math.min(indexOfLastTest, filteredTests.length)} of {filteredTests.length}
+                                                    </div>
+                                                    <div className="text-sm text-muted-foreground">
+                                                        Page {currentPage} of {Math.ceil(filteredTests.length / calculatedItemsPerPage)}
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() =>
-                                                        setCurrentPage((p) => Math.max(1, p - 1))
-                                                    }
-                                                    disabled={currentPage === 1}
-                                                >
-                                                    <RiArrowLeftSLine className="h-4 w-4" />
-                                                    Previous
-                                                </Button>
-                                                <span className="px-2 text-sm text-muted-foreground">
-                          Page {currentPage} of{" "}
-                                                    {Math.ceil(filteredTests.length / testsPerPage)}
-                        </span>
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() =>
-                                                        setCurrentPage((p) =>
-                                                            Math.min(
-                                                                Math.ceil(filteredTests.length / testsPerPage),
-                                                                p + 1,
-                                                            ),
-                                                        )
-                                                    }
-                                                    disabled={
-                                                        currentPage >=
-                                                        Math.ceil(filteredTests.length / testsPerPage)
-                                                    }
-                                                >
-                                                    Next
-                                                    <RiArrowRightSLine className="h-4 w-4" />
-                                                </Button>
+                                            
+                                            {/* Desktop Pagination */}
+                                            <div className="hidden sm:flex items-center justify-between">
+                                                <div className="text-sm text-muted-foreground">
+                                                    Showing {indexOfFirstTest + 1}–
+                                                    {Math.min(indexOfLastTest, filteredTests.length)} of{" "}
+                                                    {filteredTests.length} results
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            setCurrentPage((p) => Math.max(1, p - 1))
+                                                        }
+                                                        disabled={currentPage === 1}
+                                                    >
+                                                        <RiArrowLeftSLine className="h-4 w-4" />
+                                                        Previous
+                                                    </Button>
+                                                    <span className="px-2 text-sm text-muted-foreground">
+                                                        Page {currentPage} of{" "}
+                                                        {Math.ceil(filteredTests.length / calculatedItemsPerPage)}
+                                                    </span>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            setCurrentPage((p) =>
+                                                                Math.min(
+                                                                    Math.ceil(filteredTests.length / calculatedItemsPerPage),
+                                                                    p + 1,
+                                                                ),
+                                                            )
+                                                        }
+                                                        disabled={
+                                                            currentPage >=
+                                                            Math.ceil(filteredTests.length / calculatedItemsPerPage)
+                                                        }
+                                                    >
+                                                        Next
+                                                        <RiArrowRightSLine className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
                                             </div>
                                         </div>
                                     )}
@@ -839,13 +1072,13 @@ export default function Dashboard() {
 /* -------------------------------------------------------------------------- */
 
 const Th: React.FC<React.PropsWithChildren> = ({ children }) => (
-    <th className="py-2 px-3 text-left text-sm font-medium text-muted-foreground sm:py-3 sm:px-4">
+    <th className="py-2 px-3 text-left text-sm font-medium text-muted-foreground">
         {children}
     </th>
 );
 
 const Td: React.FC<React.PropsWithChildren & { onClick?: (e: React.MouseEvent) => void }> = ({ children, onClick }) => (
-    <td className="py-2 px-3 sm:py-4 sm:px-4" onClick={onClick}>
+    <td className="py-2 px-3" onClick={onClick}>
         {children}
     </td>
 );

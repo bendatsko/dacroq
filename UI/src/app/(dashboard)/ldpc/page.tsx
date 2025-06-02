@@ -1,7 +1,7 @@
 /* ============================================================================
  *  ldpc.tsx – aesthetic-only refactor
  *  - Extra breathing-room between sections
- *  - “Custom Message” / “Pre-written Message” now lives in the same
+ *  - "Custom Message" / "Pre-written Message" now lives in the same
  *    Test-Parameters card (styled like every other parameter)
  *  - Cleaner full-width Select / Input styling
  *  - Quick-remove (×) button for each active parameter
@@ -56,12 +56,11 @@ const PARAMETER_OPTIONS = {
             {
                 value: "analog_hardware",
                 label: "Analog Hardware",
-                description: "Energy-efficient oscillator-based decoder",
             },
             {
                 value: "digital_hardware",
                 label: "Digital Hardware",
-                description: "Traditional belief-propagation decoder",
+                
             },
         ],
         default: "digital_hardware",
@@ -72,7 +71,6 @@ const PARAMETER_OPTIONS = {
         type: "select",
         options: [
             { value: "custom_message", label: "Custom Message" },
-            { value: "pre_written", label: "Pre-written Message" },
             { value: "random_string", label: "Random String" },
             { value: "ber_test", label: "BER Test" },
         ],
@@ -149,6 +147,7 @@ export default function LDPCTestingInterface() {
     const [testName, setTestName] = useState("")
     const [customMessage, setCustomMessage] = useState("")
     const [selectedPreWritten, setSelectedPreWritten] = useState("")
+    const [autoTestName, setAutoTestName] = useState("ldpc_test") // Static initial value
 
     const [activeParameters, setActiveParameters] = useState<Record<string, any>>(
         {
@@ -172,6 +171,13 @@ export default function LDPCTestingInterface() {
             return "ldpc_" + Date.now().toString(36).slice(-6)
         }
     }
+
+    /* ------------------------- effects ------------------------- */
+    
+    // Update auto-generated name after hydration to avoid SSR mismatch
+    useEffect(() => {
+        setAutoTestName(generateTestName())
+    }, [])
 
     /* --------------------------- parameter logic ---------------------------- */
 
@@ -217,9 +223,9 @@ export default function LDPCTestingInterface() {
                                 <SelectItem key={o.value} value={o.value}>
                                     <div className="flex flex-col items-start">
                                         <span className="font-medium">{o.label}</span>
-                                        {o.description && (
+                                        {(o as any).description && (
                                             <span className="text-xs text-muted-foreground">
-                        {o.description}
+                        {(o as any).description}
                       </span>
                                         )}
                                     </div>
@@ -270,7 +276,7 @@ export default function LDPCTestingInterface() {
     const runTest = async () => {
         try {
             setLoading(true)
-            const finalName = testName.trim() || generateTestName()
+            const finalName = testName.trim() || autoTestName
 
             const res = await fetch("/api/proxy/ldpc/jobs", {
                 method: "POST",
@@ -313,233 +319,243 @@ export default function LDPCTestingInterface() {
      * =======================================================================*/
 
     return (
-        <div className="page-container">
-            <div className="mx-auto max-w-4xl space-y-10 py-10 px-4">
-                {/* --------------------------- header --------------------------- */}
-                <div className="text-left">
+        <div className="min-h-screen bg-background">
+            <div className="flex-1 flex flex-col">
+                <main className="flex-1">
+                    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 
-                    <h1 className="mb-4 text-4xl font-bold text-foreground">LDPC Solver</h1>
-                    <p className=" max-w-4xl text-lg text-muted-foreground">
-                        Decode binary low-density parity-check (LDPC) codes using high-efficiency analog compute cores.
-                    </p>
-                </div>
-
-                {/* ---------------------- configuration card --------------------- */}
-                <Card className="card-elevated">
-                    <CardHeader className="border-b border-border">
-                        <CardTitle className="flex items-center gap-2 text-xl">
-                            <RiSettings3Line className="h-5 w-5"/>
-                            Test Configuration
-                        </CardTitle>
-                        <CardDescription>
-                            Fine-tune parameters for your LDPC run.
-                        </CardDescription>
-                    </CardHeader>
-
-                    <CardContent className="space-y-3 p-6">
-                        {/* ----------------------- test name ----------------------- */}
-                        <div className="space-y-2">
-                            <Label>Test Name</Label>
-                            <Input
-                                placeholder={`Auto: ${generateTestName()}`}
-                                value={testName}
-                                onChange={(e) => setTestName(e.target.value)}
-                                className="h-11"
-                            />
+                        {/* Header */}
+                        <div className="pt-0 md:pt-1 flex items-center justify-between">
+                            <h1 className="text-3xl font-bold text-foreground">LDPC Solver</h1>
                         </div>
 
-                        {/* -------------------- parameters header ------------------- */}
-                        <div className="flex items-center justify-between">
-                            <Label>Test Parameters</Label>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="gap-2"
-                                onClick={() => setShowParameterSelector((s) => !s)}
-                            >
-                                <RiAddLine className="h-4 w-4"/>
-                                Add Parameter
-                            </Button>
+                        {/* Description */}
+                        <div>
+                            <p className="text-sm text-muted-foreground">
+                                Decode binary low-density parity-check (LDPC) codes using high-efficiency analog compute cores.
+                            </p>
                         </div>
 
-                        {/* --------------- parameter quick-add grid ---------------- */}
-                        <AnimatePresence>
-                            {showParameterSelector && (
-                                <motion.div
-                                    initial={{opacity: 0, height: 0}}
-                                    animate={{opacity: 1, height: "auto"}}
-                                    exit={{opacity: 0, height: 0}}
-                                    className="overflow-hidden"
-                                >
-                                    <div className="rounded-lg border-2 border-dashed border-border p-4">
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {Object.entries(PARAMETER_OPTIONS).map(([k, cfg]) =>
-                                                activeParameters[k] ? null : (
-                                                    <Button
-                                                        key={k}
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-auto justify-start gap-2 p-3"
-                                                        onClick={() => addParameter(k)}
-                                                    >
-                                                        {cfg.icon}
-                                                        <span>{cfg.label}</span>
-                                                    </Button>
-                                                ),
-                                            )}
-                                        </div>
-                                    </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
+                        {/* Configuration Card */}
+                        <div className="mt-3 md:mt-4">
+                            <Card className="card-elevated">
+                                <CardHeader className="border-b border-border">
+                                    <CardTitle className="flex items-center gap-2 text-xl">
+                                        <RiSettings3Line className="h-5 w-5"/>
+                                        Test Configuration
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Fine-tune parameters for your LDPC run.
+                                    </CardDescription>
+                                </CardHeader>
 
-                        {/* ---------------- active parameter list ----------------- */}
-                        <div className="space-y-4">
-                            {Object.entries(activeParameters).map(([key]) => {
-                                const cfg =
-                                    PARAMETER_OPTIONS[key as keyof typeof PARAMETER_OPTIONS]
-                                if (!cfg) return null
-
-                                return (
-                                    <motion.div
-                                        key={key}
-                                        initial={{opacity: 0, x: -20}}
-                                        animate={{opacity: 1, x: 0}}
-                                        className="space-y-3 rounded-lg bg-muted/50 p-4"
-                                    >
-                                        {/* header row */}
-                                        <div className="flex items-start justify-between gap-3">
-                                            <div className="flex items-center gap-3">
-                                                <div className="rounded-lg bg-background p-2">
-                                                    {cfg.icon}
-                                                </div>
-                                                <div>
-                                                    <h4 className="font-medium text-foreground">
-                                                        {cfg.label}
-                                                    </h4>
-                                                    {"description" in cfg && cfg.description && (
-                                                        <p className="text-xs text-muted-foreground">
-                                                            {cfg.description}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* remove parameter */}
-                                            {!(key === "algorithm_type" || key === "test_mode") && (
-                                                <Button
-                                                    size="icon"
-                                                    variant="ghost"
-                                                    onClick={() => removeParameter(key)}
-                                                    className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                                                >
-                                                    <RiCloseLine className="h-4 w-4"/>
-                                                </Button>
-                                            )}
-                                        </div>
-
-                                        {/* control */}
-                                        <div className="pl-12">
-                                            {renderParameterControl(key, cfg)}
-                                        </div>
-                                    </motion.div>
-                                )
-                            })}
-
-                            {/* -------- custom / pre-written message controls -------- */}
-                            {activeParameters.test_mode === "custom_message" && (
-                                <motion.div
-                                    initial={{opacity: 0, x: -20}}
-                                    animate={{opacity: 1, x: 0}}
-                                    className="space-y-2 rounded-lg bg-muted/50 p-4 pl-12"
-                                >
-                                    <Label>Custom Message</Label>
-                                    <Input
-                                        value={customMessage}
-                                        onChange={(e) => setCustomMessage(e.target.value)}
-                                        placeholder="Enter your message…"
-                                        className="h-11"
-                                    />
-                                </motion.div>
-                            )}
-
-                            {activeParameters.test_mode === "pre_written" && (
-                                <motion.div
-                                    initial={{opacity: 0, x: -20}}
-                                    animate={{opacity: 1, x: 0}}
-                                    className="space-y-4 rounded-lg bg-muted/50 p-4 pl-12"
-                                >
+                                <CardContent className="space-y-3 p-6">
+                                    {/* ----------------------- test name ----------------------- */}
                                     <div className="space-y-2">
-                                        <Label>Select Message</Label>
-                                        <Select
-                                            value={selectedPreWritten}
-                                            onValueChange={setSelectedPreWritten}
-                                        >
-                                            <SelectTrigger
-                                                className="h-11 w-full rounded-md border border-input bg-background focus:ring-2 focus:ring-ring">
-                                                <SelectValue placeholder="Choose…"/>
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {preWrittenMessages.map((m) => (
-                                                    <SelectItem key={m.value} value={m.value}>
-                                                        <div className="flex flex-col items-start">
-                                                            <span className="font-medium">{m.label}</span>
-                                                            <span
-                                                                className="line-clamp-1 text-xs text-muted-foreground">
-                                {m.content}
-                              </span>
-                                                        </div>
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                        <Label>Test Name</Label>
+                                        <Input
+                                            placeholder={`Auto: ${autoTestName}`}
+                                            value={testName}
+                                            onChange={(e) => setTestName(e.target.value)}
+                                            className="h-11"
+                                        />
                                     </div>
 
-                                    {selectedPreWritten && (
-                                        <div className="rounded-lg bg-muted p-3">
-                                            <p className="text-sm text-muted-foreground">
-                                                {
-                                                    preWrittenMessages.find(
-                                                        (m) => m.value === selectedPreWritten,
-                                                    )?.content
-                                                }
-                                            </p>
-                                        </div>
-                                    )}
-                                </motion.div>
-                            )}
-                        </div>
+                                    {/* -------------------- parameters header ------------------- */}
+                                    <div className="flex items-center justify-between">
+                                        <Label>Test Parameters</Label>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="gap-2"
+                                            onClick={() => setShowParameterSelector((s) => !s)}
+                                        >
+                                            <RiAddLine className="h-4 w-4"/>
+                                            Add Parameter
+                                        </Button>
+                                    </div>
 
-                        {/* ----------------------- run button ----------------------- */}
-                        <div className="flex justify-end pt-2">
-                            <Button
-                                size="lg"
-                                disabled={
-                                    loading ||
-                                    (activeParameters.test_mode === "custom_message" &&
-                                        !customMessage.trim()) ||
-                                    (activeParameters.test_mode === "pre_written" &&
-                                        !selectedPreWritten)
-                                }
-                                onClick={runTest}
-                                className="h-12 gap-2 px-8"
-                            >
-                                {loading ? (
-                                    <>
-                                        <RiLoader4Line className="h-5 w-5 animate-spin"/>
-                                        Running…
-                                    </>
-                                ) : (
-                                    <>
-                                        <RiPlayLine className="h-5 w-5"/>
-                                        Run Test
-                                        <ChevronRight className="ml-1 h-4 w-4"/>
-                                    </>
-                                )}
-                            </Button>
+                                    {/* --------------- parameter quick-add grid ---------------- */}
+                                    <AnimatePresence>
+                                        {showParameterSelector && (
+                                            <motion.div
+                                                initial={{opacity: 0, height: 0}}
+                                                animate={{opacity: 1, height: "auto"}}
+                                                exit={{opacity: 0, height: 0}}
+                                                className="overflow-hidden"
+                                            >
+                                                <div className="rounded-lg border-2 border-dashed border-border p-4">
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        {Object.entries(PARAMETER_OPTIONS).map(([k, cfg]) =>
+                                                            activeParameters[k] ? null : (
+                                                                <Button
+                                                                    key={k}
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="h-auto justify-start gap-2 p-3"
+                                                                    onClick={() => addParameter(k)}
+                                                                >
+                                                                    {cfg.icon}
+                                                                    <span>{cfg.label}</span>
+                                                                </Button>
+                                                            ),
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+
+                                    {/* ---------------- active parameter list ----------------- */}
+                                    <div className="space-y-4">
+                                        {Object.entries(activeParameters).map(([key]) => {
+                                            const cfg =
+                                                PARAMETER_OPTIONS[key as keyof typeof PARAMETER_OPTIONS]
+                                            if (!cfg) return null
+
+                                            return (
+                                                <motion.div
+                                                    key={key}
+                                                    initial={{opacity: 0, x: -20}}
+                                                    animate={{opacity: 1, x: 0}}
+                                                    className="space-y-3 rounded-lg bg-muted/50 p-4"
+                                                >
+                                                    {/* header row */}
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="rounded-lg bg-background p-2">
+                                                                {cfg.icon}
+                                                            </div>
+                                                            <div>
+                                                                <h4 className="font-medium text-foreground">
+                                                                    {cfg.label}
+                                                                </h4>
+                                                                {"description" in cfg && cfg.description && (
+                                                                    <p className="text-xs text-muted-foreground">
+                                                                        {cfg.description}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* remove parameter */}
+                                                        {!(key === "algorithm_type" || key === "test_mode") && (
+                                                            <Button
+                                                                size="icon"
+                                                                variant="ghost"
+                                                                onClick={() => removeParameter(key)}
+                                                                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                                            >
+                                                                <RiCloseLine className="h-4 w-4"/>
+                                                            </Button>
+                                                        )}
+                                                    </div>
+
+                                                    {/* control */}
+                                                    <div className="pl-12">
+                                                        {renderParameterControl(key, cfg)}
+                                                    </div>
+                                                </motion.div>
+                                            )
+                                        })}
+
+                                        {/* -------- custom / pre-written message controls -------- */}
+                                        {activeParameters.test_mode === "custom_message" && (
+                                            <motion.div
+                                                initial={{opacity: 0, x: -20}}
+                                                animate={{opacity: 1, x: 0}}
+                                                className="space-y-2 rounded-lg bg-muted/50 p-4 pl-12"
+                                            >
+                                                <Label>Custom Message</Label>
+                                                <Input
+                                                    value={customMessage}
+                                                    onChange={(e) => setCustomMessage(e.target.value)}
+                                                    placeholder="Enter your message…"
+                                                    className="h-11"
+                                                />
+                                            </motion.div>
+                                        )}
+
+                                        {activeParameters.test_mode === "pre_written" && (
+                                            <motion.div
+                                                initial={{opacity: 0, x: -20}}
+                                                animate={{opacity: 1, x: 0}}
+                                                className="space-y-4 rounded-lg bg-muted/50 p-4 pl-12"
+                                            >
+                                                <div className="space-y-2">
+                                                    <Label>Select Message</Label>
+                                                    <Select
+                                                        value={selectedPreWritten}
+                                                        onValueChange={setSelectedPreWritten}
+                                                    >
+                                                        <SelectTrigger
+                                                            className="h-11 w-full rounded-md border border-input bg-background focus:ring-2 focus:ring-ring">
+                                                            <SelectValue placeholder="Choose…"/>
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {preWrittenMessages.map((m) => (
+                                                                <SelectItem key={m.value} value={m.value}>
+                                                                    <div className="flex flex-col items-start">
+                                                                        <span className="font-medium">{m.label}</span>
+                                                                        <span
+                                                                            className="line-clamp-1 text-xs text-muted-foreground">
+                                        {m.content}
+                                      </span>
+                                                                    </div>
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+
+                                                {selectedPreWritten && (
+                                                    <div className="rounded-lg bg-muted p-3">
+                                                        <p className="text-sm text-muted-foreground">
+                                                            {
+                                                                preWrittenMessages.find(
+                                                                    (m) => m.value === selectedPreWritten,
+                                                                )?.content
+                                                            }
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </motion.div>
+                                        )}
+                                    </div>
+
+                                    {/* ----------------------- run button ----------------------- */}
+                                    <div className="flex justify-end pt-2">
+                                        <Button
+                                            size="lg"
+                                            disabled={
+                                                loading ||
+                                                (activeParameters.test_mode === "custom_message" &&
+                                                    !customMessage.trim()) ||
+                                                (activeParameters.test_mode === "pre_written" &&
+                                                    !selectedPreWritten)
+                                            }
+                                            onClick={runTest}
+                                            className="h-12 gap-2 px-8"
+                                        >
+                                            {loading ? (
+                                                <>
+                                                    <RiLoader4Line className="h-5 w-5 animate-spin"/>
+                                                    Running…
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <RiPlayLine className="h-5 w-5"/>
+                                                    Run Test
+                                                    <ChevronRight className="ml-1 h-4 w-4"/>
+                                                </>
+                                            )}
+                                        </Button>
+                                    </div>
+                                </CardContent>
+                            </Card>
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
+                </main>
             </div>
         </div>
     )

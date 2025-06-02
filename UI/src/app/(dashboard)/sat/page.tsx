@@ -1,7 +1,7 @@
 /* ============================================================================
  *  sat.tsx – refreshed UI (monochrome, spacious, flexible input modes)
  *  - Consistent styling with LDPC screen
- *  - “Input Mode” parameter: Custom CNF | Example Library | Random 3-SAT
+ *  - "Input Mode" parameter: Custom CNF | Example Library | Random 3-SAT
  *  - Full-width Select / Input aesthetics
  *  - Quick-remove (×) on non-core parameters
  *  - Default CNF pre-filled so users never start with an empty box
@@ -142,6 +142,7 @@ export default function SATTestingInterface() {
     const [dimacsInput, setDimacsInput] = useState(
         `c Default 3-SAT\np cnf 3 2\n1 -3 0\n2 3 -1 0`,
     )
+    const [autoTestName, setAutoTestName] = useState("sat_test") // Static initial value
 
     const [selectedExample, setSelectedExample] = useState("")
 
@@ -234,12 +235,19 @@ export default function SATTestingInterface() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeParameters.input_mode])
 
+    /* ------------------------- effects ------------------------- */
+    
+    // Update auto-generated name after hydration to avoid SSR mismatch
+    useEffect(() => {
+        setAutoTestName(generateTestName())
+    }, [])
+
     /* ----------------------------- run solver ----------------------------- */
 
     const runTest = async () => {
         try {
             setLoading(true)
-            const finalName = testName.trim() || generateTestName()
+            const finalName = testName.trim() || autoTestName
 
             const res = await fetch("/api/proxy/sat/solve", {
                 method: "POST",
@@ -272,153 +280,164 @@ export default function SATTestingInterface() {
      * =======================================================================*/
 
     return (
-        <div className="page-container">
-            <div className="mx-auto max-w-4xl space-y-10 py-10 px-4">
-                {/* --------------------------- header --------------------------- */}
-                <div className="text-left">
+        <div className="min-h-screen bg-background">
+            <div className="flex-1 flex flex-col">
+                <main className="flex-1">
+                    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 
-                    <h1 className="mb-4 text-4xl font-bold text-foreground">SAT Solver</h1>
-                    <p className=" max-w-3xl text-lg text-muted-foreground">
-                        Solve boolean satisfiability problems using custom hardware and integrated software.
-                    </p>
-                </div>
+                        {/* Header */}
+                        <div className="pt-0 md:pt-1 flex items-center justify-between">
+                            <h1 className="text-3xl font-bold text-foreground">SAT Solver</h1>
+                        </div>
 
-                {/* ---------------------- configuration card --------------------- */}
-                <Card className="card-elevated">
-                    <CardHeader className="border-b border-border">
-                        <CardTitle className="flex items-center gap-2 text-xl">
-                            <RiSettings3Line className="h-5 w-5" />
-                            SAT Problem Configuration
-                        </CardTitle>
-                        <CardDescription>
-                            Pick your solver -> Then paste CNF, pick an example, or auto-generate to specify your input
-                        </CardDescription>
-                    </CardHeader>
+                        {/* Description */}
+                        <div >
+                            <p className="text-sm text-muted-foreground">
+                                Solve boolean satisfiability problems using custom hardware and integrated software.
+                            </p>
+                        </div>
 
-                    <CardContent className="space-y-5 mt-4">
-                        {/* --------------------- test name --------------------- */}
-                            <Label>Test Name</Label>
-                            <Input
-                                placeholder={`Auto: ${generateTestName()}`}
-                                value={testName}
-                                onChange={(e) => setTestName(e.target.value)}
-                                className="h-11 "
-                            />
-                        <Label>Solver Parameters</Label>
-                        {/* ---------------- parameters header ---------------- */}
+                        {/* Configuration Card */}
+                        <div className="mt-3 md:mt-4">
+                            <Card className="card-elevated">
+                                <CardHeader className="border-b border-border">
+                                    <CardTitle className="flex items-center gap-2 text-xl">
+                                        <RiSettings3Line className="h-5 w-5" />
+                                        SAT Problem Configuration
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Pick your solver → Then paste CNF, pick an example, or auto-generate to specify your input
+                                    </CardDescription>
+                                </CardHeader>
 
-                        {/* ---------------- active parameter list --------------- */}
-                        <div className="space-y-4">
-                            {Object.entries(activeParameters).map(([key]) => {
-                                const cfg =
-                                    PARAMETER_OPTIONS[key as keyof typeof PARAMETER_OPTIONS]
-                                if (!cfg) return null
+                                <CardContent className="space-y-5 mt-4">
+                                    {/* --------------------- test name --------------------- */}
+                                    <Label>Test Name</Label>
+                                    <Input
+                                        placeholder={`Auto: ${autoTestName}`}
+                                        value={testName}
+                                        onChange={(e) => setTestName(e.target.value)}
+                                        className="h-11 "
+                                    />
+                                    
+                                    {/* ---------------- parameters header ---------------- */}
 
-                                return (
-                                    <motion.div
-                                        key={key}
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        className="space-y-3 rounded-lg bg-muted/50 p-4"
-                                    >
-                                        <div className="flex items-start justify-between gap-3">
-                                            <div className="flex items-center gap-3">
-                                                <div className="rounded-lg bg-background p-2">
-                                                    {cfg.icon}
-                                                </div>
-                                                <div>
-                                                    <h4 className="font-medium text-foreground">
-                                                        {cfg.label}
-                                                    </h4>
-                                                </div>
-                                            </div>
+                                    {/* ---------------- active parameter list --------------- */}
+                                    <div className="space-y-4">
+                                    <Label>Solver Parameters</Label>
+                                        {Object.entries(activeParameters).map(([key]) => {
+                                            const cfg =
+                                                PARAMETER_OPTIONS[key as keyof typeof PARAMETER_OPTIONS]
+                                            if (!cfg) return null
 
-                                            {/* removable? */}
-                                            {!(key === "solver_type" || key === "input_mode") && (
-                                                <Button
-                                                    size="icon"
-                                                    variant="ghost"
-                                                    onClick={() => removeParameter(key)}
-                                                    className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                            return (
+                                                <motion.div
+                                                    key={key}
+                                                    initial={{ opacity: 0, x: -20 }}
+                                                    animate={{ opacity: 1, x: 0 }}
+                                                    className="space-y-3 rounded-lg bg-muted/50 p-4"
                                                 >
-                                                    <RiCloseLine className="h-4 w-4" />
-                                                </Button>
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="rounded-lg bg-background p-2">
+                                                                {cfg.icon}
+                                                            </div>
+                                                            <div>
+                                                                <h4 className="font-medium text-foreground">
+                                                                    {cfg.label}
+                                                                </h4>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* removable? */}
+                                                        {!(key === "solver_type" || key === "input_mode") && (
+                                                            <Button
+                                                                size="icon"
+                                                                variant="ghost"
+                                                                onClick={() => removeParameter(key)}
+                                                                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                                            >
+                                                                <RiCloseLine className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                    <div className="pl-12">{renderParameterControl(key, cfg)}</div>
+                                                </motion.div>
+                                            )
+                                        })}
+                                    </div>
+
+                                    {/* ---------------- input mode sections --------------- */}
+                                    {activeParameters.input_mode === "example" && (
+                                        <motion.div
+                                            initial={{ opacity: 0, x: -20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            className="space-y-2 rounded-lg bg-muted/50 p-4"
+                                        >
+                                            <Label>Choose Example</Label>
+                                            <Select
+                                                value={selectedExample}
+                                                onValueChange={(v) => {
+                                                    setSelectedExample(v)
+                                                    const ex = EXAMPLES.find((e) => e.value === v)
+                                                    if (ex) setDimacsInput(ex.dimacs)
+                                                }}
+                                            >
+                                                <SelectTrigger className="h-11 w-full rounded-md border border-input bg-background focus:ring-2 focus:ring-ring">
+                                                    <SelectValue placeholder="Select example…" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {EXAMPLES.map((ex) => (
+                                                        <SelectItem key={ex.value} value={ex.value}>
+                                                            <div className="flex flex-col items-start">
+                                                                <span className="font-medium">{ex.label}</span>
+                                                                <span className="text-xs text-muted-foreground">
+                                {ex.description}
+                              </span>
+                                                            </div>
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </motion.div>
+                                    )}
+
+                                    {/* ---- textarea (always shown for preview / edits) ---- */}
+                                    <div className="space-y-2">
+                                        <Label>DIMACS CNF</Label>
+                                        <textarea
+                                            value={dimacsInput}
+                                            onChange={(e) => setDimacsInput(e.target.value)}
+                                            className="h-40 w-full resize-none rounded-lg border border-border bg-foreground/5 p-3 font-mono text-sm text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-ring"
+                                        />
+                                    </div>
+
+                                    {/* ----------------------- run button ----------------------- */}
+                                    <div className="flex justify-end pt-2">
+                                        <Button
+                                            size="lg"
+                                            disabled={loading || !dimacsInput.trim()}
+                                            onClick={runTest}
+                                            className="h-12 gap-2 px-8"
+                                        >
+                                            {loading ? (
+                                                <>
+                                                    <RiLoader4Line className="h-5 w-5 animate-spin" />
+                                                    Solving…
+                                                </>
+                                            ) : (
+                                                <>
+                                                    Run
+                                                    <ChevronRight className="ml-1 h-4 w-4" />
+                                                </>
                                             )}
-                                        </div>
-                                        <div className="pl-12">{renderParameterControl(key, cfg)}</div>
-                                    </motion.div>
-                                )
-                            })}
+                                        </Button>
+                                    </div>
+                                </CardContent>
+                            </Card>
                         </div>
-
-                        {/* ---------------- input mode sections --------------- */}
-                        {activeParameters.input_mode === "example" && (
-                            <motion.div
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                className="space-y-2 rounded-lg bg-muted/50 p-4"
-                            >
-                                <Label>Choose Example</Label>
-                                <Select
-                                    value={selectedExample}
-                                    onValueChange={(v) => {
-                                        setSelectedExample(v)
-                                        const ex = EXAMPLES.find((e) => e.value === v)
-                                        if (ex) setDimacsInput(ex.dimacs)
-                                    }}
-                                >
-                                    <SelectTrigger className="h-11 w-full rounded-md border border-input bg-background focus:ring-2 focus:ring-ring">
-                                        <SelectValue placeholder="Select example…" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {EXAMPLES.map((ex) => (
-                                            <SelectItem key={ex.value} value={ex.value}>
-                                                <div className="flex flex-col items-start">
-                                                    <span className="font-medium">{ex.label}</span>
-                                                    <span className="text-xs text-muted-foreground">
-                            {ex.description}
-                          </span>
-                                                </div>
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </motion.div>
-                        )}
-
-                        {/* ---- textarea (always shown for preview / edits) ---- */}
-                        <div className="space-y-2">
-                            <Label>DIMACS CNF</Label>
-                            <textarea
-                                value={dimacsInput}
-                                onChange={(e) => setDimacsInput(e.target.value)}
-                                className="h-40 w-full resize-none rounded-lg border border-border bg-foreground/5 p-3 font-mono text-sm text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-ring"
-                            />
-                        </div>
-
-                        {/* ----------------------- run button ----------------------- */}
-                        <div className="flex justify-end pt-2">
-                            <Button
-                                size="lg"
-                                disabled={loading || !dimacsInput.trim()}
-                                onClick={runTest}
-                                className="h-12 gap-2 px-8"
-                            >
-                                {loading ? (
-                                    <>
-                                        <RiLoader4Line className="h-5 w-5 animate-spin" />
-                                        Solving…
-                                    </>
-                                ) : (
-                                    <>
-                                        Run
-                                        <ChevronRight className="ml-1 h-4 w-4" />
-                                    </>
-                                )}
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
+                    </div>
+                </main>
             </div>
         </div>
     )
