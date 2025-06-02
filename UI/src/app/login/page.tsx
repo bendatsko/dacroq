@@ -82,17 +82,17 @@ export default function LoginPage() {
         <div className="w-full max-w-md ">
           
           {/* Login Card */}
-          <div className="mt-[24vh] bg-card border border-border rounded-xl p-12 shadow-lg">
+          <div className="mt-[24vh] bg-card border border-border rounded-xl p-12">
             
             {/* Header */}
-            <div className="text-center mb-8">
-              <div className="flex items-center justify-center gap-2 mb-2">
+            <div className="text-center mb-3">
+              <div className="flex items-center justify-center mb-1">
                 <DacroqLogo className="h-6 w-6 text-foreground/95" />
                 <span className="text-xl font-semibold text-foreground/95">
                   Dacroq
                 </span>
               </div>
-              <p className="text-sm mb-2 text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 Sign in to access your account
               </p>
             </div>

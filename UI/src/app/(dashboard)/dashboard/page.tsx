@@ -581,8 +581,18 @@ export default function Dashboard() {
 
                             {/* Action Row - For Doing Things */}
                             <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto pb-1">
+                            {selectedTests.length > 0 && (
+                                    <Button
+                                        variant="destructive"
+                                        size="icon"
+                                        onClick={() => handleDelete(selectedTests, tests)}
+                                        className="flex-shrink-0 bg-red-500 hover:bg-red-600 text-white"
+                                    >
+                                        <RiDeleteBinLine className="h-3 w-3" />
+                                    </Button>
+                                )}
                                 <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                                    <SelectTrigger className="w-36 sm:w-48 flex-shrink-0">
+                                    <SelectTrigger className="w-34 sm:w-34 flex-shrink-0">
                                         <RiFilterLine className="mr-1 h-4 w-4 sm:mr-2" />
                                         <SelectValue placeholder="Category" />
                                     </SelectTrigger>
@@ -598,7 +608,7 @@ export default function Dashboard() {
                                     </SelectContent>
                                 </Select>
                                 <Select value={chipTypeFilter} onValueChange={setChipTypeFilter}>
-                                    <SelectTrigger className="w-32 sm:w-40 flex-shrink-0">
+                                    <SelectTrigger className="w-34 sm:w-34 flex-shrink-0">
                                         <TbCpu className="mr-1 h-4 w-4 sm:mr-2" />
                                         <SelectValue placeholder="Chip Type" />
                                     </SelectTrigger>
@@ -616,7 +626,7 @@ export default function Dashboard() {
                                         setCurrentPage(1); // Reset to first page when changing page size
                                     }}
                                 >
-                                    <SelectTrigger className="w-36 sm:w-32 flex-shrink-0">
+                                    <SelectTrigger className="w-34 sm:w-34 flex-shrink-0">
                                         <TbSortAscendingNumbers className="mr-1 h-4 w-4 sm:mr-2"/>
                                         <SelectValue />
                                     </SelectTrigger>
@@ -628,16 +638,7 @@ export default function Dashboard() {
                                         <SelectItem value="50">50 per page</SelectItem>
                                     </SelectContent>
                                 </Select>
-                                {selectedTests.length > 0 && (
-                                    <Button
-                                        variant="destructive"
-                                        size="icon"
-                                        onClick={() => handleDelete(selectedTests, tests)}
-                                        className="flex-shrink-0 bg-red-500 hover:bg-red-600 text-white"
-                                    >
-                                        <RiDeleteBinLine className="h-4 w-4" />
-                                    </Button>
-                                )}
+                                
                             </div>
                         </div>
 
@@ -711,25 +712,13 @@ export default function Dashboard() {
                                                     onClick={() => handleRowClick(test)}
                                                 >
                                                     <div className="flex items-start gap-2.5">
-                                                        {/* Left: Selection checkbox */}
-                                                        <Checkbox
-                                                            checked={selectedTests.includes(test.id)}
-                                                            onCheckedChange={(checked) => {
-                                                                setSelectedTests((prev) =>
-                                                                    checked
-                                                                        ? [...prev, test.id]
-                                                                        : prev.filter((id) => id !== test.id),
-                                                                );
-                                                            }}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className="flex-shrink-0 mt-0.5"
-                                                        />
+                                                      
                                                         
                                                         {/* Center: Test details */}
                                                         <div className="flex-1 min-w-0">
                                                             {/* Test name row */}
                                                             <div className="flex items-center gap-1.5 mb-1.5">
-                                                                <span className="font-medium text-sm text-foreground truncate">{test.name}</span>
+                                                                <span className="font-medium text-sm text-foreground ">{test.name}</span>
                                                                 <Badge 
                                                                     variant={isLDPC ? "default" : "secondary"}
                                                                     className={cn(
@@ -747,10 +736,40 @@ export default function Dashboard() {
                                                                         {algorithmType === "analog_hardware" ? "A" : "D"}
                                                                     </Badge>
                                                                 )}
+                                                                  <div className="flex items-center gap-1.5">
+                                                                    <div className={cn(
+                                                                        "flex h-4 w-4 items-center justify-center rounded flex-shrink-0",
+                                                                        sc?.bg
+                                                                    )}>
+                                                                        {sc && <sc.icon className={cn("h-2.5 w-2.5", sc.color)} />}
+                                                                    </div>
+                                                                    <span className="text-xs text-muted-foreground capitalize">{test.status}</span>
+                                                                </div>
+
+
+                                                                {/* <div className="flex items-center justify-between">
+                                                              
+
+
+                                                                <div className="flex items- gap-2.5 text-xs text-muted-foreground mb-1">
+                                                                    
+                                                                    <span className="flex items-center gap-1">
+                                                                        <RiTestTubeLine className="h-3 w-3"/>
+                                                                        {testMode || test.testType}
+                                                                    </span>
+                                                                    <span className="text-xs text-muted-foreground">
+                                                                    {formatDate(test.createdAt)}
+                                                                    </span>
+                                                                </div>
+                                                                
+                                                            </div> */}
+
+
+
                                                             </div>
                                                             
                                                             {/* Test details row */}
-                                                            <div className="flex items-center gap-2.5 text-xs text-muted-foreground mb-1">
+                                                            {/* <div className="flex items-center gap-2.5 text-xs text-muted-foreground mb-1">
                                                                 <span className="flex items-center gap-1">
                                                                     <RiTestTubeLine className="h-3 w-3"/>
                                                                     {testMode || test.testType}
@@ -761,11 +780,20 @@ export default function Dashboard() {
                                                                         {noiseLevel}% noise
                                                                     </span>
                                                                 )}
-                                                            </div>
+                                                            </div> */}
                                                             
                                                             {/* Date and Status */}
                                                             <div className="flex items-center justify-between">
-                                                                <div className="flex items-center gap-1.5">
+                                                            <div className="flex items- gap-2.5 text-xs text-muted-foreground mb-1">
+                                                                <span className="flex items-center gap-1">
+                                                                        <RiTestTubeLine className="h-3 w-3"/>
+                                                                        {testMode || test.testType}
+                                                                    </span>
+                                                                    <span className="text-xs text-muted-foreground">
+                                                                    {formatDate(test.createdAt)}
+                                                                    </span>
+                                                                    </div>
+                                                                {/* <div className="flex items-center gap-1.5">
                                                                     <div className={cn(
                                                                         "flex h-4 w-4 items-center justify-center rounded flex-shrink-0",
                                                                         sc?.bg
@@ -773,13 +801,38 @@ export default function Dashboard() {
                                                                         {sc && <sc.icon className={cn("h-2.5 w-2.5", sc.color)} />}
                                                                     </div>
                                                                     <span className="text-xs text-muted-foreground capitalize">{test.status}</span>
-                                                                </div>
-                                                                <span className="text-xs text-muted-foreground">
+                                                                </div> */}
+
+
+                                                                {/* <div className="flex items- gap-2.5 text-xs text-muted-foreground mb-1">
+                                                                    
+                                                                    <span className="flex items-center gap-1">
+                                                                        <RiTestTubeLine className="h-3 w-3"/>
+                                                                        {testMode || test.testType}
+                                                                    </span>
+                                                                    <span className="text-xs text-muted-foreground">
                                                                     {formatDate(test.createdAt)}
-                                                                </span>
+                                                                    </span>
+                                                                </div> */}
+                                                                
                                                             </div>
                                                         </div>
+                                                          {/* Left: Selection checkbox */}
+                                                        <Checkbox
+                                                            checked={selectedTests.includes(test.id)}
+                                                            onCheckedChange={(checked) => {
+                                                                setSelectedTests((prev) =>
+                                                                    checked
+                                                                        ? [...prev, test.id]
+                                                                        : prev.filter((id) => id !== test.id),
+                                                                );
+                                                            }}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="flex-shrink-0 mt-0.5"
+                                                        />
                                                     </div>
+
+                                                    
                                                 </div>
                                             );
                                         })}

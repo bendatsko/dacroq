@@ -121,10 +121,10 @@ export default function Navigation() {
             <div className="flex h-full items-center">
               {/* brand */}
               <Link href="/dashboard" className="mr-8 flex h-[27px] items-center">
-                <DacroqLogo className="h-5 w-5 text-foreground/95" />
-                <span className="ml-1 mt-0.5 md:mt-0 text-sm font-semibold text-foreground/95 leading-none flex items-center">
-                Dacroq
-              </span>
+                <DacroqLogo className="h-4 w-4 text-foreground/95" />
+                <span className="text-md font-semibold text-foreground/95">
+                  Dacroq
+                </span>
               </Link>
 
               {/* main nav – desktop */}
