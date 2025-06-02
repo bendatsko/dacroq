@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -euo pipefail
-SESSIONS=(api)
+SESSIONS=(ui)
 
 for S in "${SESSIONS[@]}"; do
     if tmux has-session -t "$S" 2>/dev/null; then
