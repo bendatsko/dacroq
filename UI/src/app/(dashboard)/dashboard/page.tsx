@@ -43,8 +43,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TestRun } from "@/types/test";
+import { TbCpu } from "react-icons/tb";
+import { TbSortAscendingNumbers } from "react-icons/tb";
 
-// Externalized modal components
 import LDPCJobDetailsModal from "@/app/(dashboard)/ldpc/ldpc-job-details-modal";
 import SATTestDetailsModal from "@/app/(dashboard)/sat/sat-test-details-modal";
 
@@ -247,8 +248,7 @@ export default function Dashboard() {
 
     const [selectedTests, setSelectedTests] = useState<string[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage, setItemsPerPage] = useState("auto");
-    const [calculatedItemsPerPage, setCalculatedItemsPerPage] = useState(10);
+    const [itemsPerPage, setItemsPerPage] = useState(10);
 
     const [apiConnected, setApiConnected] = useState(true);
 
@@ -365,11 +365,6 @@ export default function Dashboard() {
     /* Calculate optimal items per page based on viewport height */
     useEffect(() => {
         const calculateOptimalItemsPerPage = () => {
-            if (itemsPerPage !== "auto") {
-                setCalculatedItemsPerPage(parseInt(itemsPerPage));
-                return;
-            }
-
             // Wait for DOM to be ready
             const timer = setTimeout(() => {
                 const viewportHeight = window.innerHeight;
@@ -403,10 +398,20 @@ export default function Dashboard() {
                 
                 const calculatedItems = Math.floor(availableHeight / rowHeight);
                 
-                // Set reasonable bounds: minimum 3, maximum 50
-                const boundedItems = Math.max(3, Math.min(50, calculatedItems));
+                // Available preset values
+                const presets = [5, 10, 15, 25, 50];
                 
-                setCalculatedItemsPerPage(boundedItems);
+                // Find the largest preset that is less than or equal to calculated items
+                let optimalPreset = 5;
+                for (const preset of presets) {
+                    if (preset <= calculatedItems) {
+                        optimalPreset = preset;
+                    } else {
+                        break;
+                    }
+                }
+                
+                setItemsPerPage(optimalPreset);
             }, 100); // Small delay to ensure DOM is rendered
 
             return () => clearTimeout(timer);
@@ -421,7 +426,7 @@ export default function Dashboard() {
 
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
-    }, [itemsPerPage]);
+    }, []);
 
     /* periodic API health check */
     useEffect(() => {
@@ -533,8 +538,8 @@ export default function Dashboard() {
                 .some((f) => f!.toLowerCase().includes(q));
         });
 
-    const indexOfLastTest = currentPage * calculatedItemsPerPage;
-    const indexOfFirstTest = indexOfLastTest - calculatedItemsPerPage;
+    const indexOfLastTest = currentPage * itemsPerPage;
+    const indexOfFirstTest = indexOfLastTest - itemsPerPage;
     const currentTests = filteredTests.slice(indexOfFirstTest, indexOfLastTest);
 
     const counts = {
@@ -556,7 +561,6 @@ export default function Dashboard() {
                         {/* Header */}
                         <div className="pt-0 md:pt-1 flex items-center justify-between">
                             <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-
                         </div>
 
                         {/* Search / filters */}
@@ -576,9 +580,9 @@ export default function Dashboard() {
                             </div>
 
                             {/* Action Row - For Doing Things */}
-                            <div className="flex items-center gap-2 sm:gap-3">
+                            <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto pb-1">
                                 <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                                    <SelectTrigger className="w-36 sm:w-48">
+                                    <SelectTrigger className="w-36 sm:w-48 flex-shrink-0">
                                         <RiFilterLine className="mr-1 h-4 w-4 sm:mr-2" />
                                         <SelectValue placeholder="Category" />
                                     </SelectTrigger>
@@ -593,10 +597,9 @@ export default function Dashboard() {
                                         <SelectItem value="queued">Queued</SelectItem>
                                     </SelectContent>
                                 </Select>
-
                                 <Select value={chipTypeFilter} onValueChange={setChipTypeFilter}>
-                                    <SelectTrigger className="w-32 sm:w-40">
-                                        <RiCpuLine className="mr-1 h-4 w-4 sm:mr-2" />
+                                    <SelectTrigger className="w-32 sm:w-40 flex-shrink-0">
+                                        <TbCpu className="mr-1 h-4 w-4 sm:mr-2" />
                                         <SelectValue placeholder="Chip Type" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -606,24 +609,25 @@ export default function Dashboard() {
                                         <SelectItem value="KSAT">K-SAT</SelectItem>
                                     </SelectContent>
                                 </Select>
-
-                                <Select value={itemsPerPage} onValueChange={(value) => {
-                                    setItemsPerPage(value);
-                                    setCurrentPage(1); // Reset to first page when changing page size
-                                }}>
-                                    <SelectTrigger className="w-20 sm:w-24">
+                                <Select 
+                                    value={itemsPerPage.toString()} 
+                                    onValueChange={(value) => {
+                                        setItemsPerPage(parseInt(value));
+                                        setCurrentPage(1); // Reset to first page when changing page size
+                                    }}
+                                >
+                                    <SelectTrigger className="w-36 sm:w-32 flex-shrink-0">
+                                        <TbSortAscendingNumbers className="mr-1 h-4 w-4 sm:mr-2"/>
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="auto">Auto</SelectItem>
-                                        <SelectItem value="5">5</SelectItem>
-                                        <SelectItem value="10">10</SelectItem>
-                                        <SelectItem value="15">15</SelectItem>
-                                        <SelectItem value="25">25</SelectItem>
-                                        <SelectItem value="50">50</SelectItem>
+                                        <SelectItem value="5">5 per page</SelectItem>
+                                        <SelectItem value="10">10 per page</SelectItem>
+                                        <SelectItem value="15">15 per page</SelectItem>
+                                        <SelectItem value="25">25 per page</SelectItem>
+                                        <SelectItem value="50">50 per page</SelectItem>
                                     </SelectContent>
                                 </Select>
-
                                 {selectedTests.length > 0 && (
                                     <Button
                                         variant="destructive"
@@ -703,7 +707,7 @@ export default function Dashboard() {
                                             return (
                                                 <div
                                                     key={test.id}
-                                                    className="bg-background border border-border rounded-lg p-2.5 cursor-pointer hover:bg-muted/50 transition-colors"
+                                                    className="bg-background border border-border rounded-lg p-2.5 cursor-pointer hover:bg-muted/50 transition-colors relative overflow-hidden"
                                                     onClick={() => handleRowClick(test)}
                                                 >
                                                     <div className="flex items-start gap-2.5">
@@ -759,21 +763,21 @@ export default function Dashboard() {
                                                                 )}
                                                             </div>
                                                             
-                                                            {/* Status row */}
-                                                            <div className="flex items-center gap-1.5">
-                                                                <div className={cn(
-                                                                    "flex h-4 w-4 items-center justify-center rounded flex-shrink-0",
-                                                                    sc?.bg
-                                                                )}>
-                                                                    {sc && <sc.icon className={cn("h-2.5 w-2.5", sc.color)} />}
+                                                            {/* Date and Status */}
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <div className={cn(
+                                                                        "flex h-4 w-4 items-center justify-center rounded flex-shrink-0",
+                                                                        sc?.bg
+                                                                    )}>
+                                                                        {sc && <sc.icon className={cn("h-2.5 w-2.5", sc.color)} />}
+                                                                    </div>
+                                                                    <span className="text-xs text-muted-foreground capitalize">{test.status}</span>
                                                                 </div>
-                                                                <span className="text-xs text-muted-foreground capitalize">{test.status}</span>
+                                                                <span className="text-xs text-muted-foreground">
+                                                                    {formatDate(test.createdAt)}
+                                                                </span>
                                                             </div>
-                                                        </div>
-                                                        
-                                                        {/* Right: Date */}
-                                                        <div className="text-xs text-muted-foreground text-right flex-shrink-0 mt-0.5">
-                                                            {formatDate(test.createdAt)}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -942,7 +946,7 @@ export default function Dashboard() {
                                     </div>
 
                                     {/* Pagination */}
-                                    {filteredTests.length > calculatedItemsPerPage && (
+                                    {filteredTests.length > itemsPerPage && (
                                         <div className="border-t border-border px-4 py-4 sm:px-6">
                                             {/* Mobile Pagination */}
                                             <div className="block sm:hidden">
@@ -963,14 +967,14 @@ export default function Dashboard() {
                                                         onClick={() =>
                                                             setCurrentPage((p) =>
                                                                 Math.min(
-                                                                    Math.ceil(filteredTests.length / calculatedItemsPerPage),
+                                                                    Math.ceil(filteredTests.length / itemsPerPage),
                                                                     p + 1,
                                                                 ),
                                                             )
                                                         }
                                                         disabled={
                                                             currentPage >=
-                                                            Math.ceil(filteredTests.length / calculatedItemsPerPage)
+                                                            Math.ceil(filteredTests.length / itemsPerPage)
                                                         }
                                                         className="flex-1"
                                                     >
@@ -983,7 +987,7 @@ export default function Dashboard() {
                                                         {indexOfFirstTest + 1}–{Math.min(indexOfLastTest, filteredTests.length)} of {filteredTests.length}
                                                     </div>
                                                     <div className="text-sm text-muted-foreground">
-                                                        Page {currentPage} of {Math.ceil(filteredTests.length / calculatedItemsPerPage)}
+                                                        Page {currentPage} of {Math.ceil(filteredTests.length / itemsPerPage)}
                                                     </div>
                                                 </div>
                                             </div>
@@ -1009,7 +1013,7 @@ export default function Dashboard() {
                                                     </Button>
                                                     <span className="px-2 text-sm text-muted-foreground">
                                                         Page {currentPage} of{" "}
-                                                        {Math.ceil(filteredTests.length / calculatedItemsPerPage)}
+                                                        {Math.ceil(filteredTests.length / itemsPerPage)}
                                                     </span>
                                                     <Button
                                                         variant="outline"
@@ -1017,14 +1021,14 @@ export default function Dashboard() {
                                                         onClick={() =>
                                                             setCurrentPage((p) =>
                                                                 Math.min(
-                                                                    Math.ceil(filteredTests.length / calculatedItemsPerPage),
+                                                                    Math.ceil(filteredTests.length / itemsPerPage),
                                                                     p + 1,
                                                                 ),
                                                             )
                                                         }
                                                         disabled={
                                                             currentPage >=
-                                                            Math.ceil(filteredTests.length / calculatedItemsPerPage)
+                                                            Math.ceil(filteredTests.length / itemsPerPage)
                                                         }
                                                     >
                                                         Next
