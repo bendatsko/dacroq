@@ -64,17 +64,37 @@ This will:
 - Start both API and frontend servers
 - Open http://localhost:3000 in your browser
 
-### Production Deployment (Raspberry Pi)
+### Production Deployment
 
 ```bash
 # Clone and deploy
-git clone https://github.com/your-username/dacroq.git
+git clone https://github.com/bendatsko/dacroq.git
 cd dacroq
 
-# Run production deployment
-chmod +x scripts/deploy-prod.sh
-sudo ./scripts/deploy-prod.sh
+# Run automated setup (for new deployments)
+chmod +x setup.sh
+./setup.sh
+
+# Or manual deployment
+chmod +x deploy.sh
+./deploy.sh
 ```
+
+## 📋 Deployment Documentation
+
+For complete deployment information, see:
+
+- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Complete deployment guide and workflow
+- **[SYSTEM-INFO.md](./SYSTEM-INFO.md)** - Detailed system configuration and technical specs
+- **[setup.sh](./setup.sh)** - Automated setup script for new environments
+
+### Current Deployment
+
+- **Live Site**: https://dacroq.eecs.umich.edu
+- **Auto-deployment**: Enabled via GitHub webhooks
+- **Server**: Red Hat Enterprise Linux 9
+- **Process Manager**: PM2 with auto-restart
+- **Web Server**: nginx with SSL/TLS
 
 ## 📁 Project Structure
 
