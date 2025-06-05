@@ -379,6 +379,60 @@ class HardwareDeviceManager:
             logger.debug(f"Failed to identify device at {port_name}: {e}")
             return None
     
+    def get_device_port(self, device_type):
+        """Get the current port for a specific device type"""
+        with self.lock:
+            return self.discovered_devices.get(device_type)
+    
+    def register_port(self, port, device_type):
+        """Register a port as being used by a specific device type"""
+        with self.lock:
+            if port in self.active_ports and self.active_ports[port] != device_type:
+                logger.warning(f"Port {port} already in use by {self.active_ports[port]}, requested by {device_type}")
+                return False
+            self.active_ports[port] = device_type
+            self.discovered_devices[device_type] = port
+            logger.info(f"Registered port {port} for {device_type} device")
+            return True
+    
+    def get_status(self):
+        """Get current status of all managed devices"""
+        with self.lock:
+            return {
+                "active_ports": dict(self.active_ports),
+                "discovered_devices": dict(self.discovered_devices),
+                "total_devices": len(self.active_ports),
+                "gpio_initialized": self.gpio_initialized
+            }
+    
+    def get_gpio_status(self):
+        """Get status of GPIO reset control system"""
+        if not GPIO_AVAILABLE:
+            return {"available": False, "reason": "lgpio not installed"}
+        
+        if not self.gpio_initialized:
+            return {"available": False, "reason": "GPIO initialization failed"}
+        
+        pin_status = {}
+        for device_type, config in self.device_configs.items():
+            reset_pin = config.get("reset_gpio_pin")
+            if reset_pin:
+                try:
+                    current_state = lgpio.gpio_read(self.gpio_handle, reset_pin)
+                    pin_status[device_type] = {
+                        "gpio_pin": reset_pin,
+                        "current_state": "HIGH (inactive)" if current_state else "LOW (active)",
+                        "raw_value": current_state
+                    }
+                except:
+                    pin_status[device_type] = {"gpio_pin": reset_pin, "status": "error"}
+        
+        return {
+            "available": True,
+            "initialized": self.gpio_initialized,
+            "pin_status": pin_status
+        }
+    
     def add_connection_event(self, device_name, port, status, details=None):
         """Log a connection event"""
         event = {

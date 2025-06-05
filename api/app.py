@@ -24,11 +24,14 @@ import json
 import logging
 import os
 import signal
+import sqlite3
 import struct
 import subprocess
 import sys
 import threading
 import time
+import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 import numpy as np
@@ -63,6 +66,7 @@ logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).parent.parent
 FIRMWARE_DIR = BASE_DIR / "firmware"
+DB_PATH = BASE_DIR / "dacroq.db"
 
 # Daemon management
 PID_FILE = Path(__file__).parent / "dacroq_hardware_api.pid"
