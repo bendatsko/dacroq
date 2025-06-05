@@ -5,7 +5,7 @@ module.exports = {
     // =============================================================================
     {
       name: 'data-api',
-      cwd: '/var/www/dacroq/web/data/api',
+      cwd: './web/data/api',
       script: 'app.py',
       interpreter: 'python3',
       args: '--port 8001',
@@ -14,13 +14,13 @@ module.exports = {
       watch: false,
       max_memory_restart: '512M',
       env: {
-        PYTHONPATH: '/var/www/dacroq/web/data/api',
-        FLASK_ENV: 'production',
+        PYTHONPATH: './web/data/api',
+        FLASK_ENV: 'development',
         PORT: 8001
       },
-      error_file: '/home/bdatsko/.pm2/logs/data-api-error.log',
-      out_file: '/home/bdatsko/.pm2/logs/data-api-out.log',
-      log_file: '/home/bdatsko/.pm2/logs/data-api.log',
+      error_file: './logs/data-api-error.log',
+      out_file: './logs/data-api-out.log',
+      log_file: './logs/data-api.log',
       time: true
     },
 
@@ -78,8 +78,8 @@ module.exports = {
     // =============================================================================
     {
       name: 'web-dev',
-      cwd: '/var/www/dacroq/web',
-      script: '/home/bdatsko/.npm-global/bin/pnpm',
+      cwd: './web',
+      script: 'npm',
       args: 'run dev',
       instances: 1,
       autorestart: true,
@@ -88,12 +88,12 @@ module.exports = {
       env: {
         NODE_ENV: 'development',
         PORT: 3001,  // Different port to avoid conflicts
-        NEXT_PUBLIC_API_BASE_URL: 'https://dacroq.eecs.umich.edu',
-        PATH: '/home/bdatsko/.npm-global/bin:/usr/local/bin:/usr/bin:/bin'
+        NEXT_PUBLIC_API_BASE_URL: 'http://localhost:8001',
+        PATH: process.env.PATH
       },
-      error_file: '/home/bdatsko/.pm2/logs/web-dev-error.log',
-      out_file: '/home/bdatsko/.pm2/logs/web-dev-out.log',
-      log_file: '/home/bdatsko/.pm2/logs/web-dev.log',
+      error_file: './logs/web-dev-error.log',
+      out_file: './logs/web-dev-out.log',
+      log_file: './logs/web-dev.log',
       time: true
     },
 
