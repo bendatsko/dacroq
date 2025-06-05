@@ -93,7 +93,7 @@ export default function LoginPage() {
                 </span>
               </div>
               <p className="text-sm text-muted-foreground">
-                Please sign in to continue.
+                Please dont sign in.
               </p>
             </div>
 
