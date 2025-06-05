@@ -58,7 +58,7 @@ ALLOWED_ORIGINS = set(
     origin.strip()
     for origin in os.getenv(
         "ALLOWED_ORIGINS",
-        "http://localhost:3000,https://dacroq.net,https://www.dacroq.net,https://test.dacroq.net",
+        "http://localhost:3000,https://dacroq.net,https://www.dacroq.net,https://test.dacroq.net,https://dacroq.eecs.umich.edu",
     ).split(",")
 )
 
@@ -75,6 +75,8 @@ def write_pid_file():
         logger.info(f"📝 PID file written: {PID_FILE}")
     except Exception as e:
         logger.error(f"Failed to write PID file: {e}")
+
+
 
 def remove_pid_file():
     """Remove PID file"""
@@ -3258,6 +3260,7 @@ def main():
     parser.add_argument("--status", action="store_true", help="Check daemon status")
     parser.add_argument("--reload", action="store_true", help="Reload daemon (stop and restart)")
     parser.add_argument("--foreground", action="store_true", help="Run in foreground (for debugging)")
+    parser.add_argument("--dev", action="store_true", help="Development mode with hot reloading")
     parser.add_argument("--port", type=int, default=int(os.getenv("PORT", 8000)), help="Port to run on")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind to")
     
@@ -3351,7 +3354,39 @@ def main():
     app.start_time = time.time()
     
     # Determine run mode
-    if args.foreground:
+    if args.dev:
+        # Development mode with hot reloading
+        print("🔧 Running in development mode with hot reloading")
+        print("📝 Code changes will automatically reload the server")
+        logger.info("Dacroq API starting in development mode...")
+        logger.info(f"Database: {DB_PATH}")
+        logger.info(f"Data directory: {DATA_DIR}")
+        
+        # Setup lighter logging for development
+        logging.getLogger().setLevel(logging.INFO)
+        
+        # Register cleanup for development mode
+        atexit.register(cleanup_on_exit)
+        
+        try:
+            print(f"🌐 API URL: http://localhost:{args.port}")
+            print("💡 Press Ctrl+C to stop the development server")
+            print("")
+            
+            # Run with Flask's built-in reloader in development mode
+            app.run(
+                host=args.host,
+                port=args.port,
+                debug=True,  # Enable debug mode for better error messages
+                use_reloader=True,  # Enable hot reloading
+                reloader_type='stat'  # Use stat-based reloader (more reliable)
+            )
+        except KeyboardInterrupt:
+            print("\n🛑 Development server stopped by user")
+        finally:
+            cleanup_on_exit()
+            
+    elif args.foreground:
         # Foreground mode (for debugging)
         print("🔧 Running in foreground mode (debugging)")
         logger.info("Dacroq API starting in foreground mode...")
@@ -3382,6 +3417,7 @@ def main():
             print("  • Press Ctrl+C to detach (daemon keeps running)")
             print("  • Run 'python3 app.py --stop' to stop the daemon")
             print("  • Run 'python3 app.py --status' to check status")
+            print("  • Run 'python3 app.py --dev' for development mode")
             print("  • View logs: tail -f dacroq_api.log")
             print("")
             

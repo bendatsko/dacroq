@@ -93,7 +93,7 @@ export default function LoginPage() {
                 </span>
               </div>
               <p className="text-sm text-muted-foreground">
-                Please sign in to continue.
+                Sign in to access your account
               </p>
             </div>
 
