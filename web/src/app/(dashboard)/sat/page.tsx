@@ -221,7 +221,7 @@ export default function SATTestingInterface() {
         
         if (showLoading) setLoadingHistory(true)
         try {
-            const res = await fetch("/api/proxy/sat/serial-history")
+            const res = await fetch("/api/hardware/sat/serial-history")
             const data = await res.json()
             
             if (res.ok) {
@@ -355,7 +355,7 @@ export default function SATTestingInterface() {
         if (!serialCommand.trim()) return
         
         try {
-            const res = await fetch("/api/proxy/sat/command", {
+            const res = await fetch("/api/hardware/sat/command", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ command: serialCommand.trim() })
@@ -424,7 +424,7 @@ export default function SATTestingInterface() {
             addSerialOutput(`🧮 Primary solver: ${primarySolver}`)
             addSerialOutput(`📝 Problem: ${dimacsInput.split('\n').length} lines`)
 
-            const res = await fetch("/api/proxy/sat/solve", {
+            const res = await fetch("/api/data/sat/solve", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({

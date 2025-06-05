@@ -148,7 +148,7 @@ export default function LDPCTestingInterface() {
         
         if (showLoading) setLoadingHistory(true)
         try {
-            const res = await fetch("/api/proxy/ldpc/serial-history")
+            const res = await fetch("/api/hardware/ldpc/serial-history")
             const data = await res.json()
             
             if (res.ok) {
@@ -197,7 +197,7 @@ export default function LDPCTestingInterface() {
         
         try {
             // First try fast hardware status check
-            const statusRes = await fetch("/api/proxy/hardware/status", {
+            const statusRes = await fetch("/api/hardware/status", {
                 method: "GET",
                 signal: AbortSignal.timeout(5000) // 5 second timeout
             })
@@ -217,7 +217,7 @@ export default function LDPCTestingInterface() {
             }
             
             // Fallback to direct command if status shows disconnected
-            const res = await fetch("/api/proxy/ldpc/command", {
+            const res = await fetch("/api/hardware/ldpc/command", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ command: "STATUS" }),
@@ -309,7 +309,7 @@ export default function LDPCTestingInterface() {
         if (!serialCommand.trim()) return
         
         try {
-            const res = await fetch("/api/proxy/ldpc/command", {
+            const res = await fetch("/api/hardware/ldpc/command", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ command: serialCommand.trim() })
@@ -352,7 +352,7 @@ export default function LDPCTestingInterface() {
         
         setCheckingHardware(true)
         try {
-            const res = await fetch("/api/proxy/hardware/discover", {
+            const res = await fetch("/api/hardware/discover", {
                 method: "POST",
                 signal: AbortSignal.timeout(30000) // 30 second timeout for discovery
             })
@@ -402,7 +402,7 @@ export default function LDPCTestingInterface() {
             addSerialOutput(`🔄 Runs per SNR: ${runsPerSNR}`)
             addSerialOutput(`🔧 Algorithm: Hardware (AMORGOS)`)
 
-            const res = await fetch("/api/proxy/ldpc/jobs", {
+            const res = await fetch("/api/data/ldpc/jobs", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({

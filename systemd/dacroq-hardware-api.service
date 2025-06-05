@@ -1,0 +1,33 @@
+[Unit]
+Description=Dacroq Hardware API
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=bdatsko
+Group=bdatsko
+WorkingDirectory=/var/www/dacroq/api/hardware
+Environment=PATH=/usr/bin:/usr/local/bin:/home/bdatsko/.local/bin
+Environment=PYTHONPATH=/var/www/dacroq
+ExecStart=/usr/bin/python3 app.py --port 8001 --host 0.0.0.0
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=dacroq-hardware-api
+
+# Security settings
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/www/dacroq/api/hardware
+ReadWritePaths=/var/www/dacroq/firmware
+EnvironmentFile=-/var/www/dacroq/.env
+
+# Hardware access permissions
+SupplementaryGroups=dialout gpio
+
+[Install]
+WantedBy=multi-user.target 

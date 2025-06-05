@@ -19,11 +19,16 @@ interface AuthResponse {
   user: User;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ;
+// Updated to use new API routing architecture
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+const DATA_API_BASE = `${API_BASE}/api/data`;  // Data API endpoints (auth, users, etc.)
+const HARDWARE_API_BASE = `${API_BASE}/api/hardware`;  // Hardware API endpoints
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
 // Debug log to verify the client ID
 console.log("🔍 Google Client ID being used:", GOOGLE_CLIENT_ID);
+console.log("🔍 Data API Base URL:", DATA_API_BASE);
+console.log("🔍 Hardware API Base URL:", HARDWARE_API_BASE);
 
 class AuthService {
   private user: User | null = null;
@@ -168,7 +173,7 @@ class AuthService {
   }
 
   private async verifyGoogleToken(token: string): Promise<User> {
-    const response = await fetch(`${API_BASE}/auth/google`, {
+    const response = await fetch(`${DATA_API_BASE}/auth/google`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -206,13 +211,11 @@ class AuthService {
     return this.user;
   }
 
-
-
   // API methods for user management (admin only)
   public async getUsers(): Promise<User[]> {
     if (!this.user) throw new Error('Not authenticated');
     
-    const response = await fetch(`${API_BASE}/users`, {
+    const response = await fetch(`${DATA_API_BASE}/users`, {
       headers: {
         'Authorization': `Bearer ${this.user.id}`,
       },
@@ -230,7 +233,7 @@ class AuthService {
   public async updateUserRole(userId: string, role: string): Promise<void> {
     if (!this.user) throw new Error('Not authenticated');
     
-    const response = await fetch(`${API_BASE}/users/${userId}`, {
+    const response = await fetch(`${DATA_API_BASE}/users/${userId}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -248,7 +251,7 @@ class AuthService {
   public async deleteUser(userId: string): Promise<void> {
     if (!this.user) throw new Error('Not authenticated');
     
-    const response = await fetch(`${API_BASE}/users/${userId}`, {
+    const response = await fetch(`${DATA_API_BASE}/users/${userId}`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${this.user.id}`,
@@ -264,7 +267,7 @@ class AuthService {
   public async getUserStats(): Promise<{ totalUsers: number; activeUsers: number; adminUsers: number }> {
     if (!this.user) throw new Error('Not authenticated');
     
-    const response = await fetch(`${API_BASE}/users/stats`, {
+    const response = await fetch(`${DATA_API_BASE}/users/stats`, {
       headers: {
         'Authorization': `Bearer ${this.user.id}`,
       },
@@ -281,7 +284,7 @@ class AuthService {
   public async updateSystemSettings(settings: Record<string, any>): Promise<void> {
     if (!this.user) throw new Error('Not authenticated');
     
-    const response = await fetch(`${API_BASE}/system/settings`, {
+    const response = await fetch(`${DATA_API_BASE}/system/settings`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -303,7 +306,7 @@ class AuthService {
   }): Promise<void> {
     if (!this.user) throw new Error('Not authenticated');
     
-    const response = await fetch(`${API_BASE}/announcements`, {
+    const response = await fetch(`${DATA_API_BASE}/announcements`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -319,7 +322,7 @@ class AuthService {
   }
 
   public async getAnnouncements(): Promise<any[]> {
-    const response = await fetch(`${API_BASE}/announcements`);
+    const response = await fetch(`${DATA_API_BASE}/announcements`);
 
     if (!response.ok) {
       throw new Error('Failed to get announcements');
@@ -327,6 +330,29 @@ class AuthService {
 
     const data = await response.json();
     return data.announcements;
+  }
+
+  // Hardware API methods (these will use the hardware API base)
+  public async getHardwareStatus(): Promise<any> {
+    const response = await fetch(`${HARDWARE_API_BASE}/status`);
+
+    if (!response.ok) {
+      throw new Error('Failed to get hardware status');
+    }
+
+    return response.json();
+  }
+
+  public async discoverHardware(): Promise<any> {
+    const response = await fetch(`${HARDWARE_API_BASE}/discover`, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to discover hardware');
+    }
+
+    return response.json();
   }
 }
 

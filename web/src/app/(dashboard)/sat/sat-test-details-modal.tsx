@@ -215,7 +215,7 @@ const SATTestDetailsModal: React.FC<SATTestDetailsModalProps> = ({
         } else if (testId && open) {
             const fetchTestData = async () => {
                 try {
-                    const response = await fetch(`/api/proxy/sat/tests/${testId}`)
+                    const response = await fetch(`/api/data/sat/tests/${testId}`)
                     if (response.ok) {
                         const data = await response.json()
                         setTestData(data)
@@ -268,7 +268,7 @@ const SATTestDetailsModal: React.FC<SATTestDetailsModalProps> = ({
 
     const fetchAvailableTests = async () => {
         try {
-            const response = await fetch('/api/proxy/sat/test-summaries')
+            const response = await fetch('/api/data/sat/test-summaries')
             if (response.ok) {
                 const data = await response.json()
                 setAvailableTests(data.summaries || [])
@@ -280,7 +280,7 @@ const SATTestDetailsModal: React.FC<SATTestDetailsModalProps> = ({
 
     const fetchComparisonTestData = async (testId: string) => {
         try {
-            const response = await fetch(`/api/proxy/sat/tests/${testId}`)
+            const response = await fetch(`/api/data/sat/tests/${testId}`)
             if (response.ok) {
                 const data = await response.json()
                 setComparisonTestData(data)
