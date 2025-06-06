@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { RiShutDownLine } from "@remixicon/react";
+import { RiShutDownLine, RiHomeLine, RiCpuLine, RiTestTubeLine } from "@remixicon/react";
 import {
   Dialog,
   DialogContent,
@@ -27,19 +27,19 @@ const NAV_ITEMS = [
   {
     href: "/dashboard",
     label: "Home",
-    mobileLabel: "Home",
+    icon: RiHomeLine,
     match: ["/dashboard"],
   },
   {
     href: "/ldpc",
     label: "LDPC",
-    mobileLabel: "LDPC",
+    icon: RiCpuLine,
     match: ["/ldpc"],
   },
   {
     href: "/sat",
     label: "SAT",
-    mobileLabel: "SAT",
+    icon: RiTestTubeLine,
     match: ["/sat"],
   },
 ] as const;
@@ -57,6 +57,7 @@ export default function Navigation() {
   const [confirmLogout, setConfirmLogout] = useState(false);
 
   /* -------------------------------- effect -------------------------------- */
+
   /* auth listener */
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(setUser);
@@ -72,18 +73,14 @@ export default function Navigation() {
   }, []);
 
   /* ------------------------------ callbacks -------------------------------- */
-  const isActive = useCallback(
-      (item: (typeof NAV_ITEMS)[number]) =>
-          item.match.some(
-              (slug) => pathname === slug || pathname.startsWith(`${slug}/`)
-          ),
-      [pathname]
-  );
 
-  const linkClasses = (active: boolean, base: string) =>
-      active
-          ? `${base} text-foreground bg-accent`
-          : `${base} text-muted-foreground hover:text-foreground hover:bg-accent`;
+  const isActive = useCallback(
+    (item: (typeof NAV_ITEMS)[number]) =>
+      item.match.some(
+        (slug) => pathname === slug || pathname.startsWith(`${slug}/`)
+      ),
+    [pathname]
+  );
 
   const handleSignOut = async () => {
     try {
@@ -99,113 +96,192 @@ export default function Navigation() {
   };
 
   /* -------------------------------- render -------------------------------- */
-  return (
-      <>
-        {/* top-nav */}
-        <header
-            className={`fixed inset-x-0 top-0 z-50 h-11 border-b transition-all duration-200 ${
-                scrolled
-                    ? "bg-background/80 backdrop-blur-md shadow-sm border-border"
-                    : "bg-card border-border"
-            }`}
-        >
 
-          <div className="pointer-events-none absolute inset-0">
-            <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-foreground/10 to-transparent" />
-            <div className="absolute inset-x-0 bottom-0 h-[2px] bg-gradient-to-t from-foreground/5 to-transparent" />
+  return (
+    <>
+      {/* Desktop Navigation */}
+      <header
+        className={`fixed inset-x-0 top-0 z-50 hidden sm:block h-14 border-b transition-all duration-200 ${
+          scrolled
+            ? "bg-background/95 backdrop-blur-md shadow-sm border-border"
+            : "bg-background border-border"
+        }`}
+      >
+        <nav className="relative mx-auto flex h-full max-w-7xl items-center justify-between px-6">
+          {/* Left side: Logo + Navigation */}
+          <div className="flex h-full items-center gap-8">
+            {/* Brand */}
+            <Link href="/dashboard" className="flex items-center gap-2">
+              <DacroqLogo className="h-5 w-5 text-foreground" />
+              <span className="text-lg font-semibold text-foreground">
+                Dacroq
+              </span>
+            </Link>
+
+            {/* Main nav links */}
+            {user && (
+              <div className="flex h-full items-center">
+                {NAV_ITEMS.map((item) => {
+                  const active = isActive(item);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`
+                        relative flex items-center h-full px-4 text-sm font-medium transition-all
+                        ${active 
+                          ? "text-foreground" 
+                          : "text-muted-foreground hover:text-foreground"
+                        }
+                      `}
+                    >
+                      {item.label}
+                      {active && (
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
-          <nav className="relative mx-auto flex h-full max-w-7xl items-center justify-between px-6">
-            {/* left side: logo + navigation links (desktop only) */}
-            <div className="flex h-full items-center">
-              {/* brand */}
-              <Link href="/dashboard" className="mr-4 sm:mr-6 flex h-[27px] items-center">
-                <DacroqLogo className="h-4 w-4 text-foreground/95" />
-                <span className="text-md font-semibold text-foreground/95">
-                  Dacroq
-                </span>
-              </Link>
+          {/* Right side: Theme toggle + Sign out */}
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            {user && (
+              <Dialog open={confirmLogout} onOpenChange={setConfirmLogout}>
+                <DialogTrigger asChild>
+                  <button className="inline-flex items-center justify-center h-9 w-9 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                    <RiShutDownLine className="h-4 w-4" />
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="bg-popover text-popover-foreground border-border">
+                  <DialogHeader>
+                    <DialogTitle className="text-foreground">
+                      Sign out?
+                    </DialogTitle>
+                    <DialogDescription className="text-muted-foreground">
+                      You'll be redirected to the login page.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="flex justify-end gap-3 mt-4">
+                    <Button
+                      variant="outline"
+                      className="border-border"
+                      onClick={() => setConfirmLogout(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      className="bg-primary text-primary-foreground hover:bg-primary/90"
+                      onClick={handleSignOut}
+                    >
+                      Sign out
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
+        </nav>
+      </header>
 
-              {/* main nav – desktop only */}
-              <div className="hidden sm:flex h-full items-center gap-1">
-                {user &&
-                    NAV_ITEMS.map((item) => (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            className={linkClasses(
-                                isActive(item),
-                                "inline-flex items-center h-[27px] px-3 text-sm font-medium rounded-md transition-colors"
-                            )}
-                        >
-                          {item.label}
-                        </Link>
-                    ))}
-              </div>
-            </div>
+      {/* Mobile Navigation - Top Bar */}
+      <header
+        className={`fixed inset-x-0 top-0 z-50 sm:hidden h-14 border-b transition-all duration-200 ${
+          scrolled
+            ? "bg-background/95 backdrop-blur-md shadow-sm border-border"
+            : "bg-background border-border"
+        }`}
+      >
+        <nav className="relative flex h-full items-center justify-between px-4">
+          {/* Left: Logo */}
+          <Link href="/dashboard" className="flex items-center gap-2">
+            <DacroqLogo className="h-5 w-5 text-foreground" />
+            <span className="text-lg font-semibold text-foreground">
+              Dacroq
+            </span>
+          </Link>
 
-            {/* right side: navigation links (mobile) + theme + sign-out */}
-            <div className="flex h-full items-center gap-2">
-              {/* main nav – mobile only */}
-              <div className="flex sm:hidden h-full items-center gap-1">
-                {user &&
-                    NAV_ITEMS.map((item) => (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            className={linkClasses(
-                                isActive(item),
-                                "inline-flex items-center h-[27px] px-2 text-xs font-medium rounded-md transition-colors"
-                            )}
-                        >
-                          {item.label}
-                        </Link>
-                    ))}
-              </div>
+          {/* Right: Theme toggle + Sign out */}
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
+            {user && (
+              <Dialog open={confirmLogout} onOpenChange={setConfirmLogout}>
+                <DialogTrigger asChild>
+                  <button className="inline-flex items-center justify-center h-9 w-9 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                    <RiShutDownLine className="h-4 w-4" />
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="bg-popover text-popover-foreground border-border">
+                  <DialogHeader>
+                    <DialogTitle className="text-foreground">
+                      Sign out?
+                    </DialogTitle>
+                    <DialogDescription className="text-muted-foreground">
+                      You'll be redirected to the login page.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="flex justify-end gap-3 mt-4">
+                    <Button
+                      variant="outline"
+                      className="border-border"
+                      onClick={() => setConfirmLogout(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      className="bg-primary text-primary-foreground hover:bg-primary/90"
+                      onClick={handleSignOut}
+                    >
+                      Sign out
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
+        </nav>
+      </header>
 
-              <ThemeToggle />
-              {user && (
-                  <Dialog open={confirmLogout} onOpenChange={setConfirmLogout}>
-                    <DialogTrigger asChild>
-                      <button className="inline-flex items-center h-[27px] px-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-md hover:bg-accent">
-                        <RiShutDownLine className="h-4 w-4" />
-                      </button>
-                    </DialogTrigger>
+      {/* Spacer for fixed header */}
+      <div className="h-14" />
 
-                    <DialogContent className="bg-popover text-popover-foreground border-border">
-                      <DialogHeader>
-                        <DialogTitle className="text-foreground">
-                          Are you sure you want to log out?
-                        </DialogTitle>
-                        <DialogDescription className="text-muted-foreground">
-                          You'll be redirected to the login page.
-                        </DialogDescription>
-                      </DialogHeader>
-
-                      <div className="flex justify-end gap-3">
-                        <Button
-                            variant="outline"
-                            className="border-border"
-                            onClick={() => setConfirmLogout(false)}
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                            className="bg-primary text-primary-foreground hover:bg-primary/90"
-                            onClick={handleSignOut}
-                        >
-                          OK
-                        </Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-              )}
-            </div>
-          </nav>
-        </header>
-
-        {/* spacer */}
-        <div className="h-11" />
-      </>
+      {/* Mobile Navigation - Bottom Tab Bar */}
+      {user && (
+        <>
+          <div className="fixed bottom-0 left-0 right-0 z-50 sm:hidden bg-background border-t border-border">
+            <nav className="flex items-center justify-around h-16">
+              {NAV_ITEMS.map((item) => {
+                const active = isActive(item);
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`
+                      flex flex-col items-center justify-center flex-1 h-full gap-1 transition-colors
+                      ${active 
+                        ? "text-primary" 
+                        : "text-muted-foreground hover:text-foreground"
+                      }
+                    `}
+                  >
+                    <Icon className={`h-5 w-5 ${active ? "stroke-[2.5]" : "stroke-2"}`} />
+                    <span className={`text-xs ${active ? "font-medium" : ""}`}>
+                      {item.label}
+                    </span>
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
+          
+          {/* Additional spacer for mobile bottom nav - only when user is logged in */}
+          <div className="h-16 sm:hidden" />
+        </>
+      )}
+    </>
   );
 }

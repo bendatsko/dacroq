@@ -350,6 +350,25 @@ const getSuccessRate = (test: TestRun) => {
 };
 
 /* -------------------------------------------------------------------------- */
+/*                          Enhanced Status Badge Styles                       */
+/* -------------------------------------------------------------------------- */
+
+const getStatusBadgeStyles = (status: string) => {
+    switch (status) {
+        case "completed":
+            return "bg-green-500/10 text-green-700 hover:bg-green-500/20 border-green-500/20 dark:bg-green-500/15 dark:text-green-400 dark:border-green-500/30";
+        case "running":
+            return "bg-blue-500/10 text-blue-700 hover:bg-blue-500/20 border-blue-500/20 dark:bg-blue-500/15 dark:text-blue-400 dark:border-blue-500/30";
+        case "failed":
+            return "bg-red-500/10 text-red-700 hover:bg-red-500/20 border-red-500/20 dark:bg-red-500/15 dark:text-red-400 dark:border-red-500/30";
+        case "queued":
+            return "bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 border-amber-500/20 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/30";
+        default:
+            return "";
+    }
+};
+
+/* -------------------------------------------------------------------------- */
 /*                               Main Page                                    */
 /* -------------------------------------------------------------------------- */
 
@@ -764,12 +783,14 @@ export default function Dashboard() {
         <div className="min-h-screen bg-background">
             <div className="flex-1 flex flex-col">
                 <main className="flex-1">
-                    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-
-                        {/* Header */}
-                        <div className="pt-0 md:pt-1 flex items-center justify-between">
-                            <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-                        </div>
+                <div className="mx-auto max-w-4xl px-4 sm:px-6 ">
+                {/* Header */}
+                <div className="mb-6">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Dashboard</h1>
+                    <p className="mt-1 text-sm sm:text-base text-muted-foreground">
+                        View and manage your tests
+                    </p>
+                </div>
 
                         {/* Search / filters */}
                         <div className="mt-4 lg:mt-6 rounded-xl border border-border bg-card/50 p-4 lg:p-5 space-y-4">
@@ -789,16 +810,6 @@ export default function Dashboard() {
 
                             {/* Action Row - For Doing Things */}
                             <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto pb-1">
-                            {selectedTests.length > 0 && (
-                                    <Button
-                                        variant="destructive"
-                                        size="icon"
-                                        onClick={() => handleDelete(selectedTests, tests)}
-                                        className="flex-shrink-0 bg-red-500 hover:bg-red-600 text-white"
-                                    >
-                                        <RiDeleteBinLine className="h-3 w-3" />
-                                    </Button>
-                                )}
                                 <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                                     <SelectTrigger className="w-36 sm:w-40 flex-shrink-0">
                                         <RiFilterLine className="mr-1 h-4 w-4 sm:mr-2" />
@@ -828,16 +839,16 @@ export default function Dashboard() {
                                     </SelectContent>
                                 </Select>
                                 <Select value={sortOrder} onValueChange={setSortOrder}>
-                                    <SelectTrigger className="w-32 sm:w-36 flex-shrink-0">
-                                        <RiTimeLine className="mr-1 h-4 w-4 sm:mr-2" />
+                                    <SelectTrigger className="w-24 sm:w-32 flex-shrink-0">
+                                        <RiTimeLine className="mr-0.5 h-4 w-4 sm:mr-2" />
                                         <SelectValue placeholder="Sort" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="newest">Newest First</SelectItem>
-                                        <SelectItem value="oldest">Oldest First</SelectItem>
-                                        <SelectItem value="name_asc">Name A-Z</SelectItem>
-                                        <SelectItem value="name_desc">Name Z-A</SelectItem>
-                                        <SelectItem value="status">By Status</SelectItem>
+                                        <SelectItem value="newest">Newest</SelectItem>
+                                        <SelectItem value="oldest">Oldest</SelectItem>
+                                        <SelectItem value="name_asc">A-Z</SelectItem>
+                                        <SelectItem value="name_desc">Z-A</SelectItem>
+                                        <SelectItem value="status">Status</SelectItem>
                                     </SelectContent>
                                 </Select>
                                 <Select 
@@ -853,20 +864,29 @@ export default function Dashboard() {
                                         setCurrentPage(1); // Reset to first page when changing page size
                                     }}
                                 >
-                                    <SelectTrigger className="w-28 sm:w-32 flex-shrink-0">
-                                        <TbSortAscendingNumbers className="mr-1 h-4 w-4 sm:mr-2"/>
+                                    <SelectTrigger className="w-20 sm:w-32 flex-shrink-0">
+                                        <TbSortAscendingNumbers className="mr-0.5 h-4 w-4 sm:mr-2"/>
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="auto">Auto ({autoCalculatedItemsPerPage})</SelectItem>
-                                        <SelectItem value="5">5 per page</SelectItem>
-                                        <SelectItem value="10">10 per page</SelectItem>
-                                        <SelectItem value="15">15 per page</SelectItem>
-                                        <SelectItem value="25">25 per page</SelectItem>
-                                        <SelectItem value="50">50 per page</SelectItem>
+                                        <SelectItem value="5">5</SelectItem>
+                                        <SelectItem value="10">10</SelectItem>
+                                        <SelectItem value="15">15</SelectItem>
+                                        <SelectItem value="25">25</SelectItem>
+                                        <SelectItem value="50">50</SelectItem>
                                     </SelectContent>
                                 </Select>
-                                
+                            {selectedTests.length > 0 && (
+                                    <Button
+                                        variant="destructive"
+                                        size="icon"
+                                        onClick={() => handleDelete(selectedTests, tests)}
+                                        className="flex-shrink-0 bg-red-500 hover:bg-red-600 text-white"
+                                    >
+                                        <RiDeleteBinLine className="h-3 w-3" />
+                                    </Button>
+                                )}
                             </div>
                         </div>
 
@@ -978,16 +998,16 @@ export default function Dashboard() {
                                                             </td>
                                                             <td className="p-3">
                                                                 <div className="flex items-center gap-2">
-                                                                    <Badge variant={testStatusInfo.variant as any} className="flex items-center gap-1">
+                                                                    <Badge 
+                                                                        variant="outline" 
+                                                                        className={cn(
+                                                                            "flex items-center gap-1 border",
+                                                                            getStatusBadgeStyles(test.status)
+                                                                        )}
+                                                                    >
                                                                         {getIconElement(testStatusInfo.iconName)}
                                                                         {testStatusInfo.label}
                                                                     </Badge>
-                                                                    {/* Show error details inline if available */}
-                                                                    {testStatusInfo.variant === "destructive" && (
-                                                                        <span className="text-xs text-muted-foreground">
-                                                                            {getSuccessRate(test)}
-                                                                        </span>
-                                                                    )}
                                                                 </div>
                                                             </td>
                                                             <td className="p-3">
@@ -997,17 +1017,6 @@ export default function Dashboard() {
                                                             </td>
                                                             <td className="p-3">
                                                                 <div className="flex items-center gap-2">
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="sm"
-                                                                        className="h-8 w-8 p-0"
-                                                                        onClick={(e: React.MouseEvent) => {
-                                                                            e.stopPropagation();
-                                                                            openJobResultsModal(test.id, test.chipType === "LDPC" ? "ldpc" : "sat");
-                                                                        }}
-                                                                    >
-                                                                        <RiEyeLine size={16} />
-                                                                    </Button>
                                                                     <Dropdownmenu>
                                                                         <DropdownMenuTrigger asChild>
                                                                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
@@ -1047,7 +1056,7 @@ export default function Dashboard() {
                                     </div>
 
                                     {/* Mobile card view */}
-                                    <div className="md:hidden space-y-4">
+                                    <div className="md:hidden space-y-4 p-4">
                                         {currentTests.map((test) => {
                                             const testStatusInfo = getTestStatusInfo(test);
                                             const testLabel = generateTestLabel(test);
@@ -1133,16 +1142,16 @@ export default function Dashboard() {
                                                                 <span className="text-xs text-muted-foreground">{test.processorType}</span>
                                                             </div>
                                                             <div className="flex items-center gap-2">
-                                                                <Badge variant={testStatusInfo.variant as any} className="flex items-center gap-1 text-xs">
+                                                                <Badge 
+                                                                    variant="outline" 
+                                                                    className={cn(
+                                                                        "flex items-center gap-1 text-xs border",
+                                                                        getStatusBadgeStyles(test.status)
+                                                                    )}
+                                                                >
                                                                     {getIconElement(testStatusInfo.iconName)}
                                                                     {testStatusInfo.label}
                                                                 </Badge>
-                                                                {/* Show error info for failed tests */}
-                                                                {testStatusInfo.variant === "destructive" && (
-                                                                    <span className="text-xs text-red-500">
-                                                                        Error
-                                                                    </span>
-                                                                )}
                                                             </div>
                                                         </div>
                                                         
@@ -1151,17 +1160,35 @@ export default function Dashboard() {
                                                                 {formatTestCreatedDate(test.created || test.createdAt || "", currentTime)}
                                                             </div>
                                                             <div className="flex items-center gap-2">
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    className="h-7 w-7 p-0"
-                                                                    onClick={(e: React.MouseEvent) => {
-                                                                        e.stopPropagation();
-                                                                        openJobResultsModal(test.id, test.chipType === "LDPC" ? "ldpc" : "sat");
-                                                                    }}
-                                                                >
-                                                                    <RiEyeLine size={14} />
-                                                                </Button>
+                                                                <Dropdownmenu>
+                                                                    <DropdownMenuTrigger asChild>
+                                                                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                                                                            <RiMoreFill size={14} />
+                                                                        </Button>
+                                                                    </DropdownMenuTrigger>
+                                                                    <DropdownMenuContent align="end">
+                                                                        <DropdownMenuItem
+                                                                            onClick={() => openJobResultsModal(test.id, test.chipType === "LDPC" ? "ldpc" : "sat")}
+                                                                        >
+                                                                            <RiEyeLine className="w-4 h-4 mr-2" />
+                                                                            View Details
+                                                                        </DropdownMenuItem>
+                                                                        <DropdownMenuItem
+                                                                            onClick={() => handleDownload([test.id], [test])}
+                                                                        >
+                                                                            <RiDownload2Line className="w-4 h-4 mr-2" />
+                                                                            Download
+                                                                        </DropdownMenuItem>
+                                                                        <DropdownMenuSeparator />
+                                                                        <DropdownMenuItem
+                                                                            onClick={() => handleDelete([test.id], tests)}
+                                                                            className="text-destructive focus:text-destructive"
+                                                                        >
+                                                                            <RiDeleteBin5Line className="w-4 h-4 mr-2" />
+                                                                            Delete
+                                                                        </DropdownMenuItem>
+                                                                    </DropdownMenuContent>
+                                                                </Dropdownmenu>
                                                             </div>
                                                         </div>
                                                     </CardContent>
