@@ -52,8 +52,7 @@ import LDPCJobDetailsModal from "@/app/(dashboard)/ldpc/ldpc-job-details-modal";
 import SATTestDetailsModal from "@/app/(dashboard)/sat/sat-test-details-modal";
 import { generateTestLabel, generateTestDescription, getTestStatusInfo, formatTestCreatedDate } from "@/lib/test-labels";
 
-// Import the API utility instead of using proxy
-import { api } from "@/lib/api";
+const API_BASE = "/api/proxy";
 
 /* -------------------------------------------------------------------------- */
 /*                               Helper Types                                 */
@@ -392,8 +391,8 @@ export default function Dashboard() {
         try {
             const endpoint =
                 type === "ldpc"
-                    ? `/api/data/ldpc/jobs/${jobId}`
-                    : `/api/data/tests/${jobId}`;
+                    ? `${API_BASE}/ldpc/jobs/${jobId}`
+                    : `${API_BASE}/tests/${jobId}`;
             const res = await fetch(endpoint);
             if (!res.ok) return;
             const details = await res.json();
@@ -424,11 +423,11 @@ export default function Dashboard() {
             const timeoutId = setTimeout(() => controller.abort(), 8000);
 
             const [testsRes, ldpcRes] = await Promise.all([
-                fetch(`/api/data/tests`, {
+                fetch(`${API_BASE}/tests`, {
                     headers: { Accept: "application/json" },
                     signal: controller.signal,
                 }),
-                fetch(`/api/data/ldpc/jobs`, {
+                fetch(`${API_BASE}/ldpc/jobs`, {
                     headers: { Accept: "application/json" },
                 }),
             ]);
@@ -583,7 +582,7 @@ export default function Dashboard() {
             try {
                 const controller = new AbortController();
                 const to = setTimeout(() => controller.abort(), 5000);
-                const res = await fetch(`/api/data/health`, {
+                const res = await fetch(`${API_BASE}/health`, {
                     signal: controller.signal,
                 });
                 clearTimeout(to);
@@ -635,8 +634,8 @@ export default function Dashboard() {
             await Promise.all(ids.map(async (id) => {
                 const test = tests.find(t => t.id === id);
                 const endpoint = test?.chipType === 'LDPC' 
-                    ? `/api/data/ldpc/jobs/${id}`
-                    : `/api/data/tests/${id}`;
+                    ? `${API_BASE}/ldpc/jobs/${id}`
+                    : `${API_BASE}/tests/${id}`;
                 
                 const res = await fetch(endpoint, { method: 'DELETE' });
                 if (!res.ok) throw new Error(`Failed to delete test ${id}`);

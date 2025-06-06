@@ -370,7 +370,7 @@ const LDPCJobDetailsModal: React.FC<LDPCJobDetailsModalProps> = ({
       const fetchJobData = async () => {
         try {
           console.log('📊 LDPC Modal: Fetching job data for ID:', jobId)
-                      const response = await fetch(`/api/data/ldpc/jobs/${jobId}`)
+          const response = await fetch(`/api/proxy/ldpc/jobs/${jobId}`)
           if (response.ok) {
             const data = await response.json()
             console.log('📊 LDPC Modal: Fetched job data:', data)
@@ -438,7 +438,7 @@ const LDPCJobDetailsModal: React.FC<LDPCJobDetailsModalProps> = ({
 
   const fetchAvailableTests = async () => {
     try {
-                  const response = await fetch('/api/data/ldpc/test-summaries')
+      const response = await fetch('/api/proxy/ldpc/test-summaries')
       if (response.ok) {
         const data = await response.json()
         setAvailableTests(data.summaries || [])
@@ -454,9 +454,9 @@ const LDPCJobDetailsModal: React.FC<LDPCJobDetailsModalProps> = ({
       let endpoint = '/api/proxy/ldpc/jobs/'
       
       if (testSummary?.type === 'LDPC') {
-        endpoint = `/api/data/ldpc/jobs/${testId}`
+        endpoint = `/api/proxy/ldpc/jobs/${testId}`
       } else {
-        endpoint = `/api/data/tests/${testId}`
+        endpoint = `/api/proxy/tests/${testId}`
       }
       
       const response = await fetch(endpoint)

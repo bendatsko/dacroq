@@ -1,7 +1,7 @@
 // app/api/proxy/[...path]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_BASE = process.env.HARDWARE_API_URL || 'https://api.dacroq.net';
+const API_BASE = process.env.HARDWARE_API_URL || 'http://localhost:8000';
 
 // Extended timeout for hardware operations
 const TIMEOUTS = {

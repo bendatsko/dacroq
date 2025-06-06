@@ -1,6 +1,0 @@
-{
-  "dependencies": {
-    "concurrently": "^9.1.2",
-    "github-webhook-handler": "^1.0.0"
-  }
-}

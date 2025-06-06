@@ -148,7 +148,7 @@ export default function LDPCTestingInterface() {
         
         if (showLoading) setLoadingHistory(true)
         try {
-            const res = await fetch("/api/hardware/ldpc/serial-history")
+            const res = await fetch("/api/proxy/ldpc/serial-history")
             const data = await res.json()
             
             if (res.ok) {
@@ -175,7 +175,7 @@ export default function LDPCTestingInterface() {
         setSerialOutput(prev => [...prev, `[${timestamp}] ${text}`])
     }, [])
 
-    // Check hardware status - optimized for faster responses
+    // Check hardware status - reduced frequency to prevent spam
     const checkHardware = useCallback(async (isAutomatic = false) => {
         if (!useHardware) {
             if (!isAutomatic) {
@@ -186,9 +186,9 @@ export default function LDPCTestingInterface() {
 
         if (checkingHardware) return false
 
-        // Rate limiting - don't check more than once every 15 seconds for automatic checks
+        // Rate limiting - don't check more than once every 10 seconds for automatic checks
         const now = Date.now()
-        if (isAutomatic && (now - lastHardwareCheckRef.current) < 15000) {
+        if (isAutomatic && (now - lastHardwareCheckRef.current) < 10000) {
             return false
         }
         lastHardwareCheckRef.current = now
@@ -196,32 +196,10 @@ export default function LDPCTestingInterface() {
         setCheckingHardware(true)
         
         try {
-            // First try fast hardware status check
-            const statusRes = await fetch("/api/hardware/status", {
-                method: "GET",
-                signal: AbortSignal.timeout(5000) // 5 second timeout
-            })
-            
-            if (statusRes.ok) {
-                const statusData = await statusRes.json()
-                if (statusData.ldpc_connected) {
-                    setHardwareStatus({ connected: true, status: "ready", lastCheck: new Date().toISOString() })
-                    setSerialConnected(true)
-                    setHardwareCheckAttempts(0)
-                    
-                    if (!isAutomatic) {
-                        toast({ variant: "success", description: "Hardware connected and ready" })
-                    }
-                    return true
-                }
-            }
-            
-            // Fallback to direct command if status shows disconnected
-            const res = await fetch("/api/hardware/ldpc/command", {
+            const res = await fetch("/api/proxy/ldpc/command", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ command: "STATUS" }),
-                signal: AbortSignal.timeout(8000) // 8 second timeout
+                body: JSON.stringify({ command: "STATUS" })
             })
             
             const data = await res.json()
@@ -251,7 +229,7 @@ export default function LDPCTestingInterface() {
             })
             setSerialConnected(false)
             
-            if (!isAutomatic && !(e instanceof Error && e.name === 'TimeoutError')) {
+            if (!isAutomatic) {
                 toast({ variant: "error", description: "Hardware not responding" })
             }
             return false
@@ -272,12 +250,12 @@ export default function LDPCTestingInterface() {
             loadSerialHistory(!historyLoaded)
             checkHardware(true)
             
-            // Set up periodic checking every 45 seconds (reduced frequency to prevent timeouts)
+            // Set up periodic checking every 30 seconds (reduced from 15s to prevent spam)
             hardwareCheckIntervalRef.current = setInterval(() => {
                 if (componentMountedRef.current && useHardware) {
                     checkHardware(true)
                 }
-            }, 45000)
+            }, 30000)
         } else {
             // Reset hardware status when hardware is disabled
             setHardwareStatus(null)
@@ -309,7 +287,7 @@ export default function LDPCTestingInterface() {
         if (!serialCommand.trim()) return
         
         try {
-            const res = await fetch("/api/hardware/ldpc/command", {
+            const res = await fetch("/api/proxy/ldpc/command", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ command: serialCommand.trim() })
@@ -346,32 +324,6 @@ export default function LDPCTestingInterface() {
         await checkHardware(false)
     }
 
-    // Trigger hardware discovery
-    const discoverHardware = async () => {
-        if (checkingHardware) return
-        
-        setCheckingHardware(true)
-        try {
-            const res = await fetch("/api/hardware/discover", {
-                method: "POST",
-                signal: AbortSignal.timeout(30000) // 30 second timeout for discovery
-            })
-            
-            const data = await res.json()
-            if (res.ok && data.success) {
-                toast({ variant: "success", description: `Found ${Object.keys(data.discovered).length} devices` })
-                // Refresh status after discovery
-                await checkHardware(false)
-            } else {
-                toast({ variant: "error", description: data.error || "Discovery failed" })
-            }
-        } catch (e) {
-            toast({ variant: "error", description: "Discovery timeout or error" })
-        } finally {
-            setCheckingHardware(false)
-        }
-    }
-
     // Run test with improved validation
     const runTest = async () => {
         if (!useHardware) {
@@ -402,7 +354,7 @@ export default function LDPCTestingInterface() {
             addSerialOutput(`🔄 Runs per SNR: ${runsPerSNR}`)
             addSerialOutput(`🔧 Algorithm: Hardware (AMORGOS)`)
 
-            const res = await fetch("/api/data/ldpc/jobs", {
+            const res = await fetch("/api/proxy/ldpc/jobs", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -720,28 +672,15 @@ export default function LDPCTestingInterface() {
                                                 )}
                                             </Badge>
                                             {useHardware && (
-                                                <div className="flex gap-1">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={refreshHardware}
-                                                        disabled={checkingHardware}
-                                                        className="h-8 w-8 p-0"
-                                                        title="Quick status check"
-                                                    >
-                                                        <RiRefreshLine className={`h-4 w-4 ${checkingHardware ? 'animate-spin' : ''}`} />
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={discoverHardware}
-                                                        disabled={checkingHardware}
-                                                        className="h-8 px-2"
-                                                        title="Full hardware discovery"
-                                                    >
-                                                        <RiCommandLine className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={refreshHardware}
+                                                    disabled={checkingHardware}
+                                                    className="h-8 w-8 p-0"
+                                                >
+                                                    <RiRefreshLine className={`h-4 w-4 ${checkingHardware ? 'animate-spin' : ''}`} />
+                                                </Button>
                                             )}
                                         </div>
                                     </div>

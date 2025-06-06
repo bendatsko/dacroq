@@ -64,37 +64,17 @@ This will:
 - Start both API and frontend servers
 - Open http://localhost:3000 in your browser
 
-### Production Deployment
+### Production Deployment (Raspberry Pi)
 
 ```bash
 # Clone and deploy
-git clone https://github.com/bendatsko/dacroq.git
+git clone https://github.com/your-username/dacroq.git
 cd dacroq
 
-# Run automated setup (for new deployments)
-chmod +x setup.sh
-./setup.sh
-
-# Or manual deployment
-chmod +x deploy.sh
-./deploy.sh
+# Run production deployment
+chmod +x scripts/deploy-prod.sh
+sudo ./scripts/deploy-prod.sh
 ```
-
-## 📋 Deployment Documentation
-
-For complete deployment information, see:
-
-- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Complete deployment guide and workflow
-- **[SYSTEM-INFO.md](./SYSTEM-INFO.md)** - Detailed system configuration and technical specs
-- **[setup.sh](./setup.sh)** - Automated setup script for new environments
-
-### Current Deployment
-
-- **Live Site**: https://dacroq.eecs.umich.edu
-- **Auto-deployment**: Enabled via GitHub webhooks
-- **Server**: Red Hat Enterprise Linux 9
-- **Process Manager**: PM2 with auto-restart
-- **Web Server**: nginx with SSL/TLS
 
 ## 📁 Project Structure
 
@@ -104,7 +84,7 @@ dacroq/
 │   ├── src/app/               # App router pages and components
 │   ├── src/components/        # Reusable UI components
 │   └── src/lib/              # Utility functions and auth
-├── 🔧 api/           # Flask API for hardware control
+├── 🔧 hardware_api/           # Flask API for hardware control
 │   ├── app.py                # Main API server
 │   ├── requirements.txt      # Python dependencies
 │   └── .venv/               # Virtual environment
@@ -234,7 +214,7 @@ npm run test         # Run test suite
 
 ### 2. API Development
 ```bash
-cd api
+cd hardware_api
 source .venv/bin/activate
 python app.py        # Start development server
 pytest              # Run tests
