@@ -19,7 +19,7 @@ interface AuthResponse {
   user: User;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ;
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
 // Debug log to verify the client ID
