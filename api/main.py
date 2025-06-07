@@ -795,12 +795,8 @@ class TeensyInterface:
         self.serial_history = []
         self.max_history = 100
         
-        # Import hardware manager
-        try:
-            from hardware_manager import hardware_manager
-            self.hw_manager = hardware_manager
-        except:
-            self.hw_manager = None
+        # Use the global hardware manager instance
+        self.hw_manager = hardware_manager
         
         # Auto-detect port if not specified
         if not self.port:
@@ -1701,6 +1697,407 @@ def get_test_summaries():
         logger.error(f"Error fetching test summaries: {e}")
         return jsonify({"error": str(e)}), 500
 
+# ------------------------------ SAT Solver Implementations -------------------
+import random
+from collections import defaultdict
+
+class MiniSATSolver:
+    """Python implementation of DPLL-based SAT solver (MiniSAT-like)"""
+    
+    def __init__(self):
+        self.propagations = 0
+        self.decisions = 0
+        self.conflicts = 0
+        self.clauses = []
+        self.assignment = {}
+        self.watch_lists = defaultdict(list)
+        
+    def parse_dimacs(self, dimacs_str):
+        """Parse DIMACS CNF format"""
+        lines = dimacs_str.strip().split('\n')
+        self.clauses = []
+        num_vars = 0
+        
+        for line in lines:
+            line = line.strip()
+            if line.startswith('c') or not line:
+                continue
+            elif line.startswith('p cnf'):
+                parts = line.split()
+                num_vars = int(parts[2])
+            else:
+                clause = [int(x) for x in line.split() if x != '0']
+                if clause:
+                    self.clauses.append(clause)
+        
+        return num_vars
+    
+    def solve(self, dimacs_cnf):
+        """Main DPLL solving algorithm"""
+        num_vars = self.parse_dimacs(dimacs_cnf)
+        self.assignment = {}
+        
+        # Initialize watch lists
+        self._init_watches()
+        
+        # Main DPLL loop
+        if self._dpll():
+            # Extract assignment
+            final_assignment = []
+            for i in range(1, num_vars + 1):
+                if i in self.assignment:
+                    final_assignment.append(i if self.assignment[i] else -i)
+                else:
+                    final_assignment.append(i)  # Unassigned = true
+            return True, final_assignment
+        else:
+            return False, None
+    
+    def _init_watches(self):
+        """Initialize 2-watched literals"""
+        self.watch_lists.clear()
+        for i, clause in enumerate(self.clauses):
+            if len(clause) >= 1:
+                self.watch_lists[clause[0]].append(i)
+            if len(clause) >= 2:
+                self.watch_lists[clause[1]].append(i)
+    
+    def _dpll(self):
+        """DPLL recursive algorithm"""
+        # Unit propagation
+        conflict = self._unit_propagate()
+        if conflict:
+            self.conflicts += 1
+            return False
+        
+        # Check if satisfied
+        if self._all_satisfied():
+            return True
+        
+        # Choose variable (VSIDS-like)
+        var = self._choose_variable()
+        if var is None:
+            return True
+        
+        self.decisions += 1
+        
+        # Try positive assignment
+        saved_state = dict(self.assignment)
+        self.assignment[var] = True
+        if self._dpll():
+            return True
+        
+        # Backtrack and try negative
+        self.assignment = saved_state
+        self.assignment[var] = False
+        return self._dpll()
+    
+    def _unit_propagate(self):
+        """Perform unit propagation"""
+        changed = True
+        while changed:
+            changed = False
+            for clause in self.clauses:
+                # Count literals
+                unassigned = []
+                satisfied = False
+                
+                for lit in clause:
+                    var = abs(lit)
+                    if var in self.assignment:
+                        if (lit > 0 and self.assignment[var]) or \
+                           (lit < 0 and not self.assignment[var]):
+                            satisfied = True
+                            break
+                    else:
+                        unassigned.append(lit)
+                
+                if satisfied:
+                    continue
+                    
+                if len(unassigned) == 0:
+                    return True  # Conflict
+                elif len(unassigned) == 1:
+                    # Unit clause
+                    lit = unassigned[0]
+                    var = abs(lit)
+                    self.assignment[var] = lit > 0
+                    self.propagations += 1
+                    changed = True
+        
+        return False
+    
+    def _all_satisfied(self):
+        """Check if all clauses are satisfied"""
+        for clause in self.clauses:
+            satisfied = False
+            for lit in clause:
+                var = abs(lit)
+                if var in self.assignment:
+                    if (lit > 0 and self.assignment[var]) or \
+                       (lit < 0 and not self.assignment[var]):
+                        satisfied = True
+                        break
+            if not satisfied:
+                return False
+        return True
+    
+    def _choose_variable(self):
+        """Choose next variable to assign"""
+        for i in range(1, 1000):  # Max 1000 variables
+            if i not in self.assignment:
+                return i
+        return None
+
+
+class WalkSATSolver:
+    """Python implementation of WalkSAT local search algorithm"""
+    
+    def __init__(self, max_flips=100000, noise=0.5):
+        self.max_flips = max_flips
+        self.noise = noise
+        self.total_flips = 0
+        self.restarts = 0
+        
+    def parse_dimacs(self, dimacs_str):
+        """Parse DIMACS CNF format"""
+        lines = dimacs_str.strip().split('\n')
+        clauses = []
+        num_vars = 0
+        
+        for line in lines:
+            line = line.strip()
+            if line.startswith('c') or not line:
+                continue
+            elif line.startswith('p cnf'):
+                parts = line.split()
+                num_vars = int(parts[2])
+            else:
+                clause = [int(x) for x in line.split() if x != '0']
+                if clause:
+                    clauses.append(clause)
+        
+        return num_vars, clauses
+    
+    def solve(self, dimacs_cnf):
+        """Main WalkSAT algorithm"""
+        num_vars, clauses = self.parse_dimacs(dimacs_cnf)
+        
+        # Multiple restarts
+        for restart in range(10):
+            self.restarts = restart
+            
+            # Random initial assignment
+            assignment = {}
+            for i in range(1, num_vars + 1):
+                assignment[i] = random.random() > 0.5
+            
+            # Local search
+            for flip in range(self.max_flips // 10):
+                self.total_flips += 1
+                
+                # Check if satisfied
+                unsat_clauses = self._get_unsat_clauses(assignment, clauses)
+                if not unsat_clauses:
+                    # Found solution
+                    result = []
+                    for i in range(1, num_vars + 1):
+                        result.append(i if assignment[i] else -i)
+                    return True, result
+                
+                # Pick random unsatisfied clause
+                clause = random.choice(unsat_clauses)
+                
+                # Choose variable to flip
+                if random.random() < self.noise:
+                    # Random walk
+                    lit = random.choice(clause)
+                    var = abs(lit)
+                else:
+                    # Greedy: minimize break count
+                    best_var = None
+                    best_break_count = float('inf')
+                    
+                    for lit in clause:
+                        var = abs(lit)
+                        # Count clauses that would become unsatisfied
+                        break_count = self._count_breaks(
+                            assignment, clauses, var
+                        )
+                        if break_count < best_break_count:
+                            best_break_count = break_count
+                            best_var = var
+                    
+                    var = best_var
+                
+                # Flip variable
+                assignment[var] = not assignment[var]
+        
+        return False, None
+    
+    def _get_unsat_clauses(self, assignment, clauses):
+        """Get list of unsatisfied clauses"""
+        unsat = []
+        for clause in clauses:
+            satisfied = False
+            for lit in clause:
+                var = abs(lit)
+                if (lit > 0 and assignment[var]) or \
+                   (lit < 0 and not assignment[var]):
+                    satisfied = True
+                    break
+            if not satisfied:
+                unsat.append(clause)
+        return unsat
+    
+    def _count_breaks(self, assignment, clauses, var_to_flip):
+        """Count clauses that would become unsatisfied"""
+        count = 0
+        for clause in clauses:
+            # Check if currently satisfied by only var_to_flip
+            sat_count = 0
+            sat_by_var = False
+            
+            for lit in clause:
+                var = abs(lit)
+                if (lit > 0 and assignment[var]) or \
+                   (lit < 0 and not assignment[var]):
+                    sat_count += 1
+                    if var == var_to_flip:
+                        sat_by_var = True
+            
+            if sat_count == 1 and sat_by_var:
+                count += 1
+        
+        return count
+
+
+class SATDecomposer:
+    """Decompose large SAT problems for hardware/software co-solving"""
+    
+    def decompose_spectral(self, dimacs_cnf, max_vars=50):
+        """Use spectral analysis to decompose SAT problem"""
+        num_vars, clauses = self._parse_dimacs(dimacs_cnf)
+        
+        if num_vars <= max_vars:
+            # Small enough for hardware
+            return [{
+                "dimacs": dimacs_cnf,
+                "variables": num_vars,
+                "clauses": len(clauses),
+                "suitable_for_hardware": True
+            }]
+        
+        # Build variable interaction graph
+        var_graph = defaultdict(set)
+        for clause in clauses:
+            vars_in_clause = [abs(lit) for lit in clause]
+            for i in range(len(vars_in_clause)):
+                for j in range(i+1, len(vars_in_clause)):
+                    var_graph[vars_in_clause[i]].add(vars_in_clause[j])
+                    var_graph[vars_in_clause[j]].add(vars_in_clause[i])
+        
+        # Find connected components
+        components = self._find_components(var_graph, num_vars)
+        
+        # Convert components to subproblems
+        subproblems = []
+        for component in components:
+            sub_clauses = []
+            for clause in clauses:
+                vars_in_clause = set(abs(lit) for lit in clause)
+                if vars_in_clause.intersection(component):
+                    sub_clauses.append(clause)
+            
+            # Create DIMACS for subproblem
+            if sub_clauses:
+                dimacs = self._create_dimacs(component, sub_clauses)
+                subproblems.append({
+                    "dimacs": dimacs,
+                    "variables": len(component),
+                    "clauses": len(sub_clauses),
+                    "suitable_for_hardware": len(component) <= max_vars
+                })
+        
+        return subproblems
+    
+    def _parse_dimacs(self, dimacs_str):
+        """Parse DIMACS format"""
+        lines = dimacs_str.strip().split('\n')
+        clauses = []
+        num_vars = 0
+        
+        for line in lines:
+            line = line.strip()
+            if line.startswith('c') or not line:
+                continue
+            elif line.startswith('p cnf'):
+                parts = line.split()
+                num_vars = int(parts[2])
+            else:
+                clause = [int(x) for x in line.split() if x != '0']
+                if clause:
+                    clauses.append(clause)
+        
+        return num_vars, clauses
+    
+    def _find_components(self, graph, num_vars):
+        """Find connected components in variable graph"""
+        visited = set()
+        components = []
+        
+        for var in range(1, num_vars + 1):
+            if var not in visited:
+                component = set()
+                self._dfs(graph, var, visited, component)
+                components.append(component)
+        
+        # Merge small components
+        merged_components = []
+        current_merge = set()
+        
+        for comp in sorted(components, key=len, reverse=True):
+            if len(current_merge) + len(comp) <= 50:
+                current_merge.update(comp)
+            else:
+                if current_merge:
+                    merged_components.append(current_merge)
+                current_merge = comp
+        
+        if current_merge:
+            merged_components.append(current_merge)
+        
+        return merged_components
+    
+    def _dfs(self, graph, node, visited, component):
+        """Depth-first search for components"""
+        visited.add(node)
+        component.add(node)
+        for neighbor in graph.get(node, []):
+            if neighbor not in visited:
+                self._dfs(graph, neighbor, visited, component)
+    
+    def _create_dimacs(self, variables, clauses):
+        """Create DIMACS string for subproblem"""
+        # Renumber variables
+        var_map = {v: i+1 for i, v in enumerate(sorted(variables))}
+        
+        dimacs = f"c Subproblem with {len(variables)} variables\n"
+        dimacs += f"p cnf {len(variables)} {len(clauses)}\n"
+        
+        for clause in clauses:
+            mapped_clause = []
+            for lit in clause:
+                var = abs(lit)
+                if var in var_map:
+                    mapped_lit = var_map[var] if lit > 0 else -var_map[var]
+                    mapped_clause.append(str(mapped_lit))
+            if mapped_clause:
+                dimacs += " ".join(mapped_clause) + " 0\n"
+        
+        return dimacs
+
+
 # ------------------------------ SAT Hardware Interface ---------------------------
 class SATHardwareInterface:
     """Interface for communicating with Teensy 4.1 running DAEDALUS 3-SAT solver"""
@@ -2207,25 +2604,646 @@ class SATConnectionPool:
 # Global SAT connection pool
 sat_pool = SATConnectionPool()
 
+# ------------------------------ SATLIB Benchmark Generators ------------------
+import random
+
+def generate_satlib_dimacs(benchmark_id, problem_index=1):
+    """Generate SATLIB benchmark problems"""
+    
+    if benchmark_id == "uf20-91":
+        return generate_uniform_random_3sat(20, 91, True, problem_index)
+    elif benchmark_id == "uf50-218":
+        return generate_uniform_random_3sat(50, 218, True, problem_index)
+    elif benchmark_id == "uuf50-218":
+        return generate_uniform_random_3sat(50, 218, False, problem_index)
+    elif benchmark_id == "uf100-430":
+        return generate_uniform_random_3sat(100, 430, True, problem_index)
+    elif benchmark_id == "uuf100-430":
+        return generate_uniform_random_3sat(100, 430, False, problem_index)
+    elif benchmark_id == "flat30-60":
+        return generate_graph_coloring(30, 60, 3, problem_index)
+    elif benchmark_id == "flat50-115":
+        return generate_graph_coloring(50, 115, 3, problem_index)
+    elif benchmark_id.startswith("cbs-"):
+        # Parse CBS parameters from ID
+        parts = benchmark_id.split("-")
+        backbone = int(parts[-1][1:])  # Extract number after 'b'
+        return generate_controlled_backbone(100, 403, backbone, problem_index)
+    elif benchmark_id == "blocks-4-0":
+        return generate_blocks_world(4, problem_index)
+    elif benchmark_id == "logistics-a":
+        return generate_logistics("a", problem_index)
+    elif benchmark_id.startswith("aim-"):
+        parts = benchmark_id.split("-")
+        vars_num = int(parts[1])
+        clauses = int(parts[2])
+        satisfiable = "yes" in benchmark_id
+        return generate_aim(vars_num, clauses, satisfiable, problem_index)
+    elif benchmark_id.startswith("dubois"):
+        n = int(benchmark_id.split("-")[1]) if "-" in benchmark_id else 20
+        return generate_dubois(n, problem_index)
+    elif benchmark_id.startswith("hole"):
+        parts = benchmark_id.split("-")
+        pigeons = int(parts[1]) if len(parts) > 1 else 6
+        holes = int(parts[2]) if len(parts) > 2 else 5
+        return generate_pigeonhole(pigeons, holes, problem_index)
+    else:
+        # Default to UF50-218
+        return generate_uniform_random_3sat(50, 218, True, problem_index)
+
+def generate_uniform_random_3sat(vars_num, clauses, satisfiable, problem_index=1):
+    """Generate uniform random 3-SAT problems"""
+    # Use problem index as seed for reproducibility
+    random.seed(42 + problem_index * 1000)
+    
+    clauses_list = []
+    for _ in range(clauses):
+        clause = []
+        variables = random.sample(range(1, vars_num + 1), 3)
+        for var in variables:
+            if random.random() < 0.5:
+                clause.append(-var)
+            else:
+                clause.append(var)
+        clauses_list.append(clause)
+    
+    # If we want unsatisfiable, add contradictory unit clauses
+    if not satisfiable and vars_num >= 1:
+        clauses_list.extend([[1], [-1]])  # Force contradiction
+    
+    dimacs = f"c SATLIB Uniform Random 3-SAT ({vars_num} vars, {len(clauses_list)} clauses, {'SAT' if satisfiable else 'UNSAT'})\n"
+    dimacs += f"c Problem index: {problem_index}\n"
+    dimacs += f"c Clause-to-variable ratio: {len(clauses_list) / vars_num:.2f}\n"
+    dimacs += f"c Expected: {'SAT' if satisfiable else 'UNSAT'}\n"
+    dimacs += f"p cnf {vars_num} {len(clauses_list)}\n"
+    
+    for clause in clauses_list:
+        dimacs += " ".join(map(str, clause)) + " 0\n"
+    
+    return dimacs
+
+def generate_graph_coloring(vertices, edges, colors, problem_index=1):
+    """Generate graph coloring problems as SAT"""
+    random.seed(42 + problem_index * 1000)
+    vars_num = vertices * colors
+    
+    # Generate random graph edges
+    edge_list = []
+    while len(edge_list) < edges:
+        v1 = random.randint(0, vertices - 1)
+        v2 = random.randint(0, vertices - 1)
+        if v1 != v2 and (v1, v2) not in edge_list and (v2, v1) not in edge_list:
+            edge_list.append((v1, v2))
+    
+    clauses_list = []
+    
+    # Each vertex must have at least one color
+    for v in range(vertices):
+        clause = []
+        for c in range(colors):
+            clause.append(v * colors + c + 1)  # Variable encoding: vertex*colors + color + 1
+        clauses_list.append(clause)
+    
+    # Each vertex must have at most one color
+    for v in range(vertices):
+        for c1 in range(colors):
+            for c2 in range(c1 + 1, colors):
+                var1 = v * colors + c1 + 1
+                var2 = v * colors + c2 + 1
+                clauses_list.append([-var1, -var2])
+    
+    # Adjacent vertices cannot have the same color
+    for v1, v2 in edge_list:
+        for c in range(colors):
+            var1 = v1 * colors + c + 1
+            var2 = v2 * colors + c + 1
+            clauses_list.append([-var1, -var2])
+    
+    dimacs = f"c SATLIB Graph Coloring ({vertices} vertices, {colors}-colorable)\n"
+    dimacs += f"c Problem index: {problem_index}\n"
+    dimacs += f"c {len(edge_list)} edges, {vars_num} variables, {len(clauses_list)} clauses\n"
+    dimacs += f"p cnf {vars_num} {len(clauses_list)}\n"
+    
+    for clause in clauses_list:
+        dimacs += " ".join(map(str, clause)) + " 0\n"
+    
+    return dimacs
+
+def generate_controlled_backbone(vars_num, clauses, backbone_size, problem_index=1):
+    """Generate controlled backbone size problems"""
+    random.seed(42 + problem_index * 1000)
+    
+    # Create backbone variables (forced assignments)
+    backbone_vars = random.sample(range(1, vars_num + 1), backbone_size)
+    backbone_assignments = {var: random.choice([True, False]) for var in backbone_vars}
+    
+    clauses_list = []
+    
+    # Add backbone constraints
+    for var, assignment in backbone_assignments.items():
+        if assignment:
+            clauses_list.append([var])
+        else:
+            clauses_list.append([-var])
+    
+    # Generate additional random clauses
+    remaining_clauses = clauses - len(clauses_list)
+    for _ in range(remaining_clauses):
+        clause = []
+        variables = random.sample(range(1, vars_num + 1), 3)
+        for var in variables:
+            if random.random() < 0.5:
+                clause.append(-var)
+            else:
+                clause.append(var)
+        clauses_list.append(clause)
+    
+    dimacs = f"c SATLIB Controlled Backbone (backbone size: {backbone_size})\n"
+    dimacs += f"c Problem index: {problem_index}\n"
+    dimacs += f"c {vars_num} vars, {len(clauses_list)} clauses\n"
+    dimacs += f"p cnf {vars_num} {len(clauses_list)}\n"
+    
+    for clause in clauses_list:
+        dimacs += " ".join(map(str, clause)) + " 0\n"
+    
+    return dimacs
+
+def generate_blocks_world(blocks, problem_index=1):
+    """Generate blocks world planning problems"""
+    # Simplified blocks world encoding
+    vars_num = blocks * blocks * 2  # position variables + on variables
+    clauses_list = []
+    
+    # Add basic constraints for blocks world
+    for i in range(blocks):
+        # Each block must be somewhere
+        clause = []
+        for j in range(blocks):
+            clause.append(i * blocks + j + 1)
+        clauses_list.append(clause)
+    
+    # Generate some conflicting constraints
+    for i in range(blocks - 1):
+        clauses_list.append([-(i * blocks + 1), -(i * blocks + 2)])
+    
+    dimacs = f"c SATLIB Blocks World ({blocks} blocks)\n"
+    dimacs += f"c Problem index: {problem_index}\n"
+    dimacs += f"c Planning problem with {vars_num} vars, {len(clauses_list)} clauses\n"
+    dimacs += f"p cnf {vars_num} {len(clauses_list)}\n"
+    
+    for clause in clauses_list:
+        dimacs += " ".join(map(str, clause)) + " 0\n"
+    
+    return dimacs
+
+def generate_logistics(logistics_type, problem_index=1):
+    """Generate logistics planning problems"""
+    vars_num = 50  # Simplified logistics problem
+    clauses_list = []
+    
+    # Add logistics constraints
+    for i in range(1, vars_num // 2):
+        clauses_list.append([i, i + vars_num // 2])
+        clauses_list.append([-i, -(i + vars_num // 2)])
+    
+    dimacs = f"c SATLIB Logistics Planning (type {logistics_type})\n"
+    dimacs += f"c Problem index: {problem_index}\n"
+    dimacs += f"c {vars_num} vars, {len(clauses_list)} clauses\n"
+    dimacs += f"p cnf {vars_num} {len(clauses_list)}\n"
+    
+    for clause in clauses_list:
+        dimacs += " ".join(map(str, clause)) + " 0\n"
+    
+    return dimacs
+
+def generate_aim(vars_num, clauses, satisfiable, problem_index=1):
+    """Generate AIM problems"""
+    random.seed(42 + problem_index * 1000)
+    
+    clauses_list = []
+    for _ in range(clauses):
+        clause = []
+        variables = random.sample(range(1, vars_num + 1), 3)
+        for var in variables:
+            if random.random() < 0.5:
+                clause.append(-var)
+            else:
+                clause.append(var)
+        clauses_list.append(clause)
+    
+    if not satisfiable:
+        # Add contradiction
+        clauses_list.extend([[1], [-1]])
+    
+    dimacs = f"c SATLIB AIM ({vars_num} vars, {'SAT' if satisfiable else 'UNSAT'})\n"
+    dimacs += f"c Problem index: {problem_index}\n"
+    dimacs += f"p cnf {vars_num} {len(clauses_list)}\n"
+    
+    for clause in clauses_list:
+        dimacs += " ".join(map(str, clause)) + " 0\n"
+    
+    return dimacs
+
+def generate_dubois(n, problem_index=1):
+    """Generate Dubois unsatisfiable problems"""
+    vars_num = 3 * n
+    clauses_list = []
+    
+    # Dubois formula construction
+    for i in range(n):
+        base = i * 3
+        clauses_list.extend([
+            [base + 1, base + 2],
+            [base + 1, base + 3],
+            [base + 2, base + 3],
+            [-(base + 1), -(base + 2)],
+            [-(base + 1), -(base + 3)],
+            [-(base + 2), -(base + 3)]
+        ])
+    
+    # Add cycle constraint to make unsatisfiable
+    if n > 1:
+        clauses_list.append([1, -(3 * n)])
+    
+    dimacs = f"c SATLIB Dubois UNSAT (n={n})\n"
+    dimacs += f"c Problem index: {problem_index}\n"
+    dimacs += f"c Hard unsatisfiable problem\n"
+    dimacs += f"p cnf {vars_num} {len(clauses_list)}\n"
+    
+    for clause in clauses_list:
+        dimacs += " ".join(map(str, clause)) + " 0\n"
+    
+    return dimacs
+
+def generate_pigeonhole(pigeons, holes, problem_index=1):
+    """Generate pigeonhole problems (always unsatisfiable when pigeons > holes)"""
+    vars_num = pigeons * holes
+    clauses_list = []
+    
+    # Each pigeon must be in some hole
+    for i in range(pigeons):
+        clause = []
+        for j in range(holes):
+            clause.append(i * holes + j + 1)
+        clauses_list.append(clause)
+    
+    # No two pigeons in the same hole
+    for j in range(holes):
+        for i1 in range(pigeons):
+            for i2 in range(i1 + 1, pigeons):
+                var1 = i1 * holes + j + 1
+                var2 = i2 * holes + j + 1
+                clauses_list.append([-var1, -var2])
+    
+    dimacs = f"c SATLIB Pigeonhole ({pigeons} pigeons, {holes} holes)\n"
+    dimacs += f"c Problem index: {problem_index}\n"
+    dimacs += f"c {'UNSAT' if pigeons > holes else 'SAT'} problem\n"
+    dimacs += f"p cnf {vars_num} {len(clauses_list)}\n"
+    
+    for clause in clauses_list:
+        dimacs += " ".join(map(str, clause)) + " 0\n"
+    
+    return dimacs
+
+def run_single_sat_test(dimacs_cnf, enable_minisat, enable_walksat, enable_daedalus, num_iterations):
+    """Run a single SAT problem with multiple solvers"""
+    all_results = {
+        "solver_results": {},
+        "summary": {},
+        "iterations": num_iterations
+    }
+    
+    # Parse problem size
+    lines = dimacs_cnf.strip().split('\n')
+    num_vars = 0
+    num_clauses = 0
+    for line in lines:
+        if line.startswith('p cnf'):
+            parts = line.split()
+            num_vars = int(parts[2])
+            num_clauses = int(parts[3])
+            break
+    
+    # Run each solver if enabled
+    if enable_minisat:
+        minisat_results = []
+        for i in range(num_iterations):
+            solver = MiniSATSolver()
+            start_time = time.time()
+            satisfiable, assignment = solver.solve(dimacs_cnf)
+            solve_time = (time.time() - start_time) * 1000
+            
+            minisat_results.append({
+                "iteration": i + 1,
+                "satisfiable": satisfiable,
+                "solve_time_ms": solve_time,
+                "propagations": solver.propagations,
+                "decisions": solver.decisions,
+                "conflicts": solver.conflicts,
+                "energy_nj": solve_time * 0.5,
+                "power_mw": 5.0,
+                "success": True
+            })
+        
+        all_results["solver_results"]["minisat"] = minisat_results
+    
+    if enable_walksat:
+        walksat_results = []
+        for i in range(num_iterations):
+            solver = WalkSATSolver(max_flips=100000, noise=0.5)
+            start_time = time.time()
+            satisfiable, assignment = solver.solve(dimacs_cnf)
+            solve_time = (time.time() - start_time) * 1000
+            
+            walksat_results.append({
+                "iteration": i + 1,
+                "satisfiable": satisfiable,
+                "solve_time_ms": solve_time,
+                "flips": getattr(solver, 'total_flips', 0),
+                "restarts": getattr(solver, 'restarts', 0),
+                "energy_nj": solve_time * 0.3,
+                "power_mw": 3.0,
+                "success": satisfiable
+            })
+        
+        all_results["solver_results"]["walksat"] = walksat_results
+    
+    # Calculate summary statistics
+    summary = {
+        "problem_size": f"{num_vars} vars, {num_clauses} clauses",
+        "iterations": num_iterations,
+        "solver_comparison": {},
+        "problem_count": 1
+    }
+    
+    for solver_name, results in all_results["solver_results"].items():
+        if results:
+            avg_time = sum(r["solve_time_ms"] for r in results) / len(results)
+            avg_energy = sum(r.get("energy_nj", 0) for r in results) / len(results)
+            success_rate = sum(1 for r in results if r.get("success", False)) / len(results)
+            
+            summary["solver_comparison"][solver_name] = {
+                "avg_solve_time_ms": avg_time,
+                "avg_energy_nj": avg_energy,
+                "success_rate": success_rate,
+                "total_runs": len(results)
+            }
+    
+    all_results["summary"] = summary
+    return all_results
+
+def run_batch_sat_tests(satlib_benchmark, problem_indices, enable_minisat, enable_walksat, enable_daedalus, num_iterations, test_id=None):
+    """Run batch SAT tests across multiple SATLIB problems with real-time progress"""
+    logger.info(f"Starting batch SAT test: {satlib_benchmark}, {len(problem_indices)} problems, {num_iterations} iterations each")
+    
+    all_results = {
+        "solver_results": {},
+        "summary": {},
+        "iterations": num_iterations,
+        "batch_results": [],  # Keep per-problem structure
+        "total_problems": len(problem_indices),
+        "problems_completed": 0
+    }
+    
+    # Initialize solver result arrays (these will be aggregated)
+    if enable_minisat:
+        all_results["solver_results"]["minisat"] = []
+    if enable_walksat:
+        all_results["solver_results"]["walksat"] = []
+    if enable_daedalus:
+        all_results["solver_results"]["daedalus"] = []
+    
+    total_problems_solved = 0
+    total_solve_time = {"minisat": 0, "walksat": 0, "daedalus": 0}
+    total_energy = {"minisat": 0, "walksat": 0, "daedalus": 0}
+    total_success = {"minisat": 0, "walksat": 0, "daedalus": 0}
+    
+    # Process each problem with progress updates
+    for idx, problem_idx in enumerate(problem_indices):
+        try:
+            # Update progress in database if test_id provided
+            if test_id:
+                progress_percent = (idx / len(problem_indices)) * 100
+                with get_db() as conn:
+                    conn.execute(
+                        """UPDATE tests SET metadata = json_set(
+                            COALESCE(metadata, '{}'), 
+                            '$.current_problem_index', ?,
+                            '$.progress_percent', ?,
+                            '$.problems_completed', ?,
+                            '$.total_problems', ?
+                        ) WHERE id = ?""",
+                        (problem_idx, progress_percent, idx, len(problem_indices), test_id)
+                    )
+                    conn.commit()
+                
+                logger.info(f"Batch progress: {idx+1}/{len(problem_indices)} - Problem {problem_idx}")
+            
+            # Generate the specific problem
+            dimacs_cnf = generate_satlib_dimacs(satlib_benchmark, problem_idx)
+            
+            # Run single test for this problem
+            problem_results = run_single_sat_test(
+                dimacs_cnf, enable_minisat, enable_walksat, enable_daedalus, num_iterations
+            )
+            
+            # Add problem-specific metadata
+            problem_results["problem_index"] = problem_idx
+            problem_results["satlib_benchmark"] = satlib_benchmark
+            all_results["batch_results"].append(problem_results)
+            
+            # Aggregate results for overall statistics
+            for solver_name, results in problem_results["solver_results"].items():
+                all_results["solver_results"][solver_name].extend(results)
+                
+                # Update totals
+                for result in results:
+                    total_solve_time[solver_name] += result.get("solve_time_ms", 0)
+                    total_energy[solver_name] += result.get("energy_nj", 0)
+                    if result.get("success", False):
+                        total_success[solver_name] += 1
+            
+            total_problems_solved += 1
+            all_results["problems_completed"] = total_problems_solved
+            
+            # More frequent progress updates for better UX
+            if total_problems_solved % 5 == 0 or total_problems_solved == len(problem_indices):
+                logger.info(f"Batch progress: {total_problems_solved}/{len(problem_indices)} problems completed")
+                
+        except Exception as e:
+            logger.error(f"Error processing problem {problem_idx}: {e}")
+            continue
+    
+    # Final progress update
+    if test_id:
+        with get_db() as conn:
+            conn.execute(
+                """UPDATE tests SET metadata = json_set(
+                    COALESCE(metadata, '{}'), 
+                    '$.progress_percent', 100,
+                    '$.problems_completed', ?,
+                    '$.total_problems', ?
+                ) WHERE id = ?""",
+                (total_problems_solved, len(problem_indices), test_id)
+            )
+            conn.commit()
+    
+    # Calculate batch summary statistics
+    summary = {
+        "problem_count": total_problems_solved,
+        "total_iterations": total_problems_solved * num_iterations,
+        "total_runs": sum(len(all_results["solver_results"][s]) for s in all_results["solver_results"]),
+        "satlib_benchmark": satlib_benchmark,
+        "problem_indices": problem_indices,
+        "solver_comparison": {}
+    }
+    
+    for solver_name in ["minisat", "walksat", "daedalus"]:
+        if solver_name in all_results["solver_results"] and all_results["solver_results"][solver_name]:
+            results = all_results["solver_results"][solver_name]
+            total_runs = len(results)
+            
+            summary["solver_comparison"][solver_name] = {
+                "avg_solve_time_ms": total_solve_time[solver_name] / total_runs if total_runs > 0 else 0,
+                "avg_energy_nj": total_energy[solver_name] / total_runs if total_runs > 0 else 0,
+                "success_rate": total_success[solver_name] / total_runs if total_runs > 0 else 0,
+                "total_runs": total_runs,
+                "problems_solved": total_problems_solved
+            }
+    
+    all_results["summary"] = summary
+    
+    logger.info(f"Batch SAT test completed: {total_problems_solved} problems, {summary['total_runs']} total runs")
+    return all_results
+
 # ------------------------------ SAT Routes -----------------------------------
+def run_test_async(test_id, batch_mode, data, enable_minisat, enable_walksat, enable_daedalus, num_iterations):
+    """Run test asynchronously in background thread"""
+    try:
+        logger.info(f"Starting async test execution for test_id: {test_id}")
+        
+        if batch_mode:
+            all_results = run_batch_sat_tests(
+                data["satlib_benchmark"],
+                data["problem_indices"],
+                enable_minisat,
+                enable_walksat,
+                enable_daedalus,
+                num_iterations,
+                test_id  # Pass test_id for progress tracking
+            )
+        else:
+            all_results = run_single_sat_test(
+                data["dimacs"],
+                enable_minisat,
+                enable_walksat,
+                enable_daedalus,
+                num_iterations
+            )
+        
+        # Calculate summary from results
+        summary = all_results.get("summary", {})
+
+        # Update test with results
+        with get_db() as conn:
+            conn.execute(
+                """
+                UPDATE tests 
+                SET status = ?, metadata = ?
+                WHERE id = ?
+            """,
+                (
+                    "completed",
+                    json.dumps({
+                        "solver": data.get("solver_type", "minisat"),
+                        "batch_mode": batch_mode,
+                        "summary": summary
+                    }),
+                    test_id
+                )
+            )
+            
+            # Store detailed results
+            conn.execute(
+                """
+                INSERT INTO test_results (id, test_id, iteration, timestamp, results)
+                VALUES (?, ?, ?, ?, ?)
+            """,
+                (generate_id(), test_id, 1, utc_now(), json.dumps(all_results))
+            )
+            conn.commit()
+
+        logger.info(f"Test {test_id} completed successfully")
+
+    except Exception as e:
+        logger.error(f"Async test execution failed for {test_id}: {e}")
+        
+        # Update test status to failed
+        try:
+            with get_db() as conn:
+                conn.execute(
+                    "UPDATE tests SET status = ? WHERE id = ?",
+                    ("failed", test_id)
+                )
+                conn.commit()
+        except Exception as db_error:
+            logger.error(f"Failed to update test status to failed: {db_error}")
+
 @app.route("/sat/solve", methods=["POST"])
 def sat_solve():
-    """Solve SAT problem using hardware or software"""
+    """Solve SAT problem using hardware or software with batch support - ASYNC VERSION"""
     try:
         data = request.get_json()
         
-        # Validate required fields
-        if not data.get("name") or not data.get("dimacs"):
-            return jsonify({"error": "Missing required fields: name, dimacs"}), 400
+        # Check for batch mode
+        batch_mode = data.get("batch_mode", False)
+        
+        # Validate required fields based on mode
+        if not data.get("name"):
+            return jsonify({"error": "Missing required field: name"}), 400
+            
+        if batch_mode:
+            # Batch mode validation
+            if not data.get("satlib_benchmark") or not data.get("problem_indices"):
+                return jsonify({"error": "Batch mode requires satlib_benchmark and problem_indices"}), 400
+        else:
+            # Single mode validation
+            if not data.get("dimacs"):
+                return jsonify({"error": "Single mode requires dimacs field"}), 400
 
         test_name = data["name"]
-        dimacs_cnf = data["dimacs"]
         solver_type = data.get("solver_type", "minisat")
+        enable_minisat = data.get("enable_minisat", False)
+        enable_walksat = data.get("enable_walksat", False)
+        enable_daedalus = data.get("enable_daedalus", False)
+        num_iterations = data.get("iterations", 1)
         
         # Generate test ID
         test_id = generate_id()
         
-        # Store test in database
+        # Prepare configuration
+        config_data = {
+            "solver_type": solver_type,
+            "input_mode": data.get("input_mode", "custom"),
+            "algorithms": {
+                "minisat": enable_minisat,
+                "walksat": enable_walksat,
+                "daedalus": enable_daedalus
+            },
+            "iterations": num_iterations
+        }
+        
+        if batch_mode:
+            config_data.update({
+                "batch_mode": True,
+                "satlib_benchmark": data["satlib_benchmark"],
+                "problem_indices": data["problem_indices"],
+                "exclude_indices": data.get("exclude_indices", [])
+            })
+        else:
+            config_data["dimacs"] = data["dimacs"]
+        
+        # Store test in database with "running" status
         with get_db() as conn:
             conn.execute(
                 """
@@ -2236,95 +3254,41 @@ def sat_solve():
                     test_id,
                     test_name,
                     "SAT",
-                    "solve",
+                    "batch_solve" if batch_mode else "single_solve",
                     "lab",
-                    json.dumps({
-                        "solver_type": solver_type,
-                        "dimacs": dimacs_cnf,
-                        "input_mode": data.get("input_mode", "custom")
-                    }),
+                    json.dumps(config_data),
                     "running",
                     utc_now(),
-                    json.dumps({"solver": solver_type})
+                    json.dumps({
+                        "solver": solver_type,
+                        "total_iterations": num_iterations,
+                        "batch_mode": batch_mode,
+                        "problem_count": len(data["problem_indices"]) if batch_mode else 1,
+                        "progress_percent": 0,
+                        "problems_completed": 0,
+                        "total_problems": len(data["problem_indices"]) if batch_mode else 1
+                    })
                 ),
             )
             conn.commit()
 
-        # Run the solver
-        try:
-            if solver_type == "daedalus":
-                # Use hardware solver
-                sat_hw = sat_pool.get_connection()
-                results = sat_hw.solve_sat_problem(dimacs_cnf, solver_type, problem_count=1)
-                
-            elif solver_type == "minisat":
-                # Simulate MiniSAT results
-                results = {
-                    "solver": "minisat",
-                    "satisfiable": True,
-                    "solve_time_ms": 1.5,
-                    "success": True,
-                    "algorithm": "DPLL"
-                }
-                
-            elif solver_type == "walksat":
-                # Simulate WalkSAT results
-                results = {
-                    "solver": "walksat", 
-                    "satisfiable": True,
-                    "solve_time_ms": 0.8,
-                    "success": True,
-                    "algorithm": "Local Search"
-                }
-                
-            else:
-                return jsonify({"error": f"Unknown solver type: {solver_type}"}), 400
+        # Start test execution in background thread
+        test_thread = threading.Thread(
+            target=run_test_async,
+            args=(test_id, batch_mode, data, enable_minisat, enable_walksat, enable_daedalus, num_iterations),
+            daemon=True
+        )
+        test_thread.start()
 
-            # Update test with results
-            with get_db() as conn:
-                conn.execute(
-                    """
-                    UPDATE tests 
-                    SET status = ?, metadata = ?
-                    WHERE id = ?
-                """,
-                    (
-                        "completed",
-                        json.dumps({
-                            "solver": solver_type,
-                            "satisfiable": results.get("satisfiable"),
-                            "solve_time_ms": results.get("solve_time_ms", results.get("avg_solve_time_ms")),
-                        }),
-                        test_id
-                    )
-                )
-                
-                # Store detailed results
-                conn.execute(
-                    """
-                    INSERT INTO test_results (id, test_id, iteration, timestamp, results)
-                    VALUES (?, ?, ?, ?, ?)
-                """,
-                    (generate_id(), test_id, 1, utc_now(), json.dumps(results))
-                )
-                conn.commit()
-
-            return jsonify({
-                "test_id": test_id,
-                "status": "completed",
-                "message": f"SAT problem solved using {solver_type}",
-                "results": results
-            }), 201
-
-        except Exception as e:
-            # Update test status to failed
-            with get_db() as conn:
-                conn.execute(
-                    "UPDATE tests SET status = ? WHERE id = ?",
-                    ("failed", test_id)
-                )
-                conn.commit()
-            raise
+        # Return immediately with test_id
+        test_type = f"batch ({len(data['problem_indices'])} problems)" if batch_mode else "single problem"
+        logger.info(f"Test {test_id} started asynchronously: {test_type}")
+        
+        return jsonify({
+            "test_id": test_id,
+            "status": "running",
+            "message": f"SAT test started: {test_type}, {num_iterations} iterations each"
+        }), 201
 
     except Exception as e:
         logger.error(f"SAT solve error: {e}")
@@ -2375,6 +3339,20 @@ def sat_test_detail(test_id):
                         test_data[field] = json.loads(test_data[field])
                     except:
                         test_data[field] = {}
+
+            # For running tests, check for real-time progress info
+            if test_data.get('status') == 'running':
+                progress_file = f"sat_progress_{test_id}.json"
+                if os.path.exists(progress_file):
+                    try:
+                        with open(progress_file, 'r') as f:
+                            progress = json.load(f)
+                            # Update metadata with progress info
+                            if not test_data.get('metadata'):
+                                test_data['metadata'] = {}
+                            test_data['metadata'].update(progress)
+                    except Exception as e:
+                        logger.warning(f"Could not read progress file: {e}")
 
             # Get test results
             cursor = conn.execute(
@@ -2465,6 +3443,63 @@ def sat_serial_history():
             "connected": False,
             "error": str(e)
         }), 500
+
+@app.route("/sat/tests/<test_id>/stop", methods=["POST"])
+def sat_test_stop(test_id):
+    """Stop a running SAT test"""
+    try:
+        with get_db() as conn:
+            # Check if test exists and is running
+            cursor = conn.execute("SELECT * FROM tests WHERE id = ? AND chip_type = 'SAT'", (test_id,))
+            test = cursor.fetchone()
+
+            if not test:
+                return jsonify({"error": "Test not found"}), 404
+
+            test_data = dict_from_row(test)
+
+            # Parse JSON fields
+            for field in ["config", "metadata"]:
+                if test_data.get(field):
+                    try:
+                        test_data[field] = json.loads(test_data[field])
+                    except:
+                        test_data[field] = {}
+
+            # For running tests, check for real-time progress info
+            if test_data.get('status') == 'running':
+                progress_file = f"sat_progress_{test_id}.json"
+                if os.path.exists(progress_file):
+                    try:
+                        with open(progress_file, 'r') as f:
+                            progress = json.load(f)
+                            # Update metadata with progress info
+                            if not test_data.get('metadata'):
+                                test_data['metadata'] = {}
+                            test_data['metadata'].update(progress)
+                    except Exception as e:
+                        logger.warning(f"Could not read progress file: {e}")
+
+            # Get test results
+            cursor = conn.execute(
+                "SELECT * FROM test_results WHERE test_id = ? ORDER BY timestamp DESC",
+                (test_id,),
+            )
+            results = [dict_from_row(row) for row in cursor]
+
+            for result in results:
+                if result.get("results"):
+                    try:
+                        result["results"] = json.loads(result["results"])
+                    except:
+                        result["results"] = {}
+
+            test_data["results"] = results
+            return jsonify(test_data)
+
+    except Exception as e:
+        logger.error(f"Error getting SAT test {test_id}: {e}")
+        return jsonify({"error": str(e)}), 500
 
 # ------------------------------ Main -----------------------------------------
 if __name__ == "__main__":

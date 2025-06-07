@@ -8,6 +8,7 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card"
+import PageNavigation from "@/components/PageNavigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -201,16 +202,22 @@ export default function LDPCTestingInterface() {
 
     const totalVectors = (endSNR - startSNR + 1) * runsPerSNR * 76800
 
+    const breadcrumbs = [
+        { label: "LDPC Testing" }
+    ]
+
     return (
-        <div className="min-h-screen bg-background">
-            <div className="mx-auto max-w-4xl px-4 ">
-                {/* Header */}
-                <div className="mb-6">
-                    <h1 className="text-2xl sm:text-3xl font-bold text-foreground">LDPC Testing</h1>
-                    <p className="mt-1 text-sm sm:text-base text-muted-foreground">
-                        Configure and run AMORGOS analog LDPC decoder tests
-                    </p>
-                </div>
+        <>
+            <PageNavigation currentPage="LDPC Testing" breadcrumbs={breadcrumbs} />
+            <div className="min-h-screen bg-background pb-20 sm:pb-6">
+                <div className="mx-auto max-w-4xl px-4 py-6">
+                    {/* Header */}
+                    <div className="mb-6">
+                        <h1 className="text-2xl sm:text-3xl font-bold text-foreground">LDPC Testing</h1>
+                        <p className="mt-1 text-sm sm:text-base text-muted-foreground">
+                            Configure and run AMORGOS analog LDPC decoder tests
+                        </p>
+                    </div>
 
                 {/* Main Configuration Card */}
                 <Card>
@@ -407,7 +414,8 @@ export default function LDPCTestingInterface() {
                         </p>
                     </CardContent>
                 </Card>
+                </div>
             </div>
-        </div>
+        </>
     )
 }

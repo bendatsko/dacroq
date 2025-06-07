@@ -1,1 +1,1 @@
-tmux new-session -d -s api 'python3 app.py'
+tmux new-session -d -s api 'python3 main.py'
